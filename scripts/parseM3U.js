@@ -9,8 +9,13 @@ const sources = m3uConfig.urls || [];
 const outputPath = './data/channels.json';
 
 function applyMapping(channel) {
-    const key = channel.tvg_id || channel.name;
-    const mapping = map[key];
+    // Try name-based mapping first
+    let mapping = map[channel.name];
+
+    // If not found, fall back to tvg_id
+    if (!mapping && channel.tvg_id) {
+        mapping = map[channel.tvg_id];
+    }
 
     if (mapping) {
         channel.name = mapping.name || channel.name;
