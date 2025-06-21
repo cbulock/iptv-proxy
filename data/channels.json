@@ -1,0 +1,260 @@
+[
+  {
+    "name": "Always Sunny",
+    "tvg_id": "C1.145.ersatztv.org",
+    "logo": "https://ersatztv.bulock.house/iptv/logos/43DF702C5CF2A9FECE2C701EA79AC9E5.jpg",
+    "source": "ErsatzTV",
+    "url": "https://ersatztv.bulock.house/iptv/channel/1.ts"
+  },
+  {
+    "name": "Star Trek",
+    "tvg_id": "C2.146.ersatztv.org",
+    "logo": "https://ersatztv.bulock.house/iptv/logos/A521EBC3BC80D0567BB02262351508F9.jpg",
+    "source": "ErsatzTV",
+    "url": "https://ersatztv.bulock.house/iptv/channel/2.ts"
+  },
+  {
+    "name": "The Simpsons",
+    "tvg_id": "C3.147.ersatztv.org",
+    "logo": "https://ersatztv.bulock.house/iptv/logos/0CE1C4979367511BEEA5D729C6042183.jpg",
+    "source": "ErsatzTV",
+    "url": "https://ersatztv.bulock.house/iptv/channel/3.ts"
+  },
+  {
+    "name": "Seinfeld",
+    "tvg_id": "C4.148.ersatztv.org",
+    "logo": "https://ersatztv.bulock.house/iptv/logos/1406F3E369B545B87207A9FDA439D701.jpg",
+    "source": "ErsatzTV",
+    "url": "https://ersatztv.bulock.house/iptv/channel/4.ts"
+  },
+  {
+    "name": "The Office",
+    "tvg_id": "C5.149.ersatztv.org",
+    "logo": "https://ersatztv.bulock.house/iptv/logos/77C706AE5B1D3AEC2BB71F2C36269CCF.jpg",
+    "source": "ErsatzTV",
+    "url": "https://ersatztv.bulock.house/iptv/channel/5.ts"
+  },
+  {
+    "name": "Evening Comedy",
+    "tvg_id": "C20.194.ersatztv.org",
+    "logo": "https://ersatztv.bulock.house/iptv/logos/2219F7C52A5B6727FFFBEA630FFB87FB.jpg",
+    "source": "ErsatzTV",
+    "url": "https://ersatztv.bulock.house/iptv/channel/20.ts"
+  },
+  {
+    "name": "Comedy TV",
+    "tvg_id": "C21.195.ersatztv.org",
+    "logo": "https://ersatztv.bulock.house/iptv/logos/5032829B5940D54DCBBBB238BFB38E2C.jpg",
+    "source": "ErsatzTV",
+    "url": "https://ersatztv.bulock.house/iptv/channel/21.ts"
+  },
+  {
+    "name": "Harry Potter",
+    "tvg_id": "C100.241.ersatztv.org",
+    "logo": "https://ersatztv.bulock.house/iptv/logos/E6C13682DB9227BA8B725AAC3129FE22.jpg",
+    "source": "ErsatzTV",
+    "url": "https://ersatztv.bulock.house/iptv/channel/100.ts"
+  },
+  {
+    "name": "WLNS-TV",
+    "tvg_id": "6.1",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v6.1",
+    "guideNumber": "6.1",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "WKAR HD",
+    "tvg_id": "23.1",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v23.1",
+    "guideNumber": "23.1",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "WKARWLD",
+    "tvg_id": "23.2",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v23.2",
+    "guideNumber": "23.2",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "WKARCRT",
+    "tvg_id": "23.3",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v23.3",
+    "guideNumber": "23.3",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "WKARKID",
+    "tvg_id": "23.4",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v23.4",
+    "guideNumber": "23.4",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "WKARMLC",
+    "tvg_id": "23.5",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v23.5",
+    "guideNumber": "23.5",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "FOX 47",
+    "tvg_id": "47.1",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v47.1",
+    "guideNumber": "47",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "47+",
+    "tvg_id": "47.2",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v47.2",
+    "guideNumber": "48",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "Bounce",
+    "tvg_id": "47.3",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v47.3",
+    "guideNumber": "49",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "Grit",
+    "tvg_id": "47.4",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v47.4",
+    "guideNumber": "50",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "CourtTV",
+    "tvg_id": "47.5",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v47.5",
+    "guideNumber": "47.5",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "IonMyst",
+    "tvg_id": "47.6",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v47.6",
+    "guideNumber": "47.6",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "BUSTED",
+    "tvg_id": "47.7",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v47.7",
+    "guideNumber": "47.7",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "WLAJ-DT",
+    "tvg_id": "53.1",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v53.1",
+    "guideNumber": "53.1",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "WLAJ-DT",
+    "tvg_id": "53.2",
+    "logo": "",
+    "url": "http://antenna.bulock:5004/auto/v53.2",
+    "guideNumber": "53.2",
+    "source": "Antenna",
+    "hdhomerun": {
+      "deviceID": "1094357B",
+      "baseURL": "http://antenna.bulock",
+      "model": "HDFX-2US"
+    }
+  },
+  {
+    "name": "WeatherStar 4000",
+    "tvg_id": "weatherStar4000",
+    "logo": "http://apps.docker:9798/logo/ws4000.png",
+    "source": "Weather",
+    "url": "http://apps.docker:9798/stream/stream.m3u8"
+  }
+]

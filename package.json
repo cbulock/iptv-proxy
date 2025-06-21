@@ -1,0 +1,30 @@
+{
+  "name": "iptv-proxy",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/cbulock/iptv-proxy#readme",
+  "bugs": {
+    "url": "https://github.com/cbulock/iptv-proxy/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cbulock/iptv-proxy.git"
+  },
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "parse": "node scripts/parseM3U.js",
+    "serve": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.10.0",
+    "express": "^5.1.0",
+    "fast-xml-parser": "^5.2.5",
+    "node-ssdp": "^4.0.1",
+    "xml2js": "^0.6.2",
+    "yaml": "^2.8.0"
+  }
+}
