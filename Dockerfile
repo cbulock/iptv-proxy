@@ -12,9 +12,9 @@ RUN npm ci --only=production
 COPY . .
 
 # Make /config the single mount point for all configs,
-# but preserve defaults on build
+# but preserve defaults if present
 RUN mkdir -p /config \
-    && cp -a ./config/. /config/ \
+    && if [ -d ./config ]; then cp -a ./config/. /config/; fi \
     && rm -rf ./config \
     && ln -s /config ./config
 
