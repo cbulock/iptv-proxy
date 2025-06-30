@@ -11,6 +11,15 @@ RUN npm ci --only=production
 # Copy source code
 COPY . .
 
+# Make /config the single mount point for all configs,
+# but preserve defaults on build
+RUN mkdir -p /config \
+    && cp -a ./config/. /config/ \
+    && rm -rf ./config \
+    && ln -s /config ./config
+
+VOLUME ["/config"]
+
 # Expose application port
 EXPOSE 34400
 

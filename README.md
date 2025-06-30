@@ -4,11 +4,11 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 
 ## Features
 
-* 🧩 Merge multiple M3U sources into a single playlist
-* 🗓️ Merge multiple EPG sources (including local files) into a unified `xmltv.xml`
-* 📺 Channel mapping to control display names, guide numbers, and logos
-* 🧠 Fallback guide info via guide number when `tvg_id` is missing
-* 🔁 HTTP server that hosts `/playlist.m3u` and `/xmltv.xml`
+- 🧩 Merge multiple M3U sources into a single playlist
+- 🗓️ Merge multiple EPG sources (including local files) into a unified `xmltv.xml`
+- 📺 Channel mapping to control display names, guide numbers, and logos
+- 🧠 Fallback guide info via guide number when `tvg_id` is missing
+- 🔁 HTTP server that hosts `/playlist.m3u` and `/xmltv.xml`
 
 This project was inspired by [xTeVe](https://github.com/xteve-project/xTeVe) and [Threadfin](https://github.com/Threadfin/Threadfin), but I wanted something a little lighter and had better control over using the feeds through reverse proxies.
 
@@ -32,8 +32,8 @@ npm start
 
 By default, the server runs on `http://localhost:34400` and serves:
 
-* `http://localhost:34400/playlist.m3u`
-* `http://localhost:34400/xmltv.xml`
+- `http://localhost:34400/playlist.m3u`
+- `http://localhost:34400/xmltv.xml`
 
 ---
 
@@ -91,13 +91,35 @@ Use this file to normalize channel metadata. You can define mapping by either ch
 
 ---
 
+## Running in Docker
+
+You can build and run IPTV-Proxy in a container. The folder `/config` inside the container is where your YAML configs live, so you must mount your host `config/` directory there.
+
+### Build the image
+
+```bash
+docker build -t iptv-proxy .
+```
+
+### Run the container
+
+```bash
+docker run -d \
+  --name iptv-proxy \
+  -p 34400:34400 \
+  -v /absolute/path/to/your/project/config:/config \
+  iptv-proxy
+```
+
+---
+
 ## Adding HDHomeRun Devices
 
 If a source entry includes an `hdhomerun` URL, the server will automatically:
 
-* Fetch `discover.json`
-* Build a fake M3U playlist
-* Tag channels with device info
+- Fetch `discover.json`
+- Build a fake M3U playlist
+- Tag channels with device info
 
 This allows you to use OTA tuners like any other playlist source.
 
@@ -105,9 +127,9 @@ This allows you to use OTA tuners like any other playlist source.
 
 ## Notes
 
-* Your XMLTV sources can be remote URLs or local files.
-* All `tvg_id`s in channels must match the `<channel id="...">` in EPG sources to link correctly.
-* Duplicate `tvg_id`s will be overwritten in favor of the last one processed.
+- Your XMLTV sources can be remote URLs or local files.
+- All `tvg_id`s in channels must match the `<channel id="...">` in EPG sources to link correctly.
+- Duplicate `tvg_id`s will be overwritten in favor of the last one processed.
 
 ---
 
