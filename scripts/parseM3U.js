@@ -33,7 +33,7 @@ function applyMapping(channel) {
     return channel;
 }
 
-async function parseAll() {
+export async function parseAll() {
     const allChannels = [];
 
     for (const source of sources) {
@@ -111,4 +111,3 @@ async function parseAll() {
     console.log(`Parsed ${allChannels.length} channels to ${outputPath}`);
 }
 
-parseAll().catch(console.error);

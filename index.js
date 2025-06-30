@@ -5,9 +5,13 @@ import chalk from 'chalk';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
+import { parseAll } from './scripts/parseM3U.js';
 
 const app = express();
 const port = 34400;
+
+// Parse channels from M3U sources before server setup
+await parseAll();
 
 // Load config
 const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8'));
