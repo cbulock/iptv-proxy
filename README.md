@@ -8,7 +8,7 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 - 🗓️ Merge multiple EPG sources (including local files) into a unified `xmltv.xml`
 - 📺 Channel mapping to control display names, guide numbers, and logos
 - 🧠 Fallback guide info via guide number when `tvg_id` is missing
-- 🔁 HTTP server that hosts `/playlist.m3u` and `/xmltv.xml`
+- 🔁 HTTP server that hosts `/lineup.m3u` and `/xmltv.xml`
 
 This project was inspired by [xTeVe](https://github.com/xteve-project/xTeVe) and [Threadfin](https://github.com/Threadfin/Threadfin), but I wanted something a little lighter and had better control over using the feeds through reverse proxies.
 
@@ -32,7 +32,7 @@ npm start
 
 By default, the server runs on `http://localhost:34400` and serves:
 
-- `http://localhost:34400/playlist.m3u`
+- `http://localhost:34400/lineup.m3u`
 - `http://localhost:34400/xmltv.xml`
 
 ---

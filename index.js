@@ -26,6 +26,6 @@ await setupEPGRoutes(app);
 app.listen(port, () => {
   const base = `http://${config.host}:${port}`;
   console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
-  console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/playlist.m3u`));
+  console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/lineup.m3u`));
   console.log(chalk.cyan(`  XMLTV Guide:`), chalk.yellow(`${base}/xmltv.xml`));
 });
