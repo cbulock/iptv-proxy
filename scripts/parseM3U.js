@@ -33,6 +33,10 @@ function applyMapping(channel) {
     return channel;
 }
 
+function proxyURL(channel) {
+    return `/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
+}
+
 export async function parseAll() {
     const allChannels = [];
 
@@ -54,7 +58,11 @@ export async function parseAll() {
                         name: chan.GuideName,
                         tvg_id: '',
                         logo: '',
-                        url: chan.URL,
+                        url: proxyURL({
+                            name: chan.GuideName,
+                            source: source.name
+                        }),
+                        original_url: chan.URL,
                         guideNumber: chan.GuideNumber,
                         source: source.name,
                         hdhomerun: {
@@ -95,7 +103,8 @@ export async function parseAll() {
                             source: source.name
                         };
                     } else if (line && !line.startsWith('#')) {
-                        current.url = line.trim();
+                        current.url = proxyURL(current);
+                        current.original_url = line.trim();
                         allChannels.push(applyMapping(current));
                         current = {};
                     }
