@@ -2,6 +2,7 @@ import fs from 'fs';
 import axios from 'axios';
 import yaml from 'yaml';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import escapeHtml from 'escape-html';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
@@ -118,7 +119,7 @@ export async function setupEPGRoutes(app) {
             res.set(response.headers);
             response.data.pipe(res);
         } catch (err) {
-            res.status(502).send(`Failed to fetch image from ${decodedUrl}`);
+            res.status(502).send(`Failed to fetch image from ${escapeHtml(decodedUrl)}`);
         }
     });
 }
