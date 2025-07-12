@@ -98,7 +98,13 @@ export async function setupEPGRoutes(app) {
             return res.status(503).send('EPG not loaded yet');
         }
 
-        const publicBaseUrl = `${req.protocol}://${req.get('host')}`;
+        // Check for proxy headers to determine the correct protocol
+        const protocol = req.get('X-Forwarded-Proto') ||
+            req.get('X-Forwarded-Protocol') ||
+            req.get('X-Url-Scheme') ||
+            (req.get('X-Forwarded-Ssl') === 'on' ? 'https' : req.protocol);
+
+        const publicBaseUrl = `${protocol}://${req.get('host')}`;
         const rewritten = rewriteImageUrls(mergedEPG, publicBaseUrl);
 
         res.set('Content-Type', 'application/xml');
