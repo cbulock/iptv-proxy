@@ -1,4 +1,7 @@
 import fs from 'fs';
+import axios from 'axios';
+import { getProxiedImageUrl } from '../libs/proxy-image.js';
+import getBaseUrl from '../libs/getBaseUrl.js';
 
 export function setupLineupRoutes(app, config) {
   const loadChannels = () =>
@@ -11,7 +14,6 @@ export function setupLineupRoutes(app, config) {
       GuideNumber: channel.guideNumber || channel.tvg_id || channel.name,
       GuideName: channel.name,
       URL: `${req.protocol}://${req.get('host')}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`
-
     }));
 
     res.json(lineup);
@@ -19,17 +21,32 @@ export function setupLineupRoutes(app, config) {
 
   app.get('/lineup.m3u', (req, res) => {
     const channels = loadChannels();
+    const tvgIdMap = new Map(); // For deduplication
 
-    let output = '#EXTM3U\n';
+    const epgUrl = `${getBaseUrl(req)}/xmltv.xml`;
+    let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
 
     for (const channel of channels) {
-      const tvgId = channel.tvg_id || '';
+      let tvgId = channel.tvg_id || '';
+      const originalTvgId = tvgId;
+
+      // Deduplicate tvg-id
+      if (tvgIdMap.has(tvgId)) {
+        let i = 1;
+        while (tvgIdMap.has(`${originalTvgId}_${i}`)) i++;
+        tvgId = `${originalTvgId}_${i}`;
+      }
+      if (tvgId) tvgIdMap.set(tvgId, true);
+
       const tvgName = channel.name || '';
-      const tvgLogo = channel.logo || '';
-      const groupTitle = channel.source || ''; // Optional: use source as group
+      const tvgLogo = channel.logo
+        ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
+        : '';
+      const groupTitle = channel.source || '';
+      const streamUrl = `${getBaseUrl(req)}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
 
       output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}\n`;
-      output += `${channel.url}\n`;
+      output += `${streamUrl}\n`;
     }
 
     res.set('Content-Type', 'application/x-mpegURL');
@@ -38,7 +55,7 @@ export function setupLineupRoutes(app, config) {
 
   app.get('/stream/:source/:name', async (req, res) => {
     const { source, name } = req.params;
-    const channels = JSON.parse(fs.readFileSync('./data/channels.json', 'utf8'));
+    const channels = loadChannels();
 
     const channel = channels.find(
       c => c.source === source && c.name === name

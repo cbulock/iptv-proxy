@@ -5,10 +5,13 @@ import chalk from 'chalk';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
+import { imageProxyRoute } from './libs/proxy-image.js';
 import { parseAll } from './scripts/parseM3U.js';
 
 const app = express();
 const port = 34400;
+
+app.set('trust proxy', true);
 
 // Parse channels from M3U sources before server setup
 await parseAll();
@@ -18,6 +21,7 @@ const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8'));
 const config = { ...m3uConfig, host: 'localhost' };
 
 // Register routes
+imageProxyRoute(app);
 setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config);
 await setupEPGRoutes(app);

@@ -3,6 +3,8 @@ import axios from 'axios';
 import yaml from 'yaml';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 
+import { getProxiedImageUrl } from '../libs/proxy-image.js';
+
 const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_"
@@ -12,13 +14,12 @@ const builder = new XMLBuilder({
     format: true
 });
 
-function rewriteImageUrls(xmlString, baseUrl) {
+function rewriteImageUrls(xmlString, req) {
     const parsed = parser.parse(xmlString);
 
     const rewrite = (node, sourceName) => {
         if (node.icon?.["@_src"]?.startsWith('http')) {
-            const encodedUrl = encodeURIComponent(node.icon["@_src"]);
-            node.icon["@_src"] = `${baseUrl}/images/${encodeURIComponent(sourceName)}/${encodedUrl}`;
+            node.icon["@_src"] = getProxiedImageUrl(node.icon["@_src"], sourceName, req);
         }
     };
 
@@ -104,8 +105,7 @@ export async function setupEPGRoutes(app) {
             req.get('X-Url-Scheme') ||
             (req.get('X-Forwarded-Ssl') === 'on' ? 'https' : req.protocol);
 
-        const publicBaseUrl = `${protocol}://${req.get('host')}`;
-        const rewritten = rewriteImageUrls(mergedEPG, publicBaseUrl);
+        const rewritten = rewriteImageUrls(mergedEPG, req);
 
         res.set('Content-Type', 'application/xml');
         res.send(rewritten);
