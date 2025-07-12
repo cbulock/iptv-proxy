@@ -64,7 +64,7 @@ export function setupLineupRoutes(app, config) {
     if (!channel) return res.status(404).send('Channel not found');
 
     try {
-      const response = await axios.get(channel.url, { responseType: 'stream' });
+      const response = await axios.get(channel.original_url, { responseType: 'stream' });
       res.set(response.headers);
       response.data.pipe(res);
     } catch (err) {
