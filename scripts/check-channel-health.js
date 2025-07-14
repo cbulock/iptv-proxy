@@ -26,9 +26,6 @@ async function checkStream(url) {
             validateStatus: null,
         });
 
-        console.log(`Checked ${url} -> status ${response.status}, content-type ${response.headers['content-type']}`);
-
-
         if (
             response.status === 200 &&
             response.headers['content-type'] &&
