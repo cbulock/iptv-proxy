@@ -2,8 +2,15 @@ import fs from 'fs/promises';
 import axios from 'axios';
 import yaml from 'yaml';
 
-const appConfig = yaml.parse(await fs.readFile('./config/app.yaml', 'utf8'));
-const BASE_URL = appConfig.base_url;
+let appConfig;
+let BASE_URL;
+try {
+    appConfig = yaml.parse(await fs.readFile('./config/app.yaml', 'utf8'));
+    BASE_URL = appConfig.base_url;
+} catch (err) {
+    console.error(`Failed to load configuration from app.yaml: ${err.message}`);
+    process.exit(1);
+}
 
 const CHANNELS_FILE = './data/channels.json';
 const STATUS_FILE = './data/lineup_status.json';
