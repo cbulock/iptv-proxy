@@ -1,11 +1,17 @@
 import fs from 'fs/promises';
 import express from 'express';
+import RateLimit from 'express-rate-limit';
 const router = express.Router();
 
 const CHANNELS_FILE = './data/channels.json';
 const STATUS_FILE = './data/lineup_status.json';
 
-router.get('/', async (req, res) => {
+const limiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+});
+
+router.get('/', limiter, async (req, res) => {
   try {
     const channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
     let filtered = channels;
