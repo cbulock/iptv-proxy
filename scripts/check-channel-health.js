@@ -1,31 +1,32 @@
 import fs from 'fs/promises';
 import axios from 'axios';
 import yaml from 'yaml';
+import pLimit from 'p-limit';
 
-let appConfig;
-let BASE_URL;
+const CHANNELS_FILE = './data/channels.json';
+const STATUS_FILE = './data/lineup_status.json';
+
+let config;
+let baseUrl = 'http://localhost:3000';
 try {
-    appConfig = yaml.parse(await fs.readFile('./config/app.yaml', 'utf8'));
-    BASE_URL = appConfig.base_url;
+    config = yaml.parse(await fs.readFile('./config/app.yaml', 'utf8'));
+    baseUrl = config.base_url;
 } catch (err) {
     console.error(`Failed to load configuration from app.yaml: ${err.message}`);
     process.exit(1);
 }
 
-const CHANNELS_FILE = './data/channels.json';
-const STATUS_FILE = './data/lineup_status.json';
+const limit = pLimit(5); // Concurrency limit
 
 function getFullUrl(url) {
-    return url.startsWith('http://') || url.startsWith('https://')
-        ? url
-        : BASE_URL + url;
+    return url.startsWith('http://') || url.startsWith('https://') ? url : baseUrl + url;
 }
 
 async function checkStream(url) {
     try {
         const response = await axios.get(url, {
             headers: {
-                'User-Agent': 'iptv-proxy health-check/1.0',
+                'User-Agent': 'IPTV Proxy Health Check',
             },
             timeout: 5000,
             responseType: 'stream',
@@ -33,35 +34,32 @@ async function checkStream(url) {
             validateStatus: null,
         });
 
-        if (
-            response.status === 200 &&
-            response.headers['content-type'] &&
-            (response.headers['content-type'].startsWith('video/') ||
-                response.headers['content-type'].includes('mpegurl') ||
-                response.headers['content-type'].includes('octet-stream'))
-        ) {
-            return true;
-        }
+        const contentType = response.headers['content-type'] || '';
+        return response.status === 200 && (
+            contentType.startsWith('video/') ||
+            contentType.includes('mpegurl') ||
+            contentType.includes('octet-stream')
+        );
     } catch (err) {
-        console.warn(`Error checking ${url}: ${err.message}`);
+        return false;
     }
-
-    return false;
 }
 
 async function runHealthCheck() {
     const channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
-    const statusMap = {};
 
-    for (const channel of channels) {
-        const healthy = await checkStream(getFullUrl(channel.url));
-        if (channel.tvg_id) {
-            statusMap[channel.tvg_id] = healthy ? 'online' : 'offline';
-        }
-        else {
-            console.warn(`Channel missing tvg_id: ${channel.name}`);
-        }
-    }
+    const tasks = channels.map(channel => {
+        const id = channel.tvg_id;
+        const url = getFullUrl(channel.url);
+
+        return limit(async () => {
+            const healthy = await checkStream(url);
+            return { id, healthy };
+        });
+    });
+
+    const results = await Promise.all(tasks);
+    const statusMap = Object.fromEntries(results.map(r => [r.id, r.healthy ? 'online' : 'offline']));
 
     await fs.writeFile(STATUS_FILE, JSON.stringify(statusMap, null, 2));
 }
