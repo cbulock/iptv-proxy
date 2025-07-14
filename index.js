@@ -6,6 +6,7 @@ import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
 import { imageProxyRoute } from './libs/proxy-image.js';
+import channelsRoute from './server/channels.js';
 import { parseAll } from './scripts/parseM3U.js';
 
 const app = express();
@@ -21,10 +22,14 @@ const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8'));
 const config = { ...m3uConfig, host: 'localhost' };
 
 // Register routes
+app.use('/channels', channelsRoute);
 imageProxyRoute(app);
 setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config);
 await setupEPGRoutes(app);
+
+// Start cron job for channel health checks
+import './scripts/scheduler.js';
 
 // Friendly startup banner
 app.listen(port, () => {
