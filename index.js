@@ -2,17 +2,25 @@ import express from 'express';
 import fs from 'fs';
 import yaml from 'yaml';
 import chalk from 'chalk';
+import path from 'path';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
 import { imageProxyRoute } from './libs/proxy-image.js';
 import channelsRoute from './server/channels.js';
+import configRoute from './server/config.js';
 import { parseAll } from './scripts/parseM3U.js';
 
 const app = express();
 const port = 34400;
 
 app.set('trust proxy', true);
+app.use(express.json({ limit: '1mb' }));
+// Use absolute path for static assets to avoid CWD issues
+const publicDir = path.resolve('./public');
+app.use(express.static(publicDir));
+app.get('/admin', (req, res) => res.sendFile(path.join(publicDir, 'admin.html')));
+app.get('/admin.html', (req, res) => res.sendFile(path.join(publicDir, 'admin.html')));
 
 // Parse channels from M3U sources before server setup
 await parseAll();
@@ -23,6 +31,7 @@ const config = { ...m3uConfig, host: 'localhost' };
 
 // Register routes
 app.use('/channels', channelsRoute);
+app.use(configRoute);
 imageProxyRoute(app);
 setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config);
@@ -37,4 +46,5 @@ app.listen(port, () => {
   console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
   console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/lineup.m3u`));
   console.log(chalk.cyan(`  XMLTV Guide:`), chalk.yellow(`${base}/xmltv.xml`));
+  console.log(chalk.cyan(`  Admin UI:`), chalk.yellow(`${base}/admin.html`));
 });

@@ -2,13 +2,9 @@ import fs from 'fs';
 import axios from 'axios';
 import yaml from 'yaml';
 
-const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8'));
-const map = yaml.parse(fs.readFileSync('./config/channel-map.yaml', 'utf8'));
-
-const sources = m3uConfig.urls || [];
 const outputPath = './data/channels.json';
 
-function applyMapping(channel) {
+function applyMapping(channel, map) {
     // Try name-based mapping first
     let mapping = map[channel.name];
 
@@ -39,6 +35,11 @@ function proxyURL(channel) {
 
 export async function parseAll() {
     const allChannels = [];
+
+    // Load config dynamically so updates take effect without restart
+    const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8')) || {};
+    const sources = m3uConfig.urls || [];
+    const map = yaml.parse(fs.readFileSync('./config/channel-map.yaml', 'utf8')) || {};
 
     for (const source of sources) {
         try {
@@ -72,7 +73,7 @@ export async function parseAll() {
                         }
                     };
 
-                    allChannels.push(applyMapping(channel));
+                    allChannels.push(applyMapping(channel, map));
                 }
 
                 let current = {
@@ -105,7 +106,7 @@ export async function parseAll() {
                     } else if (line && !line.startsWith('#')) {
                         current.url = proxyURL(current);
                         current.original_url = line.trim();
-                        allChannels.push(applyMapping(current));
+                        allChannels.push(applyMapping(current, map));
                         current = {};
                     }
                 }
@@ -118,5 +119,7 @@ export async function parseAll() {
     fs.mkdirSync('./data', { recursive: true });
     fs.writeFileSync(outputPath, JSON.stringify(allChannels, null, 2));
     console.log(`Parsed ${allChannels.length} channels to ${outputPath}`);
+
+    return allChannels.length;
 }
 

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>IPTV Proxy Admin</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background:#111; color:#eee; }
+    h1 { margin-top:0; }
+    table { width:100%; border-collapse: collapse; margin-bottom:1rem; }
+    th, td { border:1px solid #333; padding:.5rem; }
+    input[type=text] { width:100%; box-sizing:border-box; background:#222; border:1px solid #444; color:#eee; }
+    button { background:#2563eb; color:#fff; border:none; padding:.5rem .9rem; cursor:pointer; border-radius:4px; }
+    button.danger { background:#dc2626; }
+    #status { margin-bottom:1rem; min-height:1.2em; }
+    .row-actions { white-space:nowrap; }
+    #addBtn { margin-bottom:1rem; }
+    .flex { display:flex; gap:.5rem; flex-wrap:wrap; }
+    footer { margin-top:2rem; font-size:.75rem; opacity:.6; }
+  </style>
+</head>
+<body>
+  <h1>IPTV Proxy Admin</h1>
+  <div id="status"></div>
+  <button id="addBtn">Add Source</button>
+  <table id="sourcesTbl">
+    <thead>
+      <tr><th>Name</th><th>Type</th><th>URL</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <div class="flex">
+    <button id="saveBtn">Save Config</button>
+    <button id="reloadBtn">Reload Channels</button>
+  </div>
+  <footer>Editing <code>config/m3u.yaml</code>. Changes require channel reload.</footer>
+  <script src="admin.js" type="module"></script>
+</body>
+</html>
