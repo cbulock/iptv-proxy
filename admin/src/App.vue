@@ -1,82 +1,66 @@
 <template>
-  <div>
-    <h1>IPTV Proxy Admin</h1>
-    <nav class="tabs">
-      <button :class="{active: tab==='app'}" @click="tab='app'">App</button>
-      <button :class="{active: tab==='channels'}" @click="tab='channels'">Channels</button>
-      <button :class="{active: tab==='epg'}" @click="tab='epg'">EPG</button>
-    </nav>
-    <p v-if="status" :style="{ color: statusOk ? '#10b981' : '#f87171' }">{{ status }}</p>
+  <n-config-provider :theme="darkTheme">
+    <n-layout>
+      <n-layout-header bordered style="padding:1rem;display:flex;align-items:center;gap:1rem;">
+        <h1 style="margin:0;font-size:1.2rem;">IPTV Proxy Admin</h1>
+      </n-layout-header>
+      <n-layout-content style="padding:1rem;">
+  <n-tabs v-model:value="tab" type="line" animated>
+          <n-tab-pane name="app" tab="App">
+            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
+            <n-form label-placement="left" label-width="120">
+              <n-form-item label="Base URL">
+                <n-input v-model:value="app.base_url" placeholder="https://example.com" />
+              </n-form-item>
+              <n-space>
+                <n-button type="primary" @click="saveApp" :loading="savingApp">{{ savingApp ? 'Saving...' : 'Save App' }}</n-button>
+              </n-space>
+            </n-form>
+            <div class="foot">Editing <code>config/app.yaml</code>. Used for absolute URL generation behind proxies.</div>
+          </n-tab-pane>
 
-    <section v-show="tab==='app'">
-      <div class="flex">
-        <button @click="saveApp" :disabled="savingApp">{{ savingApp ? 'Saving...' : 'Save App' }}</button>
-      </div>
-      <table style="margin-top:1rem">
-        <tbody>
-          <tr>
-            <td style="width:200px">Base URL</td>
-            <td><input type="text" v-model="app.base_url" placeholder="https://example.com" /></td>
-          </tr>
-        </tbody>
-      </table>
-      <footer>Editing <code>config/app.yaml</code>. Used for absolute URL generation behind proxies.</footer>
-    </section>
+          <n-tab-pane name="channels" tab="Channels">
+            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
+            <n-space align="center" wrap style="margin-bottom:.5rem;">
+              <n-button type="primary" secondary @click="addSource">Add Source</n-button>
+              <n-button type="primary" @click="saveChannels" :loading="savingChannels">{{ savingChannels ? 'Saving...' : 'Save Channels' }}</n-button>
+            </n-space>
+            <n-data-table
+              v-if="channelSources.length"
+              :columns="channelColumns"
+              :data="channelSources"
+              :bordered="false"
+              :row-key="rowKeyFn"
+            />
+            <div v-else style="margin-top:1rem; opacity:.7">No channel sources configured yet.</div>
+            <div class="foot">Editing <code>config/m3u.yaml</code>. Changes require channel reload.</div>
+          </n-tab-pane>
 
-    <section v-show="tab==='channels'">
-      <div class="flex">
-        <button @click="addSource">Add Source</button>
-        <button @click="saveChannels" :disabled="savingChannels">{{ savingChannels ? 'Saving...' : 'Save Channels' }}</button>
-        <button @click="reloadChannels" :disabled="reloadingChannels">{{ reloadingChannels ? 'Reloading...' : 'Reload Channels' }}</button>
-      </div>
-      <table v-if="channelSources.length" style="margin-top:1rem">
-        <thead>
-          <tr><th>Name</th><th>Type</th><th>URL</th><th></th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="(s,i) in channelSources" :key="'c'+i">
-            <td><input type="text" v-model="s.name" /></td>
-            <td>
-              <select v-model="s.type">
-                <option value="m3u">M3U</option>
-                <option value="hdhomerun">HDHomeRun</option>
-              </select>
-            </td>
-            <td><input type="text" v-model="s.url" /></td>
-            <td class="row-actions"><button class="danger" @click="removeChannelSource(i)">✕</button></td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else style="margin-top:1rem; opacity:.7">No channel sources configured yet.</div>
-      <footer>Editing <code>config/m3u.yaml</code>. Changes require channel reload.</footer>
-    </section>
-
-    <section v-show="tab==='epg'">
-      <div class="flex">
-        <button @click="addEPGSource">Add EPG Source</button>
-        <button @click="saveEPG" :disabled="savingEPG">{{ savingEPG ? 'Saving...' : 'Save EPG' }}</button>
-        <button @click="reloadEPG" :disabled="reloadingEPG">{{ reloadingEPG ? 'Reloading...' : 'Reload EPG' }}</button>
-      </div>
-      <table v-if="epgSources.length" style="margin-top:1rem">
-        <thead>
-          <tr><th>Name</th><th>URL</th><th></th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="(s,i) in epgSources" :key="'e'+i">
-            <td><input type="text" v-model="s.name" /></td>
-            <td><input type="text" v-model="s.url" /></td>
-            <td class="row-actions"><button class="danger" @click="removeEPGSource(i)">✕</button></td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else style="margin-top:1rem; opacity:.7">No EPG sources configured yet.</div>
-      <footer>Editing <code>config/epg.yaml</code>. Changes require EPG reload.</footer>
-    </section>
-  </div>
+          <n-tab-pane name="epg" tab="EPG">
+            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
+            <n-space align="center" wrap style="margin-bottom:.5rem;">
+              <n-button type="primary" secondary @click="addEPGSource">Add EPG Source</n-button>
+              <n-button type="primary" @click="saveEPG" :loading="savingEPG">{{ savingEPG ? 'Saving...' : 'Save EPG' }}</n-button>
+            </n-space>
+            <n-data-table
+              v-if="epgSources.length"
+              :columns="epgColumns"
+              :data="epgSources"
+              :bordered="false"
+              :row-key="rowKeyFn"
+            />
+            <div v-else style="margin-top:1rem; opacity:.7">No EPG sources configured yet.</div>
+            <div class="foot">Editing <code>config/epg.yaml</code>. Changes require EPG reload.</div>
+          </n-tab-pane>
+        </n-tabs>
+      </n-layout-content>
+    </n-layout>
+  </n-config-provider>
 </template>
 
 <script setup>
-import { reactive, toRefs } from "vue";
+import { reactive, toRefs, h } from 'vue';
+import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable } from 'naive-ui';
 
 const state = reactive({
   tab: 'app',
@@ -88,7 +72,8 @@ const state = reactive({
   savingChannels: false,
   reloadingChannels: false,
   savingEPG: false,
-  reloadingEPG: false
+  reloadingEPG: false,
+  savingApp: false
 });
 
 function setStatus(msg, ok = true) {
@@ -234,61 +219,33 @@ loadApp();
 
 // Expose reactive fields directly in template
 const { tab, app, channelSources, epgSources, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp } = toRefs(state);
+
+function rowKey(row) { return row.name + row.url; }
+
+const channelColumns = [
+  { title: 'Name', key: 'name', render(row) { return h(NInput, { value: row?.name ?? '', onUpdateValue: v => row.name = v }); } },
+  { title: 'Type', key: 'type', render(row) { return h(NSelect, { value: row?.type ?? 'm3u', options: [ {label:'M3U', value:'m3u'}, {label:'HDHomeRun', value:'hdhomerun'} ], onUpdateValue: v => row.type = v }); } },
+  { title: 'URL', key: 'url', render(row) { return h(NInput, { value: row?.url ?? '', onUpdateValue: v => row.url = v }); } },
+  { title: 'Remove', key: 'remove', render(row) { return h(NButton, { type:'error', size:'small', onClick: () => removeChannelSource(channelSources.value.indexOf(row)) }, { default: () => '✕' }); } }
+];
+
+const epgColumns = [
+  { title: 'Name', key: 'name', render(row) { return h(NInput, { value: row?.name ?? '', onUpdateValue: v => row.name = v }); } },
+  { title: 'URL', key: 'url', render(row) { return h(NInput, { value: row?.url ?? '', onUpdateValue: v => row.url = v }); } },
+  { title: 'Remove', key: 'remove', render(row) { return h(NButton, { type:'error', size:'small', onClick: () => removeEPGSource(epgSources.value.indexOf(row)) }, { default: () => '✕' }); } }
+];
+
+function rowKeyFn(row) {
+  return (row?.name || '') + '|' + (row?.url || '');
+}
+
+// use imported darkTheme directly in template
 </script>
 
 <style>
-body {
-  font-family: system-ui, sans-serif;
-  margin: 2rem;
-  background: #111;
-  color: #eee;
-}
-h1 {
-  margin-top: 0;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 1rem;
-}
-th,
-td {
-  border: 1px solid #333;
-  padding: 0.5rem;
-}
-input[type="text"] {
-  width: 100%;
-  box-sizing: border-box;
-  background: #222;
-  border: 1px solid #444;
-  color: #eee;
-}
-button {
-  background: #2563eb;
-  color: #fff;
-  border: none;
-  padding: 0.5rem 0.9rem;
-  cursor: pointer;
-  border-radius: 4px;
-}
-button.danger {
-  background: #dc2626;
-}
-footer {
-  margin-top: 2rem;
-  font-size: 0.75rem;
-  opacity: 0.6;
-}
-.row-actions {
-  white-space: nowrap;
-}
-.flex {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.5rem;
-}
-.tabs { display:flex; gap:.5rem; margin-bottom:1rem; }
-.tabs button { background:#222; border:1px solid #444; color:#eee; padding:.4rem .8rem; }
-.tabs button.active { background:#2563eb; border-color:#2563eb; }
+.foot { margin-top: 1rem; font-size: .75rem; opacity:.7; }
+html, body, #app { height:100%; margin:0; }
+n-layout { min-height:100%; }
+n-layout-content { flex:1; display:block; }
+body { background:#111; }
 </style>
