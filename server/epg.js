@@ -6,6 +6,16 @@ import escapeHtml from 'escape-html';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
+// Module-level refresher that will be set when routes are initialized
+let refreshImpl = null;
+export async function refreshEPG() {
+    if (typeof refreshImpl === 'function') {
+        await refreshImpl();
+    } else {
+        throw new Error('EPG refresher not initialized');
+    }
+}
+
 const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_"
@@ -91,6 +101,9 @@ export async function setupEPGRoutes(app) {
 
         mergedEPG = builder.build(merged);
     }
+
+    // Expose refresher
+    refreshImpl = fetchAndMergeEPGs;
 
     await fetchAndMergeEPGs();
     setInterval(fetchAndMergeEPGs, 6 * 60 * 60 * 1000);
