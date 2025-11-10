@@ -19,8 +19,16 @@ app.use(express.json({ limit: '1mb' }));
 // Use absolute path for static assets to avoid CWD issues
 const publicDir = path.resolve('./public');
 app.use(express.static(publicDir));
-app.get('/admin', (req, res) => res.sendFile(path.join(publicDir, 'admin.html')));
-app.get('/admin.html', (req, res) => res.sendFile(path.join(publicDir, 'admin.html')));
+// Serve node_modules to allow ESM imports without a bundler
+app.use('/node_modules', express.static(path.resolve('./node_modules')));
+// Admin UI: prefer built Vite output if present
+const builtAdminDir = path.join(publicDir, 'admin');
+app.get(['/admin','/admin.html'], (req, res) => {
+  const target = fs.existsSync(path.join(builtAdminDir, 'index.html'))
+    ? path.join(builtAdminDir, 'index.html')
+    : path.join(publicDir, 'index.html');
+  res.sendFile(target);
+});
 
 // Parse channels from M3U sources before server setup
 await parseAll();
@@ -46,5 +54,5 @@ app.listen(port, () => {
   console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
   console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/lineup.m3u`));
   console.log(chalk.cyan(`  XMLTV Guide:`), chalk.yellow(`${base}/xmltv.xml`));
-  console.log(chalk.cyan(`  Admin UI:`), chalk.yellow(`${base}/admin.html`));
+  console.log(chalk.cyan(`  Admin UI:`), chalk.yellow(`${base}/admin`));
 });

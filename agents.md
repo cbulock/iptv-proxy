@@ -9,7 +9,8 @@ Copilot should help extend and maintain this codebase in JavaScript (ESM).
 ---
 
 ## Architecture Overview
-- **Runtime:** Node.js ≥ 20  
+- **Runtime:** Node.js ≥ 20
+- **Admin UI** Vue.js 3
 - **Framework:** Express  
 - **Config:** YAML files in `/config`  
 - **Logging:** Pino  
@@ -99,6 +100,7 @@ When prompted, Copilot should be able to:
 - One default export per file, unless utilities.  
 - ESM imports (`import x from`), not `require()`.  
 - Avoid large async concurrency — rate-limit fetches.
+- Use Composition API for Vue.js components
 
 ---
 

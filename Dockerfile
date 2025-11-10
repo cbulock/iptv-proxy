@@ -6,10 +6,16 @@ WORKDIR /usr/src/app
 
 # Install app dependencies
 COPY package.json package-lock.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy source code
 COPY . .
+
+# Build Admin UI (Vite) and prune dev deps
+WORKDIR /usr/src/app/admin
+RUN npm install && npm run build
+WORKDIR /usr/src/app
+RUN npm prune --production
 
 # Make /config the single mount point for all configs,
 # but preserve defaults if present

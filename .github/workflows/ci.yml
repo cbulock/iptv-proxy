@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install admin deps
+        working-directory: admin
+        run: npm install
+
+      - name: Build admin UI
+        working-directory: admin
+        run: npm run build
+
+      - name: Upload built admin
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-dist
+          path: public/admin
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-admin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: iptv-proxy:ci
