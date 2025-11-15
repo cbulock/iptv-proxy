@@ -97,6 +97,23 @@
             <div v-else style="margin-top:1rem; opacity:.7">No mappings yet. Add one to map EPG names to tvg-id and numbers.</div>
             <div class="foot">Editing <code>config/channel-map.yaml</code>. Save and then reload channels to apply.</div>
           </n-tab-pane>
+          <n-tab-pane name="health" tab="Health">
+            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
+            <n-space align="center" wrap style="margin-bottom:.75rem;">
+              <n-button type="primary" @click="loadHealth" :loading="loadingHealth">{{ loadingHealth ? 'Loading...' : 'Refresh Status' }}</n-button>
+              <n-button type="primary" secondary @click="runHealth" :loading="runningHealth">{{ runningHealth ? 'Running...' : 'Run Health Check' }}</n-button>
+            </n-space>
+            <div v-if="healthDetails.length">
+              <n-data-table
+                :columns="healthColumns"
+                :data="healthDetails"
+                :bordered="false"
+                :row-key="row => row.id"
+              />
+            </div>
+            <div v-else style="opacity:.6">No health data yet. Run a health check.</div>
+            <div class="foot">Channel health statuses are stored in <code>data/lineup_status.json</code>.</div>
+          </n-tab-pane>
         </n-tabs>
       </n-layout-content>
     </n-layout>
@@ -125,7 +142,10 @@ const state = reactive({
   savingEPG: false,
   reloadingEPG: false,
   savingApp: false,
-  savingMapping: false
+  savingMapping: false,
+  health: {},
+  loadingHealth: false,
+  runningHealth: false,
 });
 
 function setStatus(msg, ok = true) {
@@ -354,18 +374,68 @@ function quickAddMapping(s) {
   if (idx >= 0) state.unmapped.splice(idx, 1);
 }
 
+async function loadHealth() {
+  try {
+    state.loadingHealth = true;
+    const r = await fetch('/api/channel-health');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to load health');
+    state.health = { summary: j.summary || {}, details: j.details || [] };
+  } catch (e) {
+    setStatus(e.message, false);
+  } finally {
+    state.loadingHealth = false;
+  }
+}
+
+async function runHealth() {
+  try {
+    state.runningHealth = true;
+    setStatus('Running health check...');
+    const r = await fetch('/api/channel-health/run', { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Health run failed');
+    state.health = { summary: j.summary || {}, details: j.details || [] };
+    setStatus('Health check completed');
+  } catch (e) {
+    setStatus(e.message, false);
+  } finally {
+    state.runningHealth = false;
+  }
+}
+
 // Initial loads
 loadChannels();
 loadEPG();
 loadApp();
 loadMapping();
+loadHealth();
 // keep unmapped list in sync when filters or rows change
 watch(() => state.unmappedSource, () => { refreshUnmapped(); });
 watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping } = toRefs(state);
+const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping } = toRefs(state);
+
+const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
+  id: d.id,
+  status: d.healthy ? 'online' : 'offline',
+  ms: d.ms,
+  code: d.statusCode,
+  contentType: d.contentType,
+  error: d.error,
+  method: d.method,
+  path: d.path
+})) : Object.entries(health.value.summary || {}).map(([id, status]) => ({ id, status, ms: '', code: '', contentType: '', error: '', method: '', path: '' })));
+
+const healthColumns = [
+  { title: 'Channel ID', key: 'id' },
+  { title: 'Status', key: 'status', render(row) { return h('span', { style: `font-weight:600;color:${row.status==='online'?'#21c35b':'#d9534f'}` }, row.status); } },
+  { title: 'Latency (ms)', key: 'ms' },
+  { title: 'Content-Type', key: 'contentType' },
+  { title: 'Error', key: 'error' }
+];
 
 function rowKey(row) { return row.name + row.url; }
 

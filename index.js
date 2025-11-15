@@ -9,6 +9,7 @@ import { setupEPGRoutes } from './server/epg.js';
 import { imageProxyRoute } from './libs/proxy-image.js';
 import channelsRoute from './server/channels.js';
 import configRoute from './server/config.js';
+import healthRouter from './server/health.js';
 import { parseAll } from './scripts/parseM3U.js';
 
 const app = express();
@@ -40,6 +41,7 @@ const config = { ...m3uConfig, host: 'localhost' };
 // Register routes
 app.use('/channels', channelsRoute);
 app.use(configRoute);
+app.use('/', healthRouter);
 imageProxyRoute(app);
 setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config);
