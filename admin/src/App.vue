@@ -26,7 +26,7 @@
               <n-button type="primary" @click="saveChannels" :loading="savingChannels">{{ savingChannels ? 'Saving...' : 'Save Channels' }}</n-button>
             </n-space>
             <n-data-table
-              v-if="channelSources.length"
+              v-if="Array.isArray(channelSources) && channelSources.length"
               :columns="channelColumns"
               :data="channelSources"
               :bordered="false"
@@ -43,7 +43,7 @@
               <n-button type="primary" @click="saveEPG" :loading="savingEPG">{{ savingEPG ? 'Saving...' : 'Save EPG' }}</n-button>
             </n-space>
             <n-data-table
-              v-if="epgSources.length"
+              v-if="Array.isArray(epgSources) && epgSources.length"
               :columns="epgColumns"
               :data="epgSources"
               :bordered="false"
@@ -52,6 +52,51 @@
             <div v-else style="margin-top:1rem; opacity:.7">No EPG sources configured yet.</div>
             <div class="foot">Editing <code>config/epg.yaml</code>. Changes require EPG reload.</div>
           </n-tab-pane>
+
+          <n-tab-pane name="mapping" tab="Mapping">
+            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
+            <n-space align="center" wrap style="margin-bottom:.5rem;">
+              <n-button type="primary" secondary @click="addMappingRow">Add Mapping</n-button>
+              <n-button type="primary" @click="saveMapping" :loading="savingMapping">{{ savingMapping ? 'Saving...' : 'Save Mapping' }}</n-button>
+              <n-button @click="reloadChannels" :loading="reloadingChannels">Reload Channels</n-button>
+            </n-space>
+            <n-collapse>
+              <n-collapse-item title="Unmapped (click to expand)" name="unmapped">
+                <n-space align="center" wrap style="margin-bottom:.5rem;">
+                  <n-select
+                    style="min-width: 220px;"
+                    clearable
+                    placeholder="Filter by source"
+                    :options="channelSources.map(s => ({ label: s.name, value: s.name }))"
+                    v-model:value="unmappedSource"
+                  />
+                  <div style="display:flex; align-items:center; gap:.5rem;">
+                    <n-switch v-model:value="hideAdded" />
+                    <span style="opacity:.8">Hide ones already added</span>
+                  </div>
+                  <n-button size="small" @click="refreshUnmapped">Refresh</n-button>
+                </n-space>
+                <div v-if="Array.isArray(unmapped) && unmapped.length">
+                  <n-space vertical>
+                    <div v-for="(s, i) in unmapped" :key="'u'+i" style="display:flex; gap:.5rem; align-items:center;">
+                      <div style="flex:1 1 auto; opacity:.9">{{ s.name }} <span v-if="s.tvg_id" style="opacity:.6">({{ s.tvg_id }})</span> <span v-if="s.source" style="opacity:.5; margin-left:.5rem;">— {{ s.source }}</span></div>
+                      <n-button size="small" @click="quickAddMapping(s)">Add</n-button>
+                    </div>
+                  </n-space>
+                </div>
+                <div v-else style="opacity:.6">No unmapped items detected.</div>
+              </n-collapse-item>
+            </n-collapse>
+            <n-data-table
+              v-if="Array.isArray(mappingRows) && mappingRows.length"
+              :columns="mappingColumns"
+              :data="sortedMappingRows"
+              :bordered="false"
+              :row-key="rowKeyFn"
+            />
+            <div v-else style="margin-top:1rem; opacity:.7">No mappings yet. Add one to map EPG names to tvg-id and numbers.</div>
+            <div class="foot">Editing <code>config/channel-map.yaml</code>. Save and then reload channels to apply.</div>
+          </n-tab-pane>
         </n-tabs>
       </n-layout-content>
     </n-layout>
@@ -59,21 +104,28 @@
 </template>
 
 <script setup>
-import { reactive, toRefs, h } from 'vue';
-import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable } from 'naive-ui';
+import { reactive, toRefs, h, watch, computed } from 'vue';
+import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch } from 'naive-ui';
 
 const state = reactive({
   tab: 'app',
   app: { base_url: '' },
   channelSources: [],
   epgSources: [],
+  mapping: {},
+  mappingRows: [],
+  candidates: { epgNames: [], tvgIds: [], tvgOptions: [] },
+  unmapped: [],
+  unmappedSource: '',
+  hideAdded: true,
   status: '',
   statusOk: true,
   savingChannels: false,
   reloadingChannels: false,
   savingEPG: false,
   reloadingEPG: false,
-  savingApp: false
+  savingApp: false,
+  savingMapping: false
 });
 
 function setStatus(msg, ok = true) {
@@ -106,6 +158,62 @@ async function loadEPG() {
   } catch (e) {
     setStatus('Failed to load EPG config: ' + e.message, false);
   }
+}
+
+async function loadMapping() {
+  try {
+  const [mapRes, candRes, unmappedRes] = await Promise.all([
+      fetch('/api/config/channel-map'),
+      fetch('/api/mapping/candidates'),
+      fetch('/api/mapping/unmapped')
+    ]);
+    const map = await mapRes.json();
+    const candidates = await candRes.json();
+    const unmapped = await unmappedRes.json();
+    state.mapping = map || {};
+    state.candidates = candidates || { epgNames: [], tvgIds: [], tvgOptions: [] };
+    state.unmapped = Array.isArray(unmapped?.suggestions) ? unmapped.suggestions : [];
+    // flatten mapping into rows for editing
+    state.mappingRows = Object.entries(state.mapping).map(([name, v]) => ({ name, number: v.number || '', tvg_id: v.tvg_id || '' }));
+    setStatus('Loaded mapping');
+    // refresh with filters applied
+    await refreshUnmapped();
+  } catch (e) {
+    setStatus('Failed to load mapping: ' + e.message, false);
+  }
+}
+
+async function refreshUnmapped() {
+  try {
+    const url = state.unmappedSource ? `/api/mapping/unmapped?source=${encodeURIComponent(state.unmappedSource)}` : '/api/mapping/unmapped';
+    const r = await fetch(url);
+    const j = await r.json();
+    const list = Array.isArray(j?.suggestions) ? j.suggestions : [];
+    const existing = new Set(state.mappingRows.map(r => r.name));
+    const filtered = state.hideAdded ? list.filter(s => !existing.has(s.name)) : list;
+    // sort by tvg_id (numeric dot notation if possible, else string)
+    const isNumericDots = (v) => typeof v === 'string' && /^\d+(?:\.\d+)*$/.test(v);
+    const cmpTvg = (a, b) => {
+      const av = a?.tvg_id || '';
+      const bv = b?.tvg_id || '';
+      if (isNumericDots(av) && isNumericDots(bv)) {
+        const ap = av.split('.').map(Number);
+        const bp = bv.split('.').map(Number);
+        const len = Math.max(ap.length, bp.length);
+        for (let i = 0; i < len; i++) {
+          const ai = ap[i] ?? 0;
+          const bi = bp[i] ?? 0;
+          if (ai !== bi) return ai - bi;
+        }
+        return 0;
+      }
+      // Empty tvg_id to the end
+      if (!av && bv) return 1;
+      if (!bv && av) return -1;
+      return String(av).localeCompare(String(bv));
+    };
+    state.unmapped = filtered.slice().sort(cmpTvg);
+  } catch (_) {}
 }
 
 async function loadApp() {
@@ -203,6 +311,26 @@ async function saveApp() {
   }
 }
 
+async function saveMapping() {
+  try {
+    state.savingMapping = true;
+    // build object back from rows
+    const obj = {};
+    for (const row of state.mappingRows) {
+      if (!row.name) continue;
+      obj[row.name] = { number: String(row.number || ''), tvg_id: String(row.tvg_id || '') };
+    }
+    const r = await fetch('/api/config/channel-map', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Save mapping failed');
+    setStatus('Mapping saved. Reload channels to apply.');
+  } catch (e) {
+    setStatus(e.message, false);
+  } finally {
+    state.savingMapping = false;
+  }
+}
+
 function addSource() { addChannelSource(); }
 function addChannelSource() {
   state.channelSources.push({ name: '', type: 'm3u', url: '' });
@@ -212,13 +340,32 @@ function removeChannelSource(i) { state.channelSources.splice(i,1); }
 function addEPGSource() { state.epgSources.push({ name: '', url: '' }); }
 function removeEPGSource(i) { state.epgSources.splice(i,1); }
 
+function addMappingRow() { state.mappingRows.push({ name: '', number: '', tvg_id: '' }); }
+function removeMappingRow(i) { state.mappingRows.splice(i,1); }
+
+function quickAddMapping(s) {
+  if (!s) return;
+  // Avoid duplicates by name
+  if (!state.mappingRows.some(r => r.name === s.name)) {
+    state.mappingRows.push({ name: s.name || '', tvg_id: s.tvg_id || '', number: '' });
+  }
+  // remove from unmapped when added
+  const idx = state.unmapped.findIndex(x => x && x.name === s.name && (x.tvg_id || '') === (s.tvg_id || ''));
+  if (idx >= 0) state.unmapped.splice(idx, 1);
+}
+
 // Initial loads
 loadChannels();
 loadEPG();
 loadApp();
+loadMapping();
+// keep unmapped list in sync when filters or rows change
+watch(() => state.unmappedSource, () => { refreshUnmapped(); });
+watch(() => state.hideAdded, () => { refreshUnmapped(); });
+watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, channelSources, epgSources, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp } = toRefs(state);
+const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping } = toRefs(state);
 
 function rowKey(row) { return row.name + row.url; }
 
@@ -236,10 +383,24 @@ const epgColumns = [
 ];
 
 function rowKeyFn(row) {
-  return (row?.name || '') + '|' + (row?.url || '');
+  return (row?.name || '') + '|' + (row?.url ?? row?.tvg_id ?? '');
 }
 
-// use imported darkTheme directly in template
+const mappingColumns = [
+  { title: 'EPG Channel', key: 'name', render(row) { return h(NSelect, { filterable: true, options: state.candidates.epgNames.map(n => ({ label: n, value: n })), value: row?.name ?? '', onUpdateValue: v => row.name = v }); } },
+  { title: 'M3U Channel', key: 'tvg_id', render(row) { return h(NSelect, { filterable: true, options: (state.candidates.tvgOptions?.length ? state.candidates.tvgOptions : state.candidates.tvgIds.map(n => ({ label: n, value: n }))), value: row?.tvg_id ?? '', onUpdateValue: v => row.tvg_id = v }); } },
+  { title: 'Channel Number', key: 'number', render(row) { return h(NInput, { value: row?.number ?? '', onUpdateValue: v => row.number = v, placeholder: 'e.g. 101' }); } },
+  { title: 'Remove', key: 'remove', render(row) { return h(NButton, { type:'error', size:'small', onClick: () => removeMappingRow(state.mappingRows.indexOf(row)) }, { default: () => '✕' }); } }
+];
+
+// display mapping rows sorted by channel number
+const sortedMappingRows = computed(() => {
+  const num = (v) => {
+    const n = parseFloat(String(v ?? '').trim());
+    return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+  };
+  return state.mappingRows.slice().sort((a, b) => num(a.number) - num(b.number));
+});
 </script>
 
 <style>
