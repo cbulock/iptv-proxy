@@ -7,7 +7,6 @@
       <n-layout-content style="padding:1rem;">
   <n-tabs v-model:value="tab" type="line" animated>
           <n-tab-pane name="app" tab="App">
-            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
             <n-form label-placement="left" label-width="120">
               <n-form-item label="Base URL">
                 <n-input v-model:value="app.base_url" placeholder="https://example.com" />
@@ -20,7 +19,6 @@
           </n-tab-pane>
 
           <n-tab-pane name="channels" tab="Channels">
-            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
             <n-space align="center" wrap style="margin-bottom:.5rem;">
               <n-button type="primary" secondary @click="addSource">Add Source</n-button>
               <n-button type="primary" @click="saveChannels" :loading="savingChannels">{{ savingChannels ? 'Saving...' : 'Save Channels' }}</n-button>
@@ -37,7 +35,6 @@
           </n-tab-pane>
 
           <n-tab-pane name="epg" tab="EPG">
-            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
             <n-space align="center" wrap style="margin-bottom:.5rem;">
               <n-button type="primary" secondary @click="addEPGSource">Add EPG Source</n-button>
               <n-button type="primary" @click="saveEPG" :loading="savingEPG">{{ savingEPG ? 'Saving...' : 'Save EPG' }}</n-button>
@@ -54,7 +51,6 @@
           </n-tab-pane>
 
           <n-tab-pane name="mapping" tab="Mapping">
-            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
             <n-space align="center" wrap style="margin-bottom:.5rem;">
               <n-button type="primary" secondary @click="addMappingRow">Add Mapping</n-button>
               <n-button type="primary" @click="saveMapping" :loading="savingMapping">{{ savingMapping ? 'Saving...' : 'Save Mapping' }}</n-button>
@@ -98,11 +94,11 @@
             <div class="foot">Editing <code>config/channel-map.yaml</code>. Save and then reload channels to apply.</div>
           </n-tab-pane>
           <n-tab-pane name="health" tab="Health">
-            <n-alert v-if="status" :type="statusOk ? 'success' : 'error'" :title="statusOk ? 'OK' : 'Error'" style="margin:.75rem 0;">{{ status }}</n-alert>
             <n-space align="center" wrap style="margin-bottom:.75rem;">
               <n-button type="primary" @click="loadHealth" :loading="loadingHealth">{{ loadingHealth ? 'Loading...' : 'Refresh Status' }}</n-button>
               <n-button type="primary" secondary @click="runHealth" :loading="runningHealth">{{ runningHealth ? 'Running...' : 'Run Health Check' }}</n-button>
             </n-space>
+            <div v-if="formattedHealthUpdated" style="opacity:.75; margin-bottom:.5rem;">Last updated: {{ formattedHealthUpdated }}</div>
             <div v-if="healthDetails.length">
               <n-data-table
                 :columns="healthColumns"
@@ -114,6 +110,21 @@
             <div v-else style="opacity:.6">No health data yet. Run a health check.</div>
             <div class="foot">Channel health statuses are stored in <code>data/lineup_status.json</code>.</div>
           </n-tab-pane>
+          <n-tab-pane name="usage" tab="Usage">
+            <n-space align="center" wrap style="margin-bottom:.75rem;">
+              <n-button type="primary" @click="loadUsage" :loading="loadingUsage">{{ loadingUsage ? 'Loading...' : 'Refresh' }}</n-button>
+            </n-space>
+            <div v-if="activeUsage.length">
+              <n-data-table
+                :columns="usageColumns"
+                :data="activeUsage"
+                :bordered="false"
+                :row-key="row => row.key"
+              />
+            </div>
+            <div v-else style="opacity:.6">No active viewers detected.</div>
+            <div class="foot">Active usage is tracked in-memory and refreshed periodically.</div>
+          </n-tab-pane>
         </n-tabs>
       </n-layout-content>
     </n-layout>
@@ -122,7 +133,8 @@
 
 <script setup>
 import { reactive, toRefs, h, watch, computed } from 'vue';
-import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch } from 'naive-ui';
+import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, createDiscreteApi } from 'naive-ui';
+const { message } = createDiscreteApi(['message']);
 
 const state = reactive({
   tab: 'app',
@@ -146,6 +158,8 @@ const state = reactive({
   health: {},
   loadingHealth: false,
   runningHealth: false,
+  activeUsage: [],
+  loadingUsage: false,
 });
 
 function setStatus(msg, ok = true) {
@@ -166,6 +180,7 @@ async function loadChannels() {
     setStatus('Loaded channel config');
   } catch (e) {
     setStatus("Failed to load config: " + e.message, false);
+    message.error(e.message);
   }
 }
 
@@ -177,6 +192,7 @@ async function loadEPG() {
     setStatus('Loaded EPG config');
   } catch (e) {
     setStatus('Failed to load EPG config: ' + e.message, false);
+    message.error(e.message);
   }
 }
 
@@ -200,6 +216,7 @@ async function loadMapping() {
     await refreshUnmapped();
   } catch (e) {
     setStatus('Failed to load mapping: ' + e.message, false);
+    message.error(e.message);
   }
 }
 
@@ -243,6 +260,7 @@ async function loadApp() {
     state.app = { base_url: cfg.base_url || '' };
   } catch (e) {
     setStatus('Failed to load app config: ' + e.message, false);
+    message.error(e.message);
   }
 }
 
@@ -261,8 +279,10 @@ async function saveChannels() {
     const j = await r.json();
   if (!r.ok) throw new Error(j.error || "Save channels failed");
   setStatus("Channels saved. Reload channels to apply.");
+  message.success('Channels saved');
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
   state.savingChannels = false;
   }
@@ -294,8 +314,10 @@ async function saveEPG() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Save EPG failed');
     setStatus('EPG saved. Reload EPG to apply.');
+    message.success('EPG saved');
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.savingEPG = false;
   }
@@ -324,8 +346,10 @@ async function saveApp() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Save app failed');
     setStatus('App settings saved.');
+    message.success('App settings saved');
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.savingApp = false;
   }
@@ -344,8 +368,10 @@ async function saveMapping() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Save mapping failed');
     setStatus('Mapping saved. Reload channels to apply.');
+    message.success('Mapping saved');
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.savingMapping = false;
   }
@@ -380,7 +406,7 @@ async function loadHealth() {
     const r = await fetch('/api/channel-health');
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to load health');
-    state.health = { summary: j.summary || {}, details: j.details || [] };
+    state.health = { summary: j.summary || {}, details: j.details || [], meta: j.meta || null };
   } catch (e) {
     setStatus(e.message, false);
   } finally {
@@ -395,12 +421,38 @@ async function runHealth() {
     const r = await fetch('/api/channel-health/run', { method: 'POST' });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Health run failed');
-    state.health = { summary: j.summary || {}, details: j.details || [] };
+    state.health = { summary: j.summary || {}, details: j.details || [], meta: j.meta || null };
     setStatus('Health check completed');
   } catch (e) {
     setStatus(e.message, false);
   } finally {
     state.runningHealth = false;
+  }
+}
+
+async function loadUsage() {
+  try {
+    state.loadingUsage = true;
+    const r = await fetch('/api/usage/active');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to load usage');
+    const list = Array.isArray(j?.active) ? j.active : [];
+    // Normalize and sort by lastSeen desc
+    state.activeUsage = list
+      .map(u => ({
+        key: `${u.ip}|${u.channelId}`,
+        ip: u.ip,
+        channelId: u.channelId,
+        name: u.name || '',
+        tvg_id: u.tvg_id || '',
+        startedAt: u.startedAt ? new Date(u.startedAt).toLocaleString() : '',
+        lastSeenAt: u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : ''
+      }))
+      .sort((a, b) => (new Date(b.lastSeenAt).getTime() || 0) - (new Date(a.lastSeenAt).getTime() || 0));
+  } catch (e) {
+    setStatus(e.message, false);
+  } finally {
+    state.loadingUsage = false;
   }
 }
 
@@ -410,13 +462,16 @@ loadEPG();
 loadApp();
 loadMapping();
 loadHealth();
+loadUsage();
+// poll usage every 5s
+setInterval(() => { loadUsage(); }, 5000);
 // keep unmapped list in sync when filters or rows change
 watch(() => state.unmappedSource, () => { refreshUnmapped(); });
 watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping } = toRefs(state);
+const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,
@@ -435,6 +490,21 @@ const healthColumns = [
   { title: 'Latency (ms)', key: 'ms' },
   { title: 'Content-Type', key: 'contentType' },
   { title: 'Error', key: 'error' }
+];
+
+const formattedHealthUpdated = computed(() => {
+  const ended = health.value?.meta?.endedAt || health.value?.meta?.startedAt;
+  if (!ended) return '';
+  try { return new Date(ended).toLocaleString(); } catch { return String(ended); }
+});
+
+const usageColumns = [
+  { title: 'IP', key: 'ip' },
+  { title: 'Channel ID', key: 'channelId' },
+  { title: 'Name', key: 'name' },
+  { title: 'tvg-id', key: 'tvg_id' },
+  { title: 'Started', key: 'startedAt' },
+  { title: 'Last Seen', key: 'lastSeenAt' }
 ];
 
 function rowKey(row) { return row.name + row.url; }
