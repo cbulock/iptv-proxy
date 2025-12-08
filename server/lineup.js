@@ -53,7 +53,7 @@ export function setupLineupRoutes(app, config) {
     res.send(output);
   });
 
-  app.get('/stream/:source/:name', async (req, res) => {
+  app.all('/stream/:source/:name', async (req, res) => {
     const { source, name } = req.params;
     const channels = loadChannels();
 
@@ -63,12 +63,57 @@ export function setupLineupRoutes(app, config) {
 
     if (!channel) return res.status(404).send('Channel not found');
 
+    const startTime = Date.now();
+    console.info(`[stream] ${source}/${name} -> ${channel.original_url}`);
+
+    if (req.method === 'HEAD') {
+      try {
+        const response = await axios.head(channel.original_url, { timeout: 5000 });
+        res.set(response.headers);
+        res.status(response.status || 200).end();
+        console.info(`[stream] ${source}/${name} head ok in ${Date.now() - startTime}ms`);
+      } catch (err) {
+        console.warn(
+          `[stream] head failed ${source}/${name}: ${err.message}`,
+          {
+            status: err.response?.status,
+            code: err.code
+          }
+        );
+        res.status(502).end();
+      }
+      return;
+    }
+
+    if (req.method !== 'GET') {
+      return res.sendStatus(405);
+    }
+
     try {
-      const response = await axios.get(channel.original_url, { responseType: 'stream' });
+      const response = await axios.get(channel.original_url, {
+        responseType: 'stream',
+        timeout: 15000
+      });
+
+      response.data.on('error', err => {
+        console.warn(`[stream] upstream error ${source}/${name}: ${err.message}`);
+        res.destroy(err);
+      });
+
+      res.on('close', () => response.data?.destroy?.());
+      res.on('error', () => response.data?.destroy?.());
+
       res.set(response.headers);
       response.data.pipe(res);
+      console.info(`[stream] ${source}/${name} ready in ${Date.now() - startTime}ms`);
     } catch (err) {
-      console.warn(`Failed to proxy stream: ${err.message}`);
+      console.warn(
+        `[stream] failed ${source}/${name}: ${err.message}`,
+        {
+          status: err.response?.status,
+          code: err.code
+        }
+      );
       res.status(502).send('Failed to fetch stream');
     }
   });
