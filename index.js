@@ -46,22 +46,8 @@ app.use('/', healthRouter);
 app.use('/', usageRouter);
 imageProxyRoute(app);
 setupHDHRRoutes(app, config);
-setupLineupRoutes(app, config);
+setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
 await setupEPGRoutes(app);
-
-// Minimal usage tracking around stream requests
-app.use(async (req, res, next) => {
-  if (req.path.startsWith('/stream/')) {
-    const channelId = req.params?.channelId || req.path.split('/').pop();
-    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
-    const key = await registerUsage({ ip: String(ip), channelId: String(channelId) });
-    // keep lastSeen fresh on data write/finish
-    const interval = setInterval(() => touchUsage(key), 10000);
-    res.on('close', () => { clearInterval(interval); unregisterUsage(key); });
-    res.on('finish', () => { clearInterval(interval); unregisterUsage(key); });
-  }
-  next();
-});
 
 // Start cron job for channel health checks
 import './scripts/scheduler.js';

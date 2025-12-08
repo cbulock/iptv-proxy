@@ -3,7 +3,12 @@ import axios from 'axios';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
 
-export function setupLineupRoutes(app, config) {
+export function setupLineupRoutes(app, config, usageHelpers = {}) {
+  const {
+    registerUsage = async () => undefined,
+    touchUsage = () => undefined,
+    unregisterUsage = () => undefined
+  } = usageHelpers;
   const loadChannels = () =>
     JSON.parse(fs.readFileSync('./data/channels.json', 'utf8'));
 
@@ -89,24 +94,44 @@ export function setupLineupRoutes(app, config) {
       return res.sendStatus(405);
     }
 
+    let usageKey;
+    let usageInterval;
+    const registerViewer = async () => {
+      if (usageKey) return;
+      const channelId = channel.guideNumber || channel.tvg_id || channel.name;
+      const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId) });
+      usageInterval = setInterval(() => touchUsage(usageKey), 10000);
+      const cleanup = () => {
+        if (usageInterval) clearInterval(usageInterval);
+        usageInterval = null;
+        if (usageKey) unregisterUsage(usageKey);
+        usageKey = null;
+      };
+      res.on('close', cleanup);
+      res.on('finish', cleanup);
+      res.on('error', cleanup);
+    };
+
     try {
       const response = await axios.get(channel.original_url, {
         responseType: 'stream',
         timeout: 15000
       });
 
+      await registerViewer();
+
       response.data.on('error', err => {
         console.warn(`[stream] upstream error ${source}/${name}: ${err.message}`);
         res.destroy(err);
       });
 
-      res.on('close', () => response.data?.destroy?.());
-      res.on('error', () => response.data?.destroy?.());
-
       res.set(response.headers);
       response.data.pipe(res);
       console.info(`[stream] ${source}/${name} ready in ${Date.now() - startTime}ms`);
     } catch (err) {
+      if (usageKey) unregisterUsage(usageKey);
+      if (usageInterval) clearInterval(usageInterval);
       console.warn(
         `[stream] failed ${source}/${name}: ${err.message}`,
         {
