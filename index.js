@@ -3,6 +3,7 @@ import fs from 'fs';
 import yaml from 'yaml';
 import chalk from 'chalk';
 import path from 'path';
+import { initConfig } from './server/init-config.js';
 import viteConfig from './admin/vite.config.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes } from './server/lineup.js';
@@ -13,6 +14,9 @@ import configRoute from './server/config.js';
 import healthRouter from './server/health.js';
 import { parseAll } from './scripts/parseM3U.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
+
+// Ensure config files exist before anything else
+initConfig();
 
 const app = express();
 const port = 34400;
@@ -25,8 +29,8 @@ app.use(express.static(publicDir));
 // Serve node_modules to allow ESM imports without a bundler
 app.use('/node_modules', express.static(path.resolve('./node_modules')));
 // Load config
-const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8'));
-const appConfig = yaml.parse(fs.readFileSync('./config/app.yaml', 'utf8'));
+const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8')) || {};
+const appConfig = yaml.parse(fs.readFileSync('./config/app.yaml', 'utf8')) || {};
 const adminDevPort = viteConfig.server?.port || 5173;
 const config = { ...m3uConfig, ...appConfig, host: 'localhost' };
 
