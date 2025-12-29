@@ -59,8 +59,10 @@ setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
 await setupEPGRoutes(app);
 
-// Start cron job for channel health checks
-import './scripts/scheduler.js';
+// Initialize and start scheduled jobs (health checks, EPG refresh, etc.)
+import { initDefaultJobs, startScheduler } from './server/scheduler.js';
+initDefaultJobs();
+await startScheduler();
 
 // Friendly startup banner
 app.listen(port, () => {
