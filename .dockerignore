@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+.github
+
+# Dependencies
+node_modules
+admin/node_modules
+
+# Build outputs
+public/admin
+
+# Config and data (should be mounted)
+config
+data
+
+# Development
+.vscode
+*.log
+npm-debug.log*
+
+# Documentation
+README.md
+LICENSE
+agents.md
+
+# Temporary files
+tmp
+*.tmp
+.DS_Store
