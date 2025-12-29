@@ -63,7 +63,8 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test || echo "No tests defined yet"
+        run: npm test
+        continue-on-error: true
 
   build-admin:
     name: Build Admin UI

@@ -30,13 +30,11 @@ COPY libs ./libs
 COPY scripts ./scripts
 COPY server ./server
 COPY public ./public
+COPY healthcheck.sh ./
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appuser && \
-    adduser -u 1001 -S appuser -G appuser
-
-# Make /config the single mount point for all configs
-RUN mkdir -p /config && \
+    adduser -u 1001 -S appuser -G appuser && \
     chown -R appuser:appuser /usr/src/app /config
 
 # Switch to non-root user
@@ -49,7 +47,7 @@ EXPOSE 34400
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:34400/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD /bin/sh /usr/src/app/healthcheck.sh
 
 # Run the server
 CMD ["node", "index.js"]
