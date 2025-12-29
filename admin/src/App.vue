@@ -125,6 +125,21 @@
             <div v-else style="opacity:.6">No active viewers detected.</div>
             <div class="foot">Active usage is tracked in-memory and refreshed periodically.</div>
           </n-tab-pane>
+          <n-tab-pane name="tasks" tab="Tasks">
+            <n-space align="center" wrap style="margin-bottom:.75rem;">
+              <n-button type="primary" @click="loadTasks" :loading="loadingTasks">{{ loadingTasks ? 'Loading...' : 'Refresh' }}</n-button>
+            </n-space>
+            <div v-if="tasks.length">
+              <n-data-table
+                :columns="taskColumns"
+                :data="tasks"
+                :bordered="false"
+                :row-key="row => row.name"
+              />
+            </div>
+            <div v-else style="opacity:.6">No scheduled tasks found.</div>
+            <div class="foot">Scheduled tasks run automatically. You can also trigger them manually.</div>
+          </n-tab-pane>
         </n-tabs>
       </n-layout-content>
     </n-layout>
@@ -160,6 +175,9 @@ const state = reactive({
   runningHealth: false,
   activeUsage: [],
   loadingUsage: false,
+  tasks: [],
+  loadingTasks: false,
+  runningTask: null,
 });
 
 function setStatus(msg, ok = true) {
@@ -456,6 +474,57 @@ async function loadUsage() {
   }
 }
 
+async function loadTasks() {
+  try {
+    state.loadingTasks = true;
+    const r = await fetch('/api/scheduler/jobs');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to load tasks');
+    state.tasks = Array.isArray(j?.jobs) ? j.jobs : [];
+  } catch (e) {
+    setStatus(e.message, false);
+  } finally {
+    state.loadingTasks = false;
+  }
+}
+
+async function runTask(taskName) {
+  try {
+    state.runningTask = taskName;
+    setStatus(`Running task: ${taskName}...`);
+    const r = await fetch(`/api/scheduler/jobs/${encodeURIComponent(taskName)}/run`, { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to start task');
+    setStatus(`Task "${taskName}" started`);
+    message.success(`Task "${taskName}" started`);
+    // Poll until task completes
+    const pollInterval = setInterval(async () => {
+      try {
+        const pr = await fetch('/api/scheduler/jobs');
+        const pj = await pr.json();
+        if (pr.ok && Array.isArray(pj?.jobs)) {
+          state.tasks = pj.jobs;
+          const task = pj.jobs.find(t => t.name === taskName);
+          if (task && !task.isRunning) {
+            clearInterval(pollInterval);
+            state.runningTask = null;
+            setStatus(`Task "${taskName}" completed`);
+          }
+        }
+      } catch (_) {}
+    }, 1000);
+    // Safety timeout - stop polling after 5 minutes
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      if (state.runningTask === taskName) state.runningTask = null;
+    }, 5 * 60 * 1000);
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+    state.runningTask = null;
+  }
+}
+
 // Initial loads
 loadChannels();
 loadEPG();
@@ -463,6 +532,7 @@ loadApp();
 loadMapping();
 loadHealth();
 loadUsage();
+loadTasks();
 // poll usage every 5s
 setInterval(() => { loadUsage(); }, 5000);
 // keep unmapped list in sync when filters or rows change
@@ -471,7 +541,7 @@ watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage } = toRefs(state);
+const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,
@@ -505,6 +575,52 @@ const usageColumns = [
   { title: 'tvg-id', key: 'tvg_id' },
   { title: 'Started', key: 'startedAt' },
   { title: 'Last Seen', key: 'lastSeenAt' }
+];
+
+const taskColumns = [
+  { title: 'Task Name', key: 'name' },
+  { title: 'Schedule', key: 'schedule', render(row) { return h('code', { style: 'font-size:.85em;opacity:.8' }, row.schedule); } },
+  { 
+    title: 'Status', 
+    key: 'status', 
+    render(row) { 
+      if (row.isRunning || state.runningTask === row.name) return h('span', { style: 'color:#f0a020;font-weight:600' }, '⏳ Running');
+      if (!row.lastStatus) return h('span', { style: 'opacity:.6' }, '—');
+      const color = row.lastStatus === 'success' ? '#21c35b' : '#d9534f';
+      const icon = row.lastStatus === 'success' ? '✓' : '✗';
+      return h('span', { style: `color:${color};font-weight:600` }, `${icon} ${row.lastStatus}`);
+    }
+  },
+  { 
+    title: 'Last Run', 
+    key: 'lastRun', 
+    render(row) { 
+      if (!row.lastRun) return h('span', { style: 'opacity:.6' }, 'Never');
+      return new Date(row.lastRun).toLocaleString();
+    }
+  },
+  { 
+    title: 'Duration', 
+    key: 'lastDuration', 
+    render(row) { 
+      if (row.lastDuration == null) return h('span', { style: 'opacity:.6' }, '—');
+      return `${row.lastDuration}ms`;
+    }
+  },
+  { 
+    title: 'Actions', 
+    key: 'actions', 
+    render(row) { 
+      return h(NButton, { 
+        type: 'primary', 
+        size: 'small', 
+        secondary: true,
+        disabled: row.isRunning || state.runningTask === row.name,
+        loading: state.runningTask === row.name,
+        onClick: () => runTask(row.name) 
+      }, { default: () => row.isRunning ? 'Running...' : 'Run Now' });
+    }
+  }
 ];
 
 function rowKey(row) { return row.name + row.url; }

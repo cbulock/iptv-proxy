@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import express from 'express';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
 import { refreshEPG } from './epg.js';
 
@@ -9,28 +10,47 @@ import { refreshEPG } from './epg.js';
  * @property {Function} task - Async function to execute
  * @property {boolean} runOnStart - Whether to run immediately on startup
  * @property {import('node-cron').ScheduledTask} [cronTask] - The scheduled cron task
+ * @property {string|null} lastRun - ISO timestamp of last run
+ * @property {string|null} lastStatus - 'success' | 'failed' | null
+ * @property {number|null} lastDuration - Duration in ms of last run
+ * @property {boolean} isRunning - Whether the job is currently executing
  */
 
 /** @type {ScheduledJob[]} */
 const jobs = [];
 
 /**
- * Wraps a task with logging and error handling
- * @param {string} name
- * @param {Function} task
+ * Wraps a task with logging, error handling, and status tracking
+ * @param {ScheduledJob} job
  * @returns {Function}
  */
-function wrapTask(name, task) {
+function wrapTask(job) {
   return async () => {
+    if (job.isRunning) {
+      console.log(`[Scheduler] Skipping job (already running): ${job.name}`);
+      return;
+    }
+    
     const startTime = Date.now();
-    console.log(`[Scheduler] Starting job: ${name}`);
+    job.isRunning = true;
+    console.log(`[Scheduler] Starting job: ${job.name}`);
+    
     try {
-      await task();
+      await job.task();
       const duration = Date.now() - startTime;
-      console.log(`[Scheduler] Completed job: ${name} (${duration}ms)`);
+      job.lastRun = new Date().toISOString();
+      job.lastStatus = 'success';
+      job.lastDuration = duration;
+      console.log(`[Scheduler] Completed job: ${job.name} (${duration}ms)`);
     } catch (err) {
       const duration = Date.now() - startTime;
-      console.error(`[Scheduler] Job failed: ${name} (${duration}ms)`, err.message);
+      job.lastRun = new Date().toISOString();
+      job.lastStatus = 'failed';
+      job.lastDuration = duration;
+      job.lastError = err.message;
+      console.error(`[Scheduler] Job failed: ${job.name} (${duration}ms)`, err.message);
+    } finally {
+      job.isRunning = false;
     }
   };
 }
@@ -52,7 +72,12 @@ export function registerJob(name, schedule, task, runOnStart = false) {
     schedule,
     task,
     runOnStart,
-    cronTask: null
+    cronTask: null,
+    lastRun: null,
+    lastStatus: null,
+    lastDuration: null,
+    lastError: null,
+    isRunning: false
   });
 
   console.log(`[Scheduler] Registered job: ${name} (${schedule})`);
@@ -65,7 +90,7 @@ export async function startScheduler() {
   console.log(`[Scheduler] Starting ${jobs.length} scheduled jobs...`);
 
   for (const job of jobs) {
-    const wrappedTask = wrapTask(job.name, job.task);
+    const wrappedTask = wrapTask(job);
 
     // Schedule the cron job
     job.cronTask = cron.schedule(job.schedule, wrappedTask);
@@ -94,13 +119,18 @@ export function stopScheduler() {
 
 /**
  * Get status of all jobs
- * @returns {Array<{name: string, schedule: string, running: boolean}>}
+ * @returns {Array<{name: string, schedule: string, running: boolean, lastRun: string|null, lastStatus: string|null, lastDuration: number|null, lastError: string|null, isRunning: boolean}>}
  */
 export function getJobStatus() {
   return jobs.map(job => ({
     name: job.name,
     schedule: job.schedule,
-    running: job.cronTask?.running ?? false
+    running: job.cronTask?.running ?? false,
+    lastRun: job.lastRun,
+    lastStatus: job.lastStatus,
+    lastDuration: job.lastDuration,
+    lastError: job.lastError,
+    isRunning: job.isRunning
   }));
 }
 
@@ -113,7 +143,7 @@ export async function triggerJob(name) {
   if (!job) {
     throw new Error(`Job not found: ${name}`);
   }
-  await wrapTask(job.name, job.task)();
+  await wrapTask(job)();
 }
 
 // ============================================================
@@ -141,11 +171,55 @@ export function initDefaultJobs() {
   );
 }
 
+// ============================================================
+// Express Router for Scheduler API
+// ============================================================
+
+const schedulerRouter = express.Router();
+
+/**
+ * GET /api/scheduler/jobs - Get all scheduled jobs and their status
+ */
+schedulerRouter.get('/jobs', (req, res) => {
+  res.json({ jobs: getJobStatus() });
+});
+
+/**
+ * POST /api/scheduler/jobs/:name/run - Manually trigger a job
+ */
+schedulerRouter.post('/jobs/:name/run', async (req, res) => {
+  const jobName = decodeURIComponent(req.params.name);
+  try {
+    // Don't await - return immediately and let job run in background
+    const job = jobs.find(j => j.name === jobName);
+    if (!job) {
+      return res.status(404).json({ error: `Job not found: ${jobName}` });
+    }
+    if (job.isRunning) {
+      return res.status(409).json({ error: 'Job is already running', job: getJobStatus().find(j => j.name === jobName) });
+    }
+    
+    // Start the job in background
+    wrapTask(job)().catch(() => {});
+    
+    res.json({ 
+      status: 'started', 
+      message: `Job "${jobName}" started`,
+      job: getJobStatus().find(j => j.name === jobName)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export { schedulerRouter };
+
 export default {
   registerJob,
   startScheduler,
   stopScheduler,
   getJobStatus,
   triggerJob,
-  initDefaultJobs
+  initDefaultJobs,
+  schedulerRouter
 };
