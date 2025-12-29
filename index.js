@@ -60,8 +60,9 @@ setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
 await setupEPGRoutes(app);
 
 // Initialize and start scheduled jobs (health checks, EPG refresh, etc.)
-import { initDefaultJobs, startScheduler } from './server/scheduler.js';
+import { initDefaultJobs, startScheduler, schedulerRouter } from './server/scheduler.js';
 initDefaultJobs();
+app.use('/api/scheduler', schedulerRouter);
 await startScheduler();
 
 // Friendly startup banner
