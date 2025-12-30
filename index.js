@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import chalk from 'chalk';
 import path from 'path';
+import RateLimit from 'express-rate-limit';
 import { initConfig } from './server/init-config.js';
 import { loadAllConfigs } from './libs/config-loader.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
@@ -52,7 +53,13 @@ const builtAdminDir = path.join(publicDir, 'admin');
 const builtAdminIndexPath = path.join(builtAdminDir, 'index.html');
 const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
 
-app.get(['/', '/admin', '/admin.html'], (req, res) => {
+// Rate limiter for admin interface access
+const adminLimiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+});
+
+app.get(['/', '/admin', '/admin.html'], adminLimiter, (req, res) => {
   if (isAdminBuilt()) {
     res.sendFile(builtAdminIndexPath);
   } else {
