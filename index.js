@@ -113,7 +113,12 @@ await startScheduler();
 // Friendly startup banner
 app.listen(port, () => {
   const base = `http://${config.host}:${port}`;
-  const adminUrl = `http://${config.host}:${adminDevPort}/admin/`;
+  const builtIndex = path.join(builtAdminDir, 'index.html');
+  const adminBuilt = fs.existsSync(builtIndex);
+  const adminUrl = adminBuilt
+    ? `${base}/admin/`
+    : `http://${config.host}:${adminDevPort}/admin/ (dev server - run 'npm run dev')`;
+  
   console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
   console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/lineup.m3u`));
   console.log(chalk.cyan(`  XMLTV Guide:`), chalk.yellow(`${base}/xmltv.xml`));
