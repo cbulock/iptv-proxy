@@ -1,5 +1,6 @@
 import express from 'express';
 import fs from 'fs/promises';
+import RateLimit from 'express-rate-limit';
 import { loadConfig } from '../libs/config-loader.js';
 import { getChannels } from '../libs/channels-cache.js';
 
@@ -9,6 +10,12 @@ const CHANNELS_FILE = './data/channels.json';
 // Configuration constants
 const MAX_ERROR_HISTORY = 50;  // Maximum number of errors to keep in history
 const RECENT_ERROR_LIMIT = 10;  // Number of recent errors to show in status
+
+// Rate limiter for status endpoint
+const statusLimiter = RateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // limit each IP to 30 requests per minute
+});
 
 // Track parsing errors and source status
 let sourceStatus = {
@@ -55,7 +62,7 @@ export function resetSourceStatus() {
 /**
  * GET /status - Comprehensive diagnostics endpoint
  */
-router.get('/status', async (req, res) => {
+router.get('/status', statusLimiter, async (req, res) => {
   try {
     // Load configurations
     const m3uConfig = loadConfig('m3u');

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import express from 'express';
 import yaml from 'yaml';
+import RateLimit from 'express-rate-limit';
 import { parseAll } from '../scripts/parseM3U.js';
 import { refreshEPG } from './epg.js';
 import fsPromises from 'fs/promises';
@@ -8,6 +9,18 @@ import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 import { invalidateCache, getChannels } from '../libs/channels-cache.js';
 
 const router = express.Router();
+
+// Rate limiter for write operations (more restrictive)
+const writeLimiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // limit each IP to 50 requests per windowMs
+});
+
+// Rate limiter for read operations (less restrictive)
+const readLimiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+});
 
 const M3U_PATH = './config/m3u.yaml';
 const EPG_PATH = './config/epg.yaml';
@@ -182,7 +195,7 @@ router.get('/api/mapping/unmapped', async (req, res) => {
 
 // Dynamic mapping management endpoints
 
-router.post('/api/mapping', async (req, res) => {
+router.post('/api/mapping', writeLimiter, async (req, res) => {
   try {
     const { key, mapping } = req.body;
     if (!key || typeof key !== 'string') {
@@ -211,7 +224,7 @@ router.post('/api/mapping', async (req, res) => {
   }
 });
 
-router.delete('/api/mapping/:key', async (req, res) => {
+router.delete('/api/mapping/:key', writeLimiter, async (req, res) => {
   try {
     const key = decodeURIComponent(req.params.key);
     if (!key) {
@@ -239,7 +252,7 @@ router.delete('/api/mapping/:key', async (req, res) => {
   }
 });
 
-router.post('/api/mapping/bulk', async (req, res) => {
+router.post('/api/mapping/bulk', writeLimiter, async (req, res) => {
   try {
     const { mappings } = req.body;
     if (!mappings || typeof mappings !== 'object') {
