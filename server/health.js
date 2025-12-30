@@ -2,15 +2,78 @@ import express from 'express';
 import fs from 'fs/promises';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
 import { getDataPath } from '../libs/paths.js';
+import { getChannels } from '../libs/channels-cache.js';
+import { asyncHandler } from './error-handler.js';
 
 const router = express.Router();
 const STATUS_FILE = getDataPath('lineup_status.json');
 const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
+const CHANNELS_FILE = getDataPath('channels.json');
 
 // Basic health check endpoint for Docker and monitoring
+// This is a liveness check - server is running
 router.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Liveness probe - checks if the server process is running
+router.get('/health/live', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    message: 'Server is alive',
+    timestamp: new Date().toISOString() 
+  });
+});
+
+// Readiness probe - checks if the server is ready to handle requests
+router.get('/health/ready', asyncHandler(async (req, res) => {
+  const checks = {
+    timestamp: new Date().toISOString(),
+    ready: true,
+    checks: {}
+  };
+
+  // Check if channels are loaded
+  try {
+    const channels = getChannels();
+    checks.checks.channels = {
+      status: 'ok',
+      count: channels.length,
+      available: channels.length > 0
+    };
+    
+    if (channels.length === 0) {
+      checks.ready = false;
+      checks.checks.channels.status = 'warning';
+      checks.checks.channels.message = 'No channels loaded';
+    }
+  } catch (err) {
+    checks.ready = false;
+    checks.checks.channels = {
+      status: 'error',
+      message: err.message
+    };
+  }
+
+  // Check if channels file exists and is readable
+  try {
+    const stats = await fs.stat(CHANNELS_FILE);
+    checks.checks.channelsFile = {
+      status: 'ok',
+      size: stats.size,
+      modified: stats.mtime.toISOString()
+    };
+  } catch (err) {
+    checks.ready = false;
+    checks.checks.channelsFile = {
+      status: 'error',
+      message: 'Channels file not found or not readable'
+    };
+  }
+
+  const statusCode = checks.ready ? 200 : 503;
+  res.status(statusCode).json(checks);
+}));
 
 router.get('/api/channel-health', async (req, res) => {
   try {

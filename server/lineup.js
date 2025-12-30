@@ -3,6 +3,7 @@ import axios from 'axios';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
 import { getChannels } from '../libs/channels-cache.js';
+import { asyncHandler, AppError } from './error-handler.js';
 
 // Cache for M3U output by host+protocol
 const m3uCache = new Map();
@@ -25,87 +26,118 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
   } = usageHelpers;
   const loadChannels = () => getChannels();
 
-  app.get('/lineup.json', (req, res) => {
-    const cacheKey = `${req.protocol}://${req.get('host')}`;
-    
-    // Check cache
-    if (jsonCache.has(cacheKey)) {
-      return res.json(jsonCache.get(cacheKey));
-    }
-    
-    const channels = loadChannels();
-
-    const lineup = channels.map(channel => ({
-      GuideNumber: channel.guideNumber || channel.tvg_id || channel.name,
-      GuideName: channel.name,
-      URL: `${req.protocol}://${req.get('host')}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`
-    }));
-
-    // Cache the result
-    jsonCache.set(cacheKey, lineup);
-    
-    res.json(lineup);
-  });
-
-  app.get('/lineup.m3u', (req, res) => {
-    // Extract query parameters for filtering
-    const filterSource = req.query.source ? String(req.query.source) : null;
-    const filterGroup = req.query.group ? String(req.query.group) : null;
-    
-    // Create cache key including filters
-    const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}`;
-    
-    // Check cache
-    if (m3uCache.has(cacheKey)) {
-      res.set('Content-Type', 'application/x-mpegURL');
-      return res.send(m3uCache.get(cacheKey));
-    }
-    
-    let channels = loadChannels();
-    
-    // Apply filters (note: source and group both filter by channel.source since group-title=source)
-    if (filterSource) {
-      channels = channels.filter(ch => ch.source === filterSource);
-    } else if (filterGroup) {
-      // group-title in M3U is set to channel.source, so this filters the same way
-      channels = channels.filter(ch => ch.source === filterGroup);
-    }
-    
-    const tvgIdMap = new Map(); // For deduplication
-    const baseUrl = getBaseUrl(req);
-
-    const epgUrl = `${baseUrl}/xmltv.xml`;
-    let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
-
-    for (const channel of channels) {
-      let tvgId = channel.tvg_id || '';
-      const originalTvgId = tvgId;
-
-      // Deduplicate tvg-id
-      if (tvgIdMap.has(tvgId)) {
-        let i = 1;
-        while (tvgIdMap.has(`${originalTvgId}_${i}`)) i++;
-        tvgId = `${originalTvgId}_${i}`;
+  app.get('/lineup.json', asyncHandler(async (req, res) => {
+    try {
+      const cacheKey = `${req.protocol}://${req.get('host')}`;
+      
+      // Check cache
+      if (jsonCache.has(cacheKey)) {
+        return res.json(jsonCache.get(cacheKey));
       }
-      if (tvgId) tvgIdMap.set(tvgId, true);
+      
+      const channels = loadChannels();
+      
+      // Validate that we have channels
+      if (!Array.isArray(channels)) {
+        throw new AppError('Invalid channels data structure', 500);
+      }
 
-      const tvgName = channel.name || '';
-      const tvgLogo = channel.logo
-        ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
-        : '';
-      const groupTitle = channel.source || '';
-      const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
+      const baseUrl = getBaseUrl(req);
+      const lineup = channels
+        .filter(channel => channel && channel.name) // Filter out invalid channels
+        .map(channel => ({
+          GuideNumber: channel.guideNumber || channel.tvg_id || channel.name,
+          GuideName: channel.name,
+          URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.name)}`
+        }));
 
-      output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}\n`;
-      output += `${streamUrl}\n`;
+      // Cache the result
+      jsonCache.set(cacheKey, lineup);
+      
+      res.json(lineup);
+    } catch (err) {
+      console.error('[lineup.json] Error generating lineup:', err.message);
+      throw new AppError('Failed to generate lineup', 500, err.message);
     }
-    
-    // Cache the result
-    m3uCache.set(cacheKey, output);
+  }));
 
-    res.set('Content-Type', 'application/x-mpegURL');
-    res.send(output);
-  });
+  app.get('/lineup.m3u', asyncHandler(async (req, res) => {
+    try {
+      // Extract query parameters for filtering
+      const filterSource = req.query.source ? String(req.query.source) : null;
+      const filterGroup = req.query.group ? String(req.query.group) : null;
+      
+      // Create cache key including filters
+      const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}`;
+      
+      // Check cache
+      if (m3uCache.has(cacheKey)) {
+        res.set('Content-Type', 'application/x-mpegURL');
+        return res.send(m3uCache.get(cacheKey));
+      }
+      
+      let channels = loadChannels();
+      
+      // Validate that we have channels
+      if (!Array.isArray(channels)) {
+        throw new AppError('Invalid channels data structure', 500);
+      }
+      
+      // Apply filters (note: source and group both filter by channel.source since group-title=source)
+      if (filterSource) {
+        channels = channels.filter(ch => ch && ch.source === filterSource);
+      } else if (filterGroup) {
+        // group-title in M3U is set to channel.source, so this filters the same way
+        channels = channels.filter(ch => ch && ch.source === filterGroup);
+      }
+      
+      // Filter out invalid channels
+      channels = channels.filter(ch => ch && ch.name && ch.source);
+      
+      const tvgIdMap = new Map(); // For deduplication
+      const baseUrl = getBaseUrl(req);
+
+      const epgUrl = `${baseUrl}/xmltv.xml`;
+      let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
+
+      for (const channel of channels) {
+        try {
+          let tvgId = channel.tvg_id || '';
+          const originalTvgId = tvgId;
+
+          // Deduplicate tvg-id
+          if (tvgIdMap.has(tvgId)) {
+            let i = 1;
+            while (tvgIdMap.has(`${originalTvgId}_${i}`)) i++;
+            tvgId = `${originalTvgId}_${i}`;
+          }
+          if (tvgId) tvgIdMap.set(tvgId, true);
+
+          const tvgName = channel.name || '';
+          const tvgLogo = channel.logo
+            ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
+            : '';
+          const groupTitle = channel.source || '';
+          const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
+
+          output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}\n`;
+          output += `${streamUrl}\n`;
+        } catch (channelErr) {
+          // Log but continue processing other channels
+          console.warn(`[lineup.m3u] Skipping invalid channel: ${channelErr.message}`);
+        }
+      }
+      
+      // Cache the result
+      m3uCache.set(cacheKey, output);
+
+      res.set('Content-Type', 'application/x-mpegURL');
+      res.send(output);
+    } catch (err) {
+      console.error('[lineup.m3u] Error generating M3U:', err.message);
+      throw new AppError('Failed to generate M3U playlist', 500, err.message);
+    }
+  }));
 
   app.all('/stream/:source/:name', async (req, res) => {
     const { source, name } = req.params;

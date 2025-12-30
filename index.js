@@ -18,6 +18,7 @@ import { updateSourceStatus, resetSourceStatus } from './server/status.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
 import { initChannelsCache, invalidateCache, onChannelsUpdate } from './libs/channels-cache.js';
 import getBaseUrl from './libs/getBaseUrl.js';
+import { notFoundHandler, errorHandler } from './server/error-handler.js';
 
 // Ensure config files exist before anything else
 initConfig();
@@ -125,6 +126,10 @@ import { initDefaultJobs, startScheduler, schedulerRouter } from './server/sched
 initDefaultJobs();
 app.use('/api/scheduler', schedulerRouter);
 await startScheduler();
+
+// Error handling middleware (must be after all routes)
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // Friendly startup banner
 app.listen(port, () => {
