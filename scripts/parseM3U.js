@@ -2,8 +2,9 @@ import fs from 'fs';
 import axios from 'axios';
 import pLimit from 'p-limit';
 import { loadConfig } from '../libs/config-loader.js';
+import { getDataPath, DATA_DIR } from '../libs/paths.js';
 
-const outputPath = './data/channels.json';
+const outputPath = getDataPath('channels.json');
 
 // Limit concurrent source fetches
 const limit = pLimit(3);
@@ -130,7 +131,7 @@ export async function parseAll() {
     // Flatten the array of arrays
     const allChannels = channelArrays.flat();
 
-    fs.mkdirSync('./data', { recursive: true });
+    fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(outputPath, JSON.stringify(allChannels, null, 2));
     
     const duration = Date.now() - startTime;

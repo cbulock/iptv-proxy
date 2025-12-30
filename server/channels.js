@@ -2,10 +2,11 @@ import fs from 'fs/promises';
 import express from 'express';
 import RateLimit from 'express-rate-limit';
 import { getChannels } from '../libs/channels-cache.js';
+import { getDataPath } from '../libs/paths.js';
 
 const router = express.Router();
 
-const STATUS_FILE = './data/lineup_status.json';
+const STATUS_FILE = getDataPath('lineup_status.json');
 
 const limiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
