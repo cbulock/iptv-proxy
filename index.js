@@ -6,7 +6,7 @@ import { initConfig } from './server/init-config.js';
 import { loadAllConfigs } from './libs/config-loader.js';
 import viteConfig from './admin/vite.config.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
-import { setupLineupRoutes } from './server/lineup.js';
+import { setupLineupRoutes, invalidateLineupCaches } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
 import { imageProxyRoute } from './libs/proxy-image.js';
 import channelsRoute from './server/channels.js';
@@ -14,6 +14,7 @@ import configRoute from './server/config.js';
 import healthRouter from './server/health.js';
 import { parseAll } from './scripts/parseM3U.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
+import { initChannelsCache, invalidateCache, onChannelsUpdate } from './libs/channels-cache.js';
 
 // Ensure config files exist before anything else
 initConfig();
@@ -47,6 +48,12 @@ app.get(['/', '/admin', '/admin.html'], (req, res) => {
 
 // Parse channels from M3U sources before server setup
 await parseAll();
+
+// Initialize channels cache after parsing
+await initChannelsCache();
+
+// Register lineup cache invalidation when channels update
+onChannelsUpdate(invalidateLineupCaches);
 
 // Register routes
 app.use('/channels', channelsRoute);

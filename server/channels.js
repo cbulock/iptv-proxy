@@ -1,9 +1,10 @@
 import fs from 'fs/promises';
 import express from 'express';
 import RateLimit from 'express-rate-limit';
+import { getChannels } from '../libs/channels-cache.js';
+
 const router = express.Router();
 
-const CHANNELS_FILE = './data/channels.json';
 const STATUS_FILE = './data/lineup_status.json';
 
 const limiter = RateLimit({
@@ -13,7 +14,7 @@ const limiter = RateLimit({
 
 router.get('/', limiter, async (req, res) => {
   try {
-    const channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
+    const channels = getChannels();
     let filtered = channels;
 
     if (req.query.status === 'online') {

@@ -5,6 +5,7 @@ import { parseAll } from '../scripts/parseM3U.js';
 import { refreshEPG } from './epg.js';
 import fsPromises from 'fs/promises';
 import { loadConfig, validateConfigData } from '../libs/config-loader.js';
+import { invalidateCache, getChannels } from '../libs/channels-cache.js';
 
 const router = express.Router();
 
@@ -116,6 +117,7 @@ router.put('/api/config/channel-map', (req, res) => {
 router.post('/api/reload/channels', async (req, res) => {
   try {
     const count = await parseAll();
+    await invalidateCache();
     res.json({ status: 'reloaded', channels: count });
   } catch (e) {
     res.status(500).json({ error: 'Failed to reload channels', detail: e.message });
@@ -135,7 +137,7 @@ router.post('/api/reload/epg', async (req, res) => {
 router.get('/api/mapping/candidates', async (req, res) => {
   try {
     const epg = loadEPG();
-    const channels = JSON.parse(await fsPromises.readFile('./data/channels.json', 'utf8'));
+    const channels = getChannels();
     const tvgMap = new Map();
     for (const c of channels) {
       if (!c.tvg_id) continue;
@@ -159,7 +161,7 @@ router.get('/api/mapping/unmapped', async (req, res) => {
   try {
     const map = loadChannelMap();
     const mapKeys = new Set(Object.keys(map || {}));
-    const channels = JSON.parse(await fsPromises.readFile('./data/channels.json', 'utf8'));
+    const channels = getChannels();
     const filterSource = req.query.source ? String(req.query.source) : '';
     const suggestionsMap = new Map();
     for (const c of channels) {
