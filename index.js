@@ -47,19 +47,41 @@ try {
 
 const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
 
-// Admin UI: prefer built Vite output if present, otherwise redirect to dev server
+// Admin UI: serve built Vite output if present, otherwise show error
 const builtAdminDir = path.join(publicDir, 'admin');
 app.get(['/', '/admin', '/admin.html'], (req, res) => {
   const builtIndex = path.join(builtAdminDir, 'index.html');
   if (fs.existsSync(builtIndex)) {
     res.sendFile(builtIndex);
   } else {
-    // Redirect to Vite dev server using actual request host
-    const baseUrl = getBaseUrl(req);
-    const url = new URL(baseUrl);
-    url.port = adminDevPort;
-    url.pathname = '/admin/';
-    res.redirect(url.toString());
+    // Admin UI not built - show helpful error message
+    res.status(503).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Admin UI Not Available</title>
+          <style>
+            body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+            h1 { color: #e74c3c; }
+            code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+            pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+          </style>
+        </head>
+        <body>
+          <h1>Admin UI Not Available</h1>
+          <p>The admin interface has not been built. To use the admin UI, you need to build it first.</p>
+          <h2>Build Instructions:</h2>
+          <pre>cd admin
+npm install
+npm run build</pre>
+          <p>Or use the shortcut from the project root:</p>
+          <pre>npm run admin:build</pre>
+          <p>For development with hot reload, run:</p>
+          <pre>npm run dev</pre>
+          <p>This will start both the server and the admin dev server on port ${adminDevPort}.</p>
+        </body>
+      </html>
+    `);
   }
 });
 
