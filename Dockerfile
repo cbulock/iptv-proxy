@@ -32,8 +32,9 @@ COPY server ./server
 COPY public ./public
 COPY healthcheck.sh ./
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S appuser && \
+# Create non-root user for security and config directory
+RUN mkdir -p /config && \
+    addgroup -g 1001 -S appuser && \
     adduser -u 1001 -S appuser -G appuser && \
     chown -R appuser:appuser /usr/src/app /config
 
