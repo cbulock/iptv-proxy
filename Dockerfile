@@ -41,6 +41,9 @@ RUN mkdir -p /config && \
 # Switch to non-root user
 USER appuser
 
+# Set config directory path
+ENV CONFIG_PATH=/config
+
 VOLUME ["/config"]
 
 # Expose application port
