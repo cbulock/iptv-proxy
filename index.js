@@ -14,6 +14,7 @@ import healthRouter from './server/health.js';
 import { parseAll } from './scripts/parseM3U.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
 import { initChannelsCache, invalidateCache, onChannelsUpdate } from './libs/channels-cache.js';
+import getBaseUrl from './libs/getBaseUrl.js';
 
 // Ensure config files exist before anything else
 initConfig();
@@ -53,8 +54,12 @@ app.get(['/', '/admin', '/admin.html'], (req, res) => {
   if (fs.existsSync(builtIndex)) {
     res.sendFile(builtIndex);
   } else {
-    // Redirect to Vite dev server
-    res.redirect(`http://${config.host}:${adminDevPort}/admin/`);
+    // Redirect to Vite dev server using actual request host
+    const baseUrl = getBaseUrl(req);
+    const url = new URL(baseUrl);
+    url.port = adminDevPort;
+    url.pathname = '/admin/';
+    res.redirect(url.toString());
   }
 });
 
