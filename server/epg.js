@@ -82,9 +82,13 @@ export async function setupEPGRoutes(app) {
 
             const sourceChannels = allChannels.filter(c => c.source === sourceName);
             
-            // Use Set for O(1) lookups instead of array includes
-            const tvgIds = new Set(sourceChannels.map(c => c.tvg_id).filter(Boolean));
-            const names = new Set(sourceChannels.map(c => c.name));
+            // Build both Sets in a single pass for better performance
+            const tvgIds = new Set();
+            const names = new Set();
+            for (const ch of sourceChannels) {
+                if (ch.tvg_id) tvgIds.add(ch.tvg_id);
+                names.add(ch.name);
+            }
 
             try {
                 console.log(`Loading EPG: ${sourceName} (${sourceUrl})`);

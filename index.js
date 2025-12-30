@@ -38,6 +38,10 @@ try {
   adminDevPort = viteConfig.default?.server?.port || 5173;
 } catch (err) {
   // Vite not installed or config not available, use default
+  console.log(chalk.gray('Note: Vite config not loaded (using default port 5173)'));
+  if (process.env.DEBUG) {
+    console.log(chalk.gray(`  Reason: ${err.message}`));
+  }
 }
 
 const config = { ...configs.m3u, ...configs.app, host: 'localhost' };

@@ -44,10 +44,19 @@ export async function initChannelsCache() {
   channelsCache = await loadChannelsFromDisk();
   cacheTimestamp = Date.now();
   
+  let reloadInProgress = false;
+  
   // Watch for file changes to invalidate cache
   if (!fileWatcher && fs.existsSync(CHANNELS_FILE)) {
     fileWatcher = fs.watch(CHANNELS_FILE, { persistent: false }, async (eventType) => {
       if (eventType === 'change') {
+        // Prevent concurrent reloads
+        if (reloadInProgress) {
+          console.log('[Cache] Reload already in progress, skipping...');
+          return;
+        }
+        
+        reloadInProgress = true;
         console.log('[Cache] Channels file changed, reloading...');
         try {
           channelsCache = await loadChannelsFromDisk();
@@ -64,6 +73,8 @@ export async function initChannelsCache() {
           }
         } catch (err) {
           console.error('[Cache] Failed to reload channels:', err.message);
+        } finally {
+          reloadInProgress = false;
         }
       }
     });
@@ -74,13 +85,15 @@ export async function initChannelsCache() {
 
 /**
  * Get cached channels (sync after initialization)
+ * Returns a shallow copy to prevent accidental mutations
  * @returns {Array}
  */
 export function getChannels() {
   if (channelsCache === null) {
     throw new Error('Channels cache not initialized. Call initChannelsCache() first.');
   }
-  return channelsCache;
+  // Return a shallow copy to prevent mutations of cached data
+  return [...channelsCache];
 }
 
 /**
