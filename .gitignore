@@ -3,4 +3,5 @@ config
 data
 
 # Ignore the admin build output folder
-public/admin 
+public/admin config/
+data/
