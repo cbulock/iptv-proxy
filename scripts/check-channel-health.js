@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import axios from 'axios';
-import yaml from 'yaml';
+import { loadConfig } from '../libs/config-loader.js';
 import pLimit from 'p-limit';
 
 const CHANNELS_FILE = './data/channels.json';
@@ -11,7 +11,7 @@ let config;
 let baseUrl = 'http://localhost:3000';
 async function loadBaseUrl() {
     try {
-        config = yaml.parse(await fs.readFile('./config/app.yaml', 'utf8'));
+        config = loadConfig('app');
         if (config && config.base_url) baseUrl = config.base_url;
     } catch (err) {
         // fallback to default, do not exit

@@ -5,7 +5,9 @@ const CONFIG_DIR = './config';
 
 const DEFAULT_CONFIGS = {
   'app.yaml': `# Application configuration
+# Example:
 # base_url: https://your-domain.com
+{}
 `,
   'm3u.yaml': `# M3U playlist sources
 urls: []
@@ -24,9 +26,11 @@ urls: []
 #     url: http://example.com/epg.xml
 `,
   'channel-map.yaml': `# Channel mapping overrides
+# Example:
 # ChannelName:
 #   number: "1.1"
 #   tvg_id: "channel.id"
+{}
 `
 };
 
