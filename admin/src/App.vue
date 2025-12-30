@@ -38,7 +38,40 @@
             <n-space align="center" wrap style="margin-bottom:.5rem;">
               <n-button type="primary" secondary @click="addEPGSource">Add EPG Source</n-button>
               <n-button type="primary" @click="saveEPG" :loading="savingEPG">{{ savingEPG ? 'Saving...' : 'Save EPG' }}</n-button>
+              <n-button @click="loadEPGValidation" :loading="loadingEPGValidation">{{ loadingEPGValidation ? 'Validating...' : 'Validate EPG' }}</n-button>
             </n-space>
+            <div v-if="epgValidation" style="margin-bottom:1rem; padding:.75rem; background:rgba(255,255,255,.05); border-radius:4px;">
+              <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem;">
+                <span style="font-weight:600; font-size:1.1em;">EPG Validation:</span>
+                <span v-if="epgValidation.valid" style="color:#21c35b; font-weight:600;">✓ Valid</span>
+                <span v-else style="color:#d9534f; font-weight:600;">✗ Invalid</span>
+              </div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.5rem; margin-bottom:.5rem;">
+                <div><span style="opacity:.7">Channels:</span> {{ epgValidation.summary?.channels || 0 }} <span v-if="epgValidation.summary?.validChannels !== epgValidation.summary?.channels" style="color:#f0a020;">({{ epgValidation.summary?.validChannels || 0 }} valid)</span></div>
+                <div><span style="opacity:.7">Programmes:</span> {{ epgValidation.summary?.programmes || 0 }} <span v-if="epgValidation.summary?.validProgrammes !== epgValidation.summary?.programmes" style="color:#f0a020;">({{ epgValidation.summary?.validProgrammes || 0 }} valid)</span></div>
+                <div><span style="opacity:.7">Errors:</span> <span :style="{color: epgValidation.summary?.errorCount > 0 ? '#d9534f' : '#21c35b'}">{{ epgValidation.summary?.errorCount || 0 }}</span></div>
+                <div><span style="opacity:.7">Warnings:</span> <span :style="{color: epgValidation.summary?.warningCount > 0 ? '#f0a020' : '#21c35b'}">{{ epgValidation.summary?.warningCount || 0 }}</span></div>
+              </div>
+              <div v-if="epgValidation.coverage" style="margin-top:.5rem; padding:.5rem; background:rgba(255,255,255,.05); border-radius:4px;">
+                <div style="font-weight:600; margin-bottom:.25rem;">Coverage:</div>
+                <div><span style="opacity:.7">Total Channels:</span> {{ epgValidation.coverage.total }}</div>
+                <div><span style="opacity:.7">With EPG:</span> {{ epgValidation.coverage.withEPG }} ({{ epgValidation.coverage.percentage }}%)</div>
+                <div v-if="epgValidation.coverage.withoutEPG > 0" style="margin-top:.25rem;">
+                  <span style="opacity:.7">Missing EPG ({{ epgValidation.coverage.withoutEPG }}):</span>
+                  <div v-for="(ch, idx) in epgValidation.coverage.channelsWithoutEPG" :key="idx" style="padding-left:1rem; opacity:.7; font-size:.9em;">• {{ ch.name }} <span style="opacity:.6">({{ ch.tvg_id || 'no tvg-id' }})</span></div>
+                </div>
+              </div>
+              <div v-if="epgValidation.errors && epgValidation.errors.length > 0" style="margin-top:.5rem; color:#d9534f;">
+                <div style="font-weight:600; margin-bottom:.25rem;">Errors:</div>
+                <div v-for="(err, idx) in epgValidation.errors.slice(0, 10)" :key="idx" style="padding-left:1rem; font-size:.9em;">• {{ err }}</div>
+                <div v-if="epgValidation.errors.length > 10" style="padding-left:1rem; opacity:.7; font-size:.9em;">... and {{ epgValidation.errors.length - 10 }} more</div>
+              </div>
+              <div v-if="epgValidation.warnings && epgValidation.warnings.length > 0" style="margin-top:.5rem; color:#f0a020;">
+                <div style="font-weight:600; margin-bottom:.25rem;">Warnings:</div>
+                <div v-for="(warn, idx) in epgValidation.warnings.slice(0, 10)" :key="idx" style="padding-left:1rem; font-size:.9em;">• {{ warn }}</div>
+                <div v-if="epgValidation.warnings.length > 10" style="padding-left:1rem; opacity:.7; font-size:.9em;">... and {{ epgValidation.warnings.length - 10 }} more</div>
+              </div>
+            </div>
             <n-data-table
               v-if="Array.isArray(epgSources) && epgSources.length"
               :columns="epgColumns"
@@ -57,6 +90,53 @@
               <n-button @click="reloadChannels" :loading="reloadingChannels">Reload Channels</n-button>
             </n-space>
             <n-collapse>
+              <n-collapse-item title="Duplicates (click to expand)" name="duplicates">
+                <n-space align="center" wrap style="margin-bottom:.5rem;">
+                  <n-button size="small" @click="loadDuplicates" :loading="loadingDuplicates">{{ loadingDuplicates ? 'Loading...' : 'Refresh' }}</n-button>
+                </n-space>
+                <div v-if="duplicates.summary && (duplicates.summary.duplicateNames > 0 || duplicates.summary.duplicateTvgIds > 0)">
+                  <div style="margin-bottom:1rem;opacity:.9">
+                    Found {{ duplicates.summary.duplicateNames }} duplicate names and {{ duplicates.summary.duplicateTvgIds }} duplicate tvg-ids
+                  </div>
+                  <div v-if="duplicates.byTvgId.length > 0">
+                    <h4 style="margin:.5rem 0;">By TVG-ID:</h4>
+                    <div v-for="dup in duplicates.byTvgId" :key="dup.tvgId" style="margin-bottom:1rem; padding:.5rem; background:rgba(255,255,255,.05); border-radius:4px;">
+                      <div style="font-weight:600; margin-bottom:.25rem;">tvg-id: {{ dup.tvgId }} ({{ dup.count }} channels)</div>
+                      <div v-for="(ch, idx) in dup.channels" :key="idx" style="padding-left:1rem; opacity:.8; margin:.25rem 0;">
+                        • {{ ch.name }} <span style="opacity:.6">({{ ch.source }})</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="duplicates.byName.length > 0" style="margin-top:1rem;">
+                    <h4 style="margin:.5rem 0;">By Name:</h4>
+                    <div v-for="dup in duplicates.byName" :key="dup.name" style="margin-bottom:1rem; padding:.5rem; background:rgba(255,255,255,.05); border-radius:4px;">
+                      <div style="font-weight:600; margin-bottom:.25rem;">{{ dup.name }} ({{ dup.count }} channels)</div>
+                      <div v-for="(ch, idx) in dup.channels" :key="idx" style="padding-left:1rem; opacity:.8; margin:.25rem 0;">
+                        • tvg-id: {{ ch.tvg_id || 'none' }} <span style="opacity:.6">({{ ch.source }})</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else style="opacity:.6">No duplicates detected.</div>
+              </n-collapse-item>
+              <n-collapse-item title="Auto-Suggestions (click to expand)" name="suggestions">
+                <n-space align="center" wrap style="margin-bottom:.5rem;">
+                  <n-button size="small" @click="loadSuggestions" :loading="loadingSuggestions">{{ loadingSuggestions ? 'Loading...' : 'Refresh' }}</n-button>
+                </n-space>
+                <div v-if="Array.isArray(suggestions) && suggestions.length">
+                  <div v-for="(s, i) in suggestions" :key="'s'+i" style="margin-bottom:1rem; padding:.5rem; background:rgba(255,255,255,.05); border-radius:4px;">
+                    <div style="font-weight:600; margin-bottom:.5rem;">{{ s.channel.name }} <span style="opacity:.6">({{ s.channel.tvg_id }})</span></div>
+                    <div v-for="(sug, j) in s.suggestions" :key="'sg'+j" style="display:flex; gap:.5rem; align-items:center; margin:.25rem 0; padding-left:1rem;">
+                      <div style="flex:1 1 auto; opacity:.9">
+                        → {{ sug.name }} <span style="opacity:.6">({{ sug.tvg_id }})</span>
+                        <span style="opacity:.5; margin-left:.5rem;">score: {{ (sug.score * 100).toFixed(0) }}%</span>
+                      </div>
+                      <n-button size="tiny" @click="applySuggestion(s.channel, sug)">Apply</n-button>
+                    </div>
+                  </div>
+                </div>
+                <div v-else style="opacity:.6">No suggestions available. Try lowering the threshold or ensure you have unmapped channels.</div>
+              </n-collapse-item>
               <n-collapse-item title="Unmapped (click to expand)" name="unmapped">
                 <n-space align="center" wrap style="margin-bottom:.5rem;">
                   <n-select
@@ -162,6 +242,12 @@ const state = reactive({
   unmapped: [],
   unmappedSource: '',
   hideAdded: true,
+  duplicates: { byName: [], byTvgId: [], summary: {} },
+  suggestions: [],
+  epgValidation: null,
+  loadingDuplicates: false,
+  loadingSuggestions: false,
+  loadingEPGValidation: false,
   status: '',
   statusOk: true,
   savingChannels: false,
@@ -525,6 +611,63 @@ async function runTask(taskName) {
   }
 }
 
+async function loadDuplicates() {
+  try {
+    state.loadingDuplicates = true;
+    const r = await fetch('/api/mapping/duplicates');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to load duplicates');
+    state.duplicates = j;
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.loadingDuplicates = false;
+  }
+}
+
+async function loadSuggestions() {
+  try {
+    state.loadingSuggestions = true;
+    const r = await fetch('/api/mapping/suggestions?threshold=0.7&max=3');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to load suggestions');
+    state.suggestions = j.suggestions || [];
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.loadingSuggestions = false;
+  }
+}
+
+async function loadEPGValidation() {
+  try {
+    state.loadingEPGValidation = true;
+    const r = await fetch('/api/epg/validate');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to validate EPG');
+    state.epgValidation = j;
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.loadingEPGValidation = false;
+  }
+}
+
+function applySuggestion(channel, suggestion) {
+  // Add mapping based on suggestion
+  if (!state.mappingRows.some(r => r.name === channel.name)) {
+    state.mappingRows.push({
+      name: channel.name,
+      tvg_id: suggestion.tvg_id || '',
+      number: ''
+    });
+    message.success(`Added mapping for ${channel.name}`);
+  }
+}
+
 // Initial loads
 loadChannels();
 loadEPG();
@@ -541,7 +684,7 @@ watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
+const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,

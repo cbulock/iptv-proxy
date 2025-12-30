@@ -4,6 +4,7 @@ import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import escapeHtml from 'escape-html';
 import { loadConfig } from '../libs/config-loader.js';
 import { getChannels } from '../libs/channels-cache.js';
+import { validateEPG, validateEPGCoverage } from '../libs/epg-validator.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
@@ -161,6 +162,36 @@ export async function setupEPGRoutes(app) {
             response.data.pipe(res);
         } catch (err) {
             res.status(502).send(`Failed to fetch image from ${escapeHtml(decodedUrl)}`);
+        }
+    });
+
+    // New endpoint: validate current merged EPG
+    app.get('/api/epg/validate', (req, res) => {
+        if (!mergedEPG) {
+            return res.status(503).json({ error: 'EPG not loaded yet' });
+        }
+
+        try {
+            const channels = getChannels();
+            const validation = validateEPGCoverage(mergedEPG, channels);
+            
+            res.json({
+                valid: validation.valid,
+                summary: {
+                    channels: validation.channelCount,
+                    programmes: validation.programmeCount,
+                    validChannels: validation.validChannels,
+                    validProgrammes: validation.validProgrammes,
+                    errorCount: validation.errors.length,
+                    warningCount: validation.warnings.length
+                },
+                coverage: validation.coverage || null,
+                errors: validation.errors,
+                warnings: validation.warnings,
+                details: validation.details
+            });
+        } catch (err) {
+            res.status(500).json({ error: 'Validation failed', detail: err.message });
         }
     });
 }

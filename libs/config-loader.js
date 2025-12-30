@@ -51,9 +51,10 @@ const channelMapSchema = Joi.object().pattern(
     number: Joi.string().optional(),
     tvg_id: Joi.string().optional(),
     logo: Joi.string().optional(),
-    url: Joi.string().optional()
-  }).or('name', 'number', 'tvg_id', 'logo', 'url').messages({
-    'object.missing': 'Each channel mapping must have at least one property (name, number, tvg_id, logo, or url)'
+    url: Joi.string().optional(),
+    group: Joi.string().optional()
+  }).or('name', 'number', 'tvg_id', 'logo', 'url', 'group').messages({
+    'object.missing': 'Each channel mapping must have at least one property (name, number, tvg_id, logo, url, or group)'
   })
 ).default({});
 

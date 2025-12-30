@@ -24,6 +24,7 @@ function applyMapping(channel, map) {
         channel.logo = mapping.logo || channel.logo;
         channel.url = mapping.url || channel.url;
         channel.guideNumber = mapping.number || channel.guideNumber;
+        channel.group = mapping.group || channel.group;
     }
 
     // 👇 Fallback: if still no tvg_id, use guideNumber
@@ -81,8 +82,15 @@ async function processSource(source, map) {
             }
         } else {
             // Standard M3U - stream processing for large files
-            const response = await axios.get(source.url);
-            const lines = response.data.split('\n');
+            let data;
+            if (source.url.startsWith('file://')) {
+                const filePath = source.url.replace('file://', '');
+                data = fs.readFileSync(filePath, 'utf8');
+            } else {
+                const response = await axios.get(source.url);
+                data = response.data;
+            }
+            const lines = data.split('\n');
 
             let current = {};
 
@@ -91,11 +99,13 @@ async function processSource(source, map) {
                     const nameMatch = line.match(/,(.*)$/);
                     const tvgIdMatch = line.match(/tvg-id="(.*?)"/);
                     const tvgLogoMatch = line.match(/tvg-logo="(.*?)"/);
+                    const groupMatch = line.match(/group-title="(.*?)"/);
 
                     current = {
                         name: nameMatch ? nameMatch[1].trim() : 'Unknown',
                         tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
                         logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
+                        group: groupMatch ? groupMatch[1] : '',
                         source: source.name
                     };
                 } else if (line && !line.startsWith('#')) {

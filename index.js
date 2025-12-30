@@ -12,6 +12,8 @@ import { imageProxyRoute } from './libs/proxy-image.js';
 import channelsRoute from './server/channels.js';
 import configRoute from './server/config.js';
 import healthRouter from './server/health.js';
+import mappingRouter from './server/mapping.js';
+import channelsManagementRouter from './server/channels-management.js';
 import { parseAll } from './scripts/parseM3U.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
 import { initChannelsCache, invalidateCache, onChannelsUpdate } from './libs/channels-cache.js';
@@ -106,6 +108,8 @@ onChannelsUpdate(invalidateLineupCaches);
 // Register routes
 app.use('/channels', channelsRoute);
 app.use(configRoute);
+app.use(mappingRouter);
+app.use('/api/channels', channelsManagementRouter);
 app.use('/', healthRouter);
 app.use('/', usageRouter);
 imageProxyRoute(app);
