@@ -1,7 +1,8 @@
 import fs from 'fs';
 import fsPromises from 'fs/promises';
+import { getDataPath } from './paths.js';
 
-const CHANNELS_FILE = './data/channels.json';
+const CHANNELS_FILE = getDataPath('channels.json');
 
 // In-memory cache
 let channelsCache = null;

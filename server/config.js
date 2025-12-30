@@ -7,6 +7,7 @@ import { refreshEPG } from './epg.js';
 import fsPromises from 'fs/promises';
 import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 import { invalidateCache, getChannels } from '../libs/channels-cache.js';
+import { getConfigPath } from '../libs/paths.js';
 
 const router = express.Router();
 
@@ -22,10 +23,10 @@ const readLimiter = RateLimit({
   max: 100, // limit each IP to 100 requests per windowMs
 });
 
-const M3U_PATH = './config/m3u.yaml';
-const EPG_PATH = './config/epg.yaml';
-const APP_PATH = './config/app.yaml';
-const CHANNEL_MAP_PATH = './config/channel-map.yaml';
+const M3U_PATH = getConfigPath('m3u.yaml');
+const EPG_PATH = getConfigPath('epg.yaml');
+const APP_PATH = getConfigPath('app.yaml');
+const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
 
 function loadM3U() {
   return loadConfig('m3u');

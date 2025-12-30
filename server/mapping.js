@@ -1,10 +1,11 @@
 import express from 'express';
 import fs from 'fs/promises';
 import { loadConfig } from '../libs/config-loader.js';
+import { getConfigPath, getDataPath } from '../libs/paths.js';
 
 const router = express.Router();
-const CHANNELS_FILE = './data/channels.json';
-const CHANNEL_MAP_FILE = './config/channel-map.yaml';
+const CHANNELS_FILE = getDataPath('channels.json');
+const CHANNEL_MAP_FILE = getConfigPath('channel-map.yaml');
 
 router.get('/api/mapping/conflicts', async (req, res) => {
   try {

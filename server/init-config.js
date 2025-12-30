@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-
-const CONFIG_DIR = './config';
+import { CONFIG_DIR, getConfigPath } from '../libs/paths.js';
 
 const DEFAULT_CONFIGS = {
   'app.yaml': `# Application configuration
@@ -47,7 +46,7 @@ export function initConfig() {
 
   // Ensure each config file exists
   for (const [filename, defaultContent] of Object.entries(DEFAULT_CONFIGS)) {
-    const filePath = path.join(CONFIG_DIR, filename);
+    const filePath = getConfigPath(filename);
     if (!fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, defaultContent, 'utf8');
       console.log(`Created default config: ${filePath}`);

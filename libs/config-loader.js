@@ -2,6 +2,7 @@ import fs from 'fs';
 import yaml from 'yaml';
 import Joi from 'joi';
 import chalk from 'chalk';
+import { getConfigPath } from './paths.js';
 
 // Define schemas for each config file
 const m3uSchema = Joi.object({
@@ -126,28 +127,28 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
  */
 export function loadAllConfigs() {
   const m3u = loadAndValidateConfig(
-    './config/m3u.yaml',
+    getConfigPath('m3u.yaml'),
     m3uSchema,
     defaultConfigs.m3u,
     'M3U config'
   );
 
   const epg = loadAndValidateConfig(
-    './config/epg.yaml',
+    getConfigPath('epg.yaml'),
     epgSchema,
     defaultConfigs.epg,
     'EPG config'
   );
 
   const app = loadAndValidateConfig(
-    './config/app.yaml',
+    getConfigPath('app.yaml'),
     appSchema,
     defaultConfigs.app,
     'App config'
   );
 
   const channelMap = loadAndValidateConfig(
-    './config/channel-map.yaml',
+    getConfigPath('channel-map.yaml'),
     channelMapSchema,
     defaultConfigs.channelMap,
     'Channel map'
@@ -164,25 +165,25 @@ export function loadAllConfigs() {
 export function loadConfig(configType) {
   const configs = {
     m3u: {
-      path: './config/m3u.yaml',
+      path: getConfigPath('m3u.yaml'),
       schema: m3uSchema,
       default: defaultConfigs.m3u,
       name: 'M3U config'
     },
     epg: {
-      path: './config/epg.yaml',
+      path: getConfigPath('epg.yaml'),
       schema: epgSchema,
       default: defaultConfigs.epg,
       name: 'EPG config'
     },
     app: {
-      path: './config/app.yaml',
+      path: getConfigPath('app.yaml'),
       schema: appSchema,
       default: defaultConfigs.app,
       name: 'App config'
     },
     channelMap: {
-      path: './config/channel-map.yaml',
+      path: getConfigPath('channel-map.yaml'),
       schema: channelMapSchema,
       default: defaultConfigs.channelMap,
       name: 'Channel map'

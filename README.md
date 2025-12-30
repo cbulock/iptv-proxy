@@ -111,6 +111,17 @@ docker run -d \
   iptv-proxy
 ```
 
+**Note:** The config directory location is determined by the `CONFIG_PATH` environment variable (defaults to `/config` in Docker). If you need to use a different path, you can override it:
+
+```bash
+docker run -d \
+  --name iptv-proxy \
+  -p 34400:34400 \
+  -e CONFIG_PATH=/custom/config/path \
+  -v /absolute/path/to/your/project/config:/custom/config/path \
+  iptv-proxy
+```
+
 ---
 
 ## Adding HDHomeRun Devices

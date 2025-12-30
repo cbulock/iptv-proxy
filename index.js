@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import chalk from 'chalk';
 import path from 'path';
+import RateLimit from 'express-rate-limit';
 import { initConfig } from './server/init-config.js';
 import { loadAllConfigs } from './libs/config-loader.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
@@ -52,19 +53,49 @@ const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
 // Set up source status tracking for parseM3U
 setStatusCallback(updateSourceStatus);
 
-// Admin UI: prefer built Vite output if present, otherwise redirect to dev server
+// Admin UI: serve built Vite output if present, otherwise show error
 const builtAdminDir = path.join(publicDir, 'admin');
-app.get(['/', '/admin', '/admin.html'], (req, res) => {
-  const builtIndex = path.join(builtAdminDir, 'index.html');
-  if (fs.existsSync(builtIndex)) {
-    res.sendFile(builtIndex);
+const builtAdminIndexPath = path.join(builtAdminDir, 'index.html');
+const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
+
+// Rate limiter for admin interface access
+const adminLimiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+});
+
+app.get(['/', '/admin', '/admin.html'], adminLimiter, (req, res) => {
+  if (isAdminBuilt()) {
+    res.sendFile(builtAdminIndexPath);
   } else {
-    // Redirect to Vite dev server using actual request host
-    const baseUrl = getBaseUrl(req);
-    const url = new URL(baseUrl);
-    url.port = adminDevPort;
-    url.pathname = '/admin/';
-    res.redirect(url.toString());
+    // Admin UI not built - show helpful error message
+    res.status(503).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Admin UI Not Available</title>
+          <style>
+            body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+            h1 { color: #e74c3c; }
+            code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+            pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+          </style>
+        </head>
+        <body>
+          <h1>Admin UI Not Available</h1>
+          <p>The admin interface has not been built. To use the admin UI, you need to build it first.</p>
+          <h2>Build Instructions:</h2>
+          <pre>cd admin
+npm install
+npm run build</pre>
+          <p>Or use the shortcut from the project root:</p>
+          <pre>npm run admin:build</pre>
+          <p>For development with hot reload, run:</p>
+          <pre>npm run dev</pre>
+          <p>This will start both the server and the admin dev server on port ${adminDevPort}.</p>
+        </body>
+      </html>
+    `);
   }
 });
 
@@ -98,7 +129,10 @@ await startScheduler();
 // Friendly startup banner
 app.listen(port, () => {
   const base = `http://${config.host}:${port}`;
-  const adminUrl = `http://${config.host}:${adminDevPort}/admin/`;
+  const adminUrl = isAdminBuilt()
+    ? `${base}/admin/`
+    : `http://${config.host}:${adminDevPort}/admin/ (dev server - run 'npm run dev')`;
+  
   console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
   console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/lineup.m3u`));
   console.log(chalk.cyan(`  XMLTV Guide:`), chalk.yellow(`${base}/xmltv.xml`));

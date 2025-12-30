@@ -1,12 +1,13 @@
 import express from 'express';
 import fs from 'fs/promises';
+import { getDataPath } from '../libs/paths.js';
 
 const router = express.Router();
 const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, startedAt, lastSeen }
 let channelsCache = [];
 
 async function loadChannels() {
-  try { channelsCache = JSON.parse(await fs.readFile('./data/channels.json', 'utf8')) || []; } catch { channelsCache = []; }
+  try { channelsCache = JSON.parse(await fs.readFile(getDataPath('channels.json'), 'utf8')) || []; } catch { channelsCache = []; }
 }
 
 function findChannelMeta(channelId) {
