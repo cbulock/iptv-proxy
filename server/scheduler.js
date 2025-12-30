@@ -3,6 +3,9 @@ import express from 'express';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
 import { refreshEPG } from './epg.js';
 
+// Constants for external URLs used in error messages
+const CRON_VALIDATOR_URL = 'https://crontab.guru/';
+
 /**
  * @typedef {Object} ScheduledJob
  * @property {string} name - Human readable name
@@ -72,7 +75,7 @@ export function registerJob(name, schedule, task, runOnStart = false) {
     console.log(`      • Every 6 hours: "0 */6 * * *"`);
     console.log(`      • Daily at 3 AM: "0 3 * * *"`);
     console.log(`      • Twice daily: "0 6,18 * * *"`);
-    console.log(`      • Validate at: https://crontab.guru/`);
+    console.log(`      • Validate at: ${CRON_VALIDATOR_URL}`);
     throw new Error(errorMsg);
   }
 

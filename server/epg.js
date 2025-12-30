@@ -157,6 +157,11 @@ export async function setupEPGRoutes(app) {
                     console.log(`   💡 Fix: Authentication failed (${err.response.status})`);
                     console.log(`      • Check credentials in the URL if required`);
                     console.log(`      • Ensure proper URL encoding of username/password`);
+                } else if (err.response?.status >= 400 && err.response?.status < 500) {
+                    console.log(`   💡 Fix: Client error (${err.response.status})`);
+                    console.log(`      • The request was invalid or rejected by the server`);
+                    console.log(`      • Check the URL and request parameters`);
+                    console.log(`      • Review server documentation for this endpoint`);
                 } else if (err.message?.includes('parse') || err.message?.includes('XML')) {
                     console.log(`   💡 Fix: Invalid XMLTV format`);
                     console.log(`      • Verify the source provides valid XMLTV/XML data`);
@@ -187,7 +192,9 @@ export async function setupEPGRoutes(app) {
 
     app.get('/xmltv.xml', (req, res) => {
         if (!mergedEPG) {
-            return res.status(503).send('EPG not loaded yet. This usually happens during startup. Please wait a moment and try again. If this persists, check server logs for EPG source errors.');
+            const errorMsg = 'EPG not loaded yet. This usually happens during startup. Please wait a moment and try again.';
+            const fixMsg = 'If this persists, check server logs for EPG source errors.';
+            return res.status(503).send(`${errorMsg} ${fixMsg}`);
         }
 
         // Extract query parameters for filtering

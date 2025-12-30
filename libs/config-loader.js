@@ -4,6 +4,9 @@ import Joi from 'joi';
 import chalk from 'chalk';
 import { getConfigPath } from './paths.js';
 
+// Constants for external URLs used in error messages
+const YAML_VALIDATOR_URL = 'https://www.yamllint.com/';
+
 // Define schemas for each config file
 const m3uSchema = Joi.object({
   urls: Joi.array().items(
@@ -95,7 +98,7 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
       console.log(chalk.yellow(`      • Incorrect indentation (use spaces, not tabs)`));
       console.log(chalk.yellow(`      • Missing quotes around strings with special characters`));
       console.log(chalk.yellow(`      • Unclosed brackets or quotes`));
-      console.log(chalk.yellow(`      • Use a YAML validator: https://www.yamllint.com/`));
+      console.log(chalk.yellow(`      • Use a YAML validator: ${YAML_VALIDATOR_URL}`));
       console.log(chalk.gray(`   Using default configuration for ${name}`));
       return defaultValue;
     }
