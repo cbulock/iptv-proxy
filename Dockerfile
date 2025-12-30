@@ -1,33 +1,54 @@
-# Use a lightweight Node.js base image
+# Stage 1: Build production dependencies
+FROM node:20-alpine AS deps
+
+WORKDIR /build
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies only
+RUN npm ci --omit=dev
+
+# Stage 2: Final production image
 FROM node:20-alpine
+
+# Add metadata labels
+LABEL org.opencontainers.image.source="https://github.com/cbulock/iptv-proxy"
+LABEL org.opencontainers.image.description="IPTV Proxy - Unified Channel and EPG Aggregator"
+LABEL org.opencontainers.image.licenses="MIT"
 
 # Create app directory
 WORKDIR /usr/src/app
 
-# Install app dependencies
-COPY package.json package-lock.json ./
-RUN npm ci
+# Copy production dependencies
+COPY --from=deps /build/node_modules ./node_modules
 
-# Copy source code
-COPY . .
+# Copy application source
+COPY package*.json ./
+COPY index.js ./
+COPY libs ./libs
+COPY scripts ./scripts
+COPY server ./server
+COPY public ./public
+COPY healthcheck.sh ./
 
-# Build Admin UI (Vite) and prune dev deps
-WORKDIR /usr/src/app/admin
-RUN npm install && npm run build
-WORKDIR /usr/src/app
-RUN npm prune --production
+# Create non-root user for security and config directory
+RUN mkdir -p /config && \
+    addgroup -g 1001 -S appuser && \
+    adduser -u 1001 -S appuser -G appuser && \
+    chown -R appuser:appuser /usr/src/app /config
 
-# Make /config the single mount point for all configs,
-# but preserve defaults if present
-RUN mkdir -p /config \
-    && if [ -d ./config ]; then cp -a ./config/. /config/; fi \
-    && rm -rf ./config \
-    && ln -s /config ./config
+# Switch to non-root user
+USER appuser
 
 VOLUME ["/config"]
 
 # Expose application port
 EXPOSE 34400
 
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD /bin/sh /usr/src/app/healthcheck.sh
+
 # Run the server
-CMD ["npm", "run", "serve"]
+CMD ["node", "index.js"]

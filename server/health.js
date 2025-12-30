@@ -6,6 +6,11 @@ const router = express.Router();
 const STATUS_FILE = './data/lineup_status.json';
 const LAST_LOG_FILE = './data/lineup_health_last.json';
 
+// Basic health check endpoint for Docker and monitoring
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 router.get('/api/channel-health', async (req, res) => {
   try {
     let raw = {};
