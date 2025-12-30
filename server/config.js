@@ -180,4 +180,95 @@ router.get('/api/mapping/unmapped', async (req, res) => {
   }
 });
 
+// Dynamic mapping management endpoints
+
+router.post('/api/mapping', async (req, res) => {
+  try {
+    const { key, mapping } = req.body;
+    if (!key || typeof key !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid key' });
+    }
+    if (!mapping || typeof mapping !== 'object') {
+      return res.status(400).json({ error: 'Missing or invalid mapping object' });
+    }
+    
+    // Load current mappings
+    let channelMap = loadChannelMap();
+    
+    // Add or update the mapping
+    channelMap[key] = {
+      ...channelMap[key],
+      ...mapping
+    };
+    
+    // Save the updated mapping
+    const yamlText = yaml.stringify(channelMap);
+    fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    
+    res.json({ status: 'saved', key, mapping: channelMap[key] });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to save mapping', detail: e.message });
+  }
+});
+
+router.delete('/api/mapping/:key', async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key);
+    if (!key) {
+      return res.status(400).json({ error: 'Missing key' });
+    }
+    
+    // Load current mappings
+    let channelMap = loadChannelMap();
+    
+    // Check if key exists
+    if (!channelMap[key]) {
+      return res.status(404).json({ error: 'Mapping not found' });
+    }
+    
+    // Remove the mapping
+    delete channelMap[key];
+    
+    // Save the updated mapping
+    const yamlText = yaml.stringify(channelMap);
+    fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    
+    res.json({ status: 'deleted', key });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete mapping', detail: e.message });
+  }
+});
+
+router.post('/api/mapping/bulk', async (req, res) => {
+  try {
+    const { mappings } = req.body;
+    if (!mappings || typeof mappings !== 'object') {
+      return res.status(400).json({ error: 'Missing or invalid mappings object' });
+    }
+    
+    // Load current mappings
+    let channelMap = loadChannelMap();
+    
+    // Merge the new mappings
+    let count = 0;
+    for (const [key, mapping] of Object.entries(mappings)) {
+      if (typeof mapping === 'object' && mapping !== null) {
+        channelMap[key] = {
+          ...channelMap[key],
+          ...mapping
+        };
+        count++;
+      }
+    }
+    
+    // Save the updated mapping
+    const yamlText = yaml.stringify(channelMap);
+    fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    
+    res.json({ status: 'saved', count });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to save bulk mappings', detail: e.message });
+  }
+});
+
 export default router;
