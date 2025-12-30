@@ -61,9 +61,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     const baseUrl = getBaseUrl(req);
 
     const epgUrl = `${baseUrl}/xmltv.xml`;
-    
-    // Use array and join for better performance than string concatenation
-    const lines = [`#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"`];
+    let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
 
     for (const channel of channels) {
       let tvgId = channel.tvg_id || '';
@@ -84,11 +82,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       const groupTitle = channel.source || '';
       const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
 
-      lines.push(`#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}`);
-      lines.push(streamUrl);
+      output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}\n`;
+      output += `${streamUrl}\n`;
     }
-
-    const output = lines.join('\n') + '\n';
     
     // Cache the result
     m3uCache.set(cacheKey, output);

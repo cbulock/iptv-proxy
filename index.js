@@ -4,7 +4,6 @@ import chalk from 'chalk';
 import path from 'path';
 import { initConfig } from './server/init-config.js';
 import { loadAllConfigs } from './libs/config-loader.js';
-import viteConfig from './admin/vite.config.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes, invalidateLineupCaches } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
@@ -31,7 +30,16 @@ app.use(express.static(publicDir));
 app.use('/node_modules', express.static(path.resolve('./node_modules')));
 // Load and validate config
 const configs = loadAllConfigs();
-const adminDevPort = viteConfig.server?.port || 5173;
+
+// Try to load vite config, fallback to default if not available
+let adminDevPort = 5173;
+try {
+  const viteConfig = await import('./admin/vite.config.js');
+  adminDevPort = viteConfig.default?.server?.port || 5173;
+} catch (err) {
+  // Vite not installed or config not available, use default
+}
+
 const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
 
 // Admin UI: prefer built Vite output if present, otherwise redirect to dev server
