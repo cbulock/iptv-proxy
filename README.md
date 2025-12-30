@@ -9,6 +9,10 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 - 📺 Channel mapping to control display names, guide numbers, and logos
 - 🧠 Fallback guide info via guide number when `tvg_id` is missing
 - 🔁 HTTP server that hosts `/lineup.m3u` and `/xmltv.xml`
+- 🛡️ Robust error handling for malformed sources and network failures
+- 🔄 Graceful handling of invalid M3U entries and XML data
+- 🌐 Full reverse proxy support with `X-Forwarded-*` headers
+- 💚 Health check endpoints for monitoring and orchestration (liveness, readiness)
 
 This project was inspired by [xTeVe](https://github.com/xteve-project/xTeVe) and [Threadfin](https://github.com/Threadfin/Threadfin), but I wanted something a little lighter and had better control over using the feeds through reverse proxies.
 
