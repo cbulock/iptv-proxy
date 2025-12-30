@@ -8,8 +8,8 @@ const __dirname = dirname(__filename);
 // Project root is one level up from libs/
 export const PROJECT_ROOT = join(__dirname, '..');
 
-// Config directory
-export const CONFIG_DIR = join(PROJECT_ROOT, 'config');
+// Config directory - use CONFIG_PATH env var if set, otherwise default to PROJECT_ROOT/config
+export const CONFIG_DIR = process.env.CONFIG_PATH || join(PROJECT_ROOT, 'config');
 
 // Data directory
 export const DATA_DIR = join(PROJECT_ROOT, 'data');
