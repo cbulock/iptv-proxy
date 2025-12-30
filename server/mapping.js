@@ -53,14 +53,16 @@ router.get('/api/mapping/duplicates', async (req, res) => {
 
     const duplicates = detectDuplicates(channels);
     
+    // Note: totalDuplicateChannels sums all channels in duplicate groups.
+    // A channel may appear in both byName and byTvgId if it has both types of duplicates.
     res.json({
       byName: duplicates.byName,
       byTvgId: duplicates.byTvgId,
       summary: {
         duplicateNames: duplicates.byName.length,
         duplicateTvgIds: duplicates.byTvgId.length,
-        totalDuplicateChannels: duplicates.byName.reduce((sum, d) => sum + d.count, 0) +
-                                  duplicates.byTvgId.reduce((sum, d) => sum + d.count, 0)
+        totalDuplicateChannelsByName: duplicates.byName.reduce((sum, d) => sum + d.count, 0),
+        totalDuplicateChannelsByTvgId: duplicates.byTvgId.reduce((sum, d) => sum + d.count, 0)
       }
     });
   } catch (e) {

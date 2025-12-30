@@ -88,15 +88,17 @@ router.post('/rename', async (req, res) => {
     for (const ch of channels) {
       if (!ch.oldName || !ch.newName) continue;
       
-      // If there was an existing mapping for oldName, migrate it
+      // If there was an existing mapping for oldName, migrate it to newName
       if (mapping[ch.oldName]) {
+        // Move the mapping to the new key and update the display name
         mapping[ch.newName] = {
           ...mapping[ch.oldName],
           name: ch.newName
         };
         delete mapping[ch.oldName];
       } else {
-        // Create new mapping with renamed display name
+        // Create new mapping: the key is the source channel name (oldName),
+        // and 'name' field overrides the display name to newName
         mapping[ch.oldName] = {
           name: ch.newName
         };

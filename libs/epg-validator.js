@@ -10,6 +10,10 @@ const parser = new XMLParser({
   attributeNamePrefix: '@_'
 });
 
+// Sampling configuration for large EPGs
+const SMALL_EPG_THRESHOLD = 200; // EPGs with fewer programmes are fully validated
+const SAMPLE_SIZE = 100; // Number of programmes to sample from each section
+
 /**
  * Validate channel element
  * @param {Object} channel - Channel object from parsed XML
@@ -229,25 +233,25 @@ export function validateEPG(xmlString) {
     const programmes = Array.isArray(tv.programme) ? tv.programme : (tv.programme ? [tv.programme] : []);
     result.programmeCount = programmes.length;
     
-    // Sample validation for large EPGs (validate first 100, last 100, and random sample)
+    // Sample validation for large EPGs (validate first, last, and random sample)
     const indicesToValidate = new Set();
     
-    if (programmes.length <= 200) {
+    if (programmes.length <= SMALL_EPG_THRESHOLD) {
       // Validate all if small
       for (let i = 0; i < programmes.length; i++) {
         indicesToValidate.add(i);
       }
     } else {
-      // First 100
-      for (let i = 0; i < 100; i++) {
+      // First SAMPLE_SIZE
+      for (let i = 0; i < SAMPLE_SIZE && i < programmes.length; i++) {
         indicesToValidate.add(i);
       }
-      // Last 100
-      for (let i = programmes.length - 100; i < programmes.length; i++) {
+      // Last SAMPLE_SIZE
+      for (let i = Math.max(0, programmes.length - SAMPLE_SIZE); i < programmes.length; i++) {
         indicesToValidate.add(i);
       }
-      // Random sample of 100
-      for (let i = 0; i < 100; i++) {
+      // Random sample of SAMPLE_SIZE
+      for (let i = 0; i < SAMPLE_SIZE; i++) {
         const idx = Math.floor(Math.random() * programmes.length);
         indicesToValidate.add(idx);
       }
@@ -277,7 +281,7 @@ export function validateEPG(xmlString) {
     }
     
     // Estimate valid programmes based on sample
-    if (programmes.length > 200 && validatedCount > 0) {
+    if (programmes.length > SMALL_EPG_THRESHOLD && validatedCount > 0) {
       const sampleRate = sampleValid / validatedCount;
       result.validProgrammes = Math.round(programmes.length * sampleRate);
     } else {
