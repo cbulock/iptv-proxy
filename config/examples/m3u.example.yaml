@@ -1,0 +1,101 @@
+# M3U Playlist Sources Configuration
+# This file defines all the M3U/M3U8 playlist sources and HDHomeRun devices
+# that will be aggregated into a unified playlist.
+
+urls:
+  # ============================================================================
+  # Standard M3U/M3U8 Sources
+  # ============================================================================
+  
+  # Basic M3U source with HTTPS URL
+  - name: "Premium IPTV"
+    url: "https://example.com/iptv/playlist.m3u"
+    type: "m3u"
+  
+  # M3U8 source (HLS streams)
+  - name: "Sports Channels"
+    url: "https://sports-provider.com/channels.m3u8"
+    type: "m3u"
+  
+  # M3U source from local media server (e.g., ErsatzTV, Plex, Jellyfin)
+  - name: "ErsatzTV"
+    url: "http://192.168.1.100:8409/iptv/channels.m3u"
+    type: "m3u"
+  
+  # M3U source with authentication (URL-encoded credentials)
+  - name: "Authenticated Service"
+    url: "https://username:password@secure-iptv.com/playlist.m3u"
+    type: "m3u"
+  
+  # ============================================================================
+  # HDHomeRun OTA Tuner Devices
+  # ============================================================================
+  
+  # HDHomeRun device by hostname
+  - name: "HDHomeRun Living Room"
+    url: "http://hdhomerun-living.local"
+    type: "hdhomerun"
+  
+  # HDHomeRun device by IP address
+  - name: "HDHomeRun Bedroom"
+    url: "http://192.168.1.150"
+    type: "hdhomerun"
+  
+  # Multiple HDHomeRun devices for increased tuner capacity
+  - name: "HDHomeRun Attic"
+    url: "http://192.168.1.151"
+    type: "hdhomerun"
+  
+  # ============================================================================
+  # Local File Sources (for testing or offline use)
+  # ============================================================================
+  
+  # Local M3U file (relative to project root)
+  # Note: Use file:// URLs for local files
+  # - name: "Local Playlist"
+  #   url: "file://./data/local-channels.m3u"
+  #   type: "m3u"
+  
+  # ============================================================================
+  # Edge Cases and Advanced Scenarios
+  # ============================================================================
+  
+  # Source with special characters in name (will be used as group-title)
+  # - name: "Kids & Family"
+  #   url: "https://family-content.com/channels.m3u"
+  #   type: "m3u"
+  
+  # Source behind a reverse proxy with custom port
+  # - name: "Proxied Service"
+  #   url: "https://proxy.example.com:8443/iptv/playlist.m3u"
+  #   type: "m3u"
+  
+  # Source with self-signed certificate (may require additional configuration)
+  # - name: "Self-Signed HTTPS"
+  #   url: "https://self-signed.local/playlist.m3u"
+  #   type: "m3u"
+
+# ============================================================================
+# Configuration Notes:
+# ============================================================================
+# 
+# - Each source must have a unique "name" - this becomes the group-title in the output
+# - The "type" field is optional and defaults to "m3u" if omitted
+# - HDHomeRun devices must use type "hdhomerun"
+# - For HDHomeRun, the URL should point to the device's base URL (no /lineup.json path needed)
+# - All channels from each source will be tagged with the source name
+# - Use channel-map.yaml to normalize channel metadata across sources
+# - Sources are processed sequentially in the order listed
+# - If a source fails to load, it will be skipped with a warning
+# 
+# ============================================================================
+# Troubleshooting:
+# ============================================================================
+# 
+# - "Failed to fetch M3U": Check URL accessibility and network connectivity
+# - "Missing URL for source": Ensure each source has a valid URL field
+# - HDHomeRun not working: Verify device is on the network and accessible
+# - Authentication issues: Ensure credentials are properly URL-encoded
+# - Timeout errors: Check if the source server is responsive
+# 
+# For more help, see the README.md troubleshooting section.

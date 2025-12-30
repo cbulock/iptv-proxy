@@ -1,0 +1,120 @@
+# Application Configuration
+# This file contains optional application-level settings.
+
+# ============================================================================
+# Base URL Configuration
+# ============================================================================
+
+# Optional: Set a custom base URL for the application
+# This is useful when running behind a reverse proxy or using a custom domain
+# If not set, the base URL is automatically detected from request headers
+# base_url: "https://iptv.example.com"
+
+# Examples:
+# - Direct access: Leave commented (auto-detect)
+# - Behind nginx: base_url: "https://iptv.example.com"
+# - Custom port: base_url: "https://iptv.example.com:8443"
+# - Subdirectory: base_url: "https://example.com/iptv"
+
+# ============================================================================
+# Scheduler Configuration
+# ============================================================================
+
+# Configure automatic background tasks (uses node-cron syntax)
+
+# EPG Refresh Schedule
+# Default: Every 6 hours at :00 minutes
+# epg_refresh_schedule: "0 */6 * * *"
+
+# Example schedules:
+# - Every hour: "0 * * * *"
+# - Every 12 hours: "0 */12 * * *"
+# - Daily at 3 AM: "0 3 * * *"
+# - Twice daily (6 AM & 6 PM): "0 6,18 * * *"
+
+# Channel Health Check Schedule
+# Default: Every 4 hours
+# channel_health_schedule: "0 */4 * * *"
+
+# Channel Reload Schedule
+# Default: Disabled (manual reload only)
+# Uncomment to enable automatic channel reloading
+# channel_reload_schedule: "0 */12 * * *"
+
+# ============================================================================
+# Image Proxy Configuration
+# ============================================================================
+
+# Image proxying is enabled by default for all channel logos and EPG images
+# This helps avoid CORS issues and provides a consistent URL structure
+# No configuration needed - works automatically
+
+# ============================================================================
+# HTTP Server Configuration
+# ============================================================================
+
+# Port configuration is set via environment variable or defaults to 34400
+# To change: Set PORT environment variable before starting
+# Example: PORT=8080 npm start
+
+# ============================================================================
+# Advanced Configuration Examples
+# ============================================================================
+
+# Example: Production setup with daily EPG refresh
+# base_url: "https://iptv.yourdomain.com"
+# epg_refresh_schedule: "0 3 * * *"
+# channel_health_schedule: "0 */6 * * *"
+
+# Example: Development setup with frequent updates
+# base_url: "http://localhost:34400"
+# epg_refresh_schedule: "*/30 * * * *"
+# channel_health_schedule: "*/15 * * * *"
+
+# Example: Behind a reverse proxy with subfolder
+# base_url: "https://media.example.com/iptv"
+# epg_refresh_schedule: "0 */6 * * *"
+
+# ============================================================================
+# Configuration Notes:
+# ============================================================================
+# 
+# Base URL:
+# - Automatically detected from X-Forwarded-* headers if not explicitly set
+# - Used for generating absolute URLs in M3U playlists and stream proxying
+# - Should NOT include trailing slash
+# - Must be accessible from your media player clients
+# 
+# Cron Expressions:
+# - Format: "minute hour day month weekday"
+# - Ranges: minute (0-59), hour (0-23), day (1-31), month (1-12), weekday (0-7)
+# - Special characters: * (any), */n (every n), n,m (multiple values), n-m (range)
+# 
+# Environment Variables:
+# - PORT: HTTP server port (default: 34400)
+# - CONFIG_PATH: Configuration directory path (default: ./config)
+# - NODE_ENV: Node environment (development, production)
+# 
+# ============================================================================
+# Troubleshooting:
+# ============================================================================
+# 
+# - Wrong URLs in M3U: Set base_url explicitly to match your proxy configuration
+# - Scheduler not running: Check cron expression syntax, view logs for errors
+# - CORS errors with images: Ensure image proxy is working (should be automatic)
+# - Port conflict: Change PORT environment variable or check for conflicting services
+# - Behind reverse proxy: Set base_url and ensure proxy passes X-Forwarded-* headers
+# 
+# For more help, see the README.md troubleshooting section.
+
+# ============================================================================
+# Reverse Proxy Headers
+# ============================================================================
+# 
+# If running behind a reverse proxy, ensure these headers are forwarded:
+# - X-Forwarded-Proto: Protocol (http/https)
+# - X-Forwarded-Host: Original hostname
+# - X-Forwarded-For: Client IP address
+# - X-Real-IP: Client IP address (alternative to X-Forwarded-For)
+# 
+# See README.md for nginx, Caddy, and Traefik configuration examples.
