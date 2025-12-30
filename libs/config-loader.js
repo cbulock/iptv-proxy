@@ -38,7 +38,7 @@ const epgSchema = Joi.object({
 }).default({ urls: [] });
 
 const appSchema = Joi.object({
-  base_url: Joi.string().uri({ allowRelative: false }).optional().allow('').messages({
+  base_url: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
     'string.uri': 'app.yaml "base_url" must be a valid URL'
   })
 }).unknown(true).default({});
