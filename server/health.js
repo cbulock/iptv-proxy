@@ -36,15 +36,16 @@ router.get('/health/ready', asyncHandler(async (req, res) => {
   // Check if channels are loaded
   try {
     const channels = getChannels();
+    const hasChannels = channels.length > 0;
+    
     checks.checks.channels = {
-      status: 'ok',
+      status: hasChannels ? 'ok' : 'warning',
       count: channels.length,
-      available: channels.length > 0
+      available: hasChannels
     };
     
-    if (channels.length === 0) {
+    if (!hasChannels) {
       checks.ready = false;
-      checks.checks.channels.status = 'warning';
       checks.checks.channels.message = 'No channels loaded';
     }
   } catch (err) {

@@ -122,8 +122,9 @@ export async function setupEPGRoutes(app) {
                     throw new Error('Empty or invalid EPG data received');
                 }
 
-                // Validate basic XML structure
-                if (!xmlData.trim().startsWith('<?xml') && !xmlData.trim().startsWith('<tv')) {
+                // Validate basic XML structure (allow whitespace/comments before declaration)
+                const trimmedXml = xmlData.trim();
+                if (!trimmedXml.includes('<?xml') && !trimmedXml.includes('<tv')) {
                     throw new Error('Invalid XML format - missing XML declaration or root element');
                 }
 
@@ -185,71 +186,63 @@ export async function setupEPGRoutes(app) {
     setInterval(fetchAndMergeEPGs, 6 * 60 * 60 * 1000);
 
     app.get('/xmltv.xml', asyncHandler(async (req, res) => {
-        try {
-            if (!mergedEPG) {
-                throw new AppError('EPG not loaded yet', 503);
-            }
-
-            // Extract query parameters for filtering
-            const filterSource = req.query.source ? String(req.query.source) : null;
-            const filterChannels = req.query.channels ? String(req.query.channels).split(',') : null;
-            
-            let xmlToSend = mergedEPG;
-            
-            // Apply filters if specified
-            if ((filterSource || filterChannels) && typeof mergedEPG === 'string' && mergedEPG.trim()) {
-                try {
-                    const parsed = parser.parse(mergedEPG);
-                    
-                    if (!parsed || !parsed.tv) {
-                        throw new Error('Invalid EPG structure');
-                    }
-                    
-                    const allChannels = getChannels();
-                    
-                    // Build set of allowed tvg_ids based on filters
-                    let allowedTvgIds = new Set();
-                    
-                    if (filterSource) {
-                        // Filter by source
-                        const sourceChannels = allChannels.filter(c => c && c.source === filterSource);
-                        sourceChannels.forEach(c => {
-                            if (c.tvg_id) allowedTvgIds.add(c.tvg_id);
-                        });
-                    } else if (filterChannels) {
-                        // Filter by specific channel IDs
-                        filterChannels.forEach(id => allowedTvgIds.add(id.trim()));
-                    }
-                    
-                    // Filter channels and programmes
-                    if (allowedTvgIds.size > 0 && parsed.tv) {
-                        const tv = parsed.tv;
-                        tv.channel = [].concat(tv.channel || []).filter(c =>
-                            c && allowedTvgIds.has(c["@_id"])
-                        );
-                        tv.programme = [].concat(tv.programme || []).filter(p =>
-                            p && allowedTvgIds.has(p["@_channel"])
-                        );
-                        
-                        xmlToSend = builder.build(parsed);
-                    }
-                } catch (filterErr) {
-                    console.error('[EPG] Error filtering XMLTV:', filterErr.message);
-                    // Fall back to unfiltered XML
-                }
-            }
-
-            const rewritten = rewriteImageUrls(xmlToSend, req);
-
-            res.set('Content-Type', 'application/xml');
-            res.send(rewritten);
-        } catch (err) {
-            if (err.statusCode === 503) {
-                throw err;
-            }
-            console.error('[xmltv.xml] Error generating EPG:', err.message);
-            throw new AppError('Failed to generate XMLTV EPG', 500, err.message);
+        if (!mergedEPG) {
+            throw new AppError('EPG not loaded yet', 503);
         }
+
+        // Extract query parameters for filtering
+        const filterSource = req.query.source ? String(req.query.source) : null;
+        const filterChannels = req.query.channels ? String(req.query.channels).split(',') : null;
+        
+        let xmlToSend = mergedEPG;
+        
+        // Apply filters if specified
+        if ((filterSource || filterChannels) && typeof mergedEPG === 'string' && mergedEPG.trim()) {
+            try {
+                const parsed = parser.parse(mergedEPG);
+                
+                if (!parsed || !parsed.tv) {
+                    throw new Error('Invalid EPG structure');
+                }
+                
+                const allChannels = getChannels();
+                
+                // Build set of allowed tvg_ids based on filters
+                let allowedTvgIds = new Set();
+                
+                if (filterSource) {
+                    // Filter by source
+                    const sourceChannels = allChannels.filter(c => c && c.source === filterSource);
+                    sourceChannels.forEach(c => {
+                        if (c.tvg_id) allowedTvgIds.add(c.tvg_id);
+                    });
+                } else if (filterChannels) {
+                    // Filter by specific channel IDs
+                    filterChannels.forEach(id => allowedTvgIds.add(id.trim()));
+                }
+                
+                // Filter channels and programmes
+                if (allowedTvgIds.size > 0 && parsed.tv) {
+                    const tv = parsed.tv;
+                    tv.channel = [].concat(tv.channel || []).filter(c =>
+                        c && allowedTvgIds.has(c["@_id"])
+                    );
+                    tv.programme = [].concat(tv.programme || []).filter(p =>
+                        p && allowedTvgIds.has(p["@_channel"])
+                    );
+                    
+                    xmlToSend = builder.build(parsed);
+                }
+            } catch (filterErr) {
+                console.error('[EPG] Error filtering XMLTV:', filterErr.message);
+                // Fall back to unfiltered XML
+            }
+        }
+
+        const rewritten = rewriteImageUrls(xmlToSend, req);
+
+        res.set('Content-Type', 'application/xml');
+        res.send(rewritten);
     }));
 
     app.get('/images/:source/:url', asyncHandler(async (req, res) => {

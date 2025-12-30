@@ -105,11 +105,17 @@ async function processSource(source, map) {
 
             const lines = response.data.split('\n');
 
-            // Validate M3U header
-            if (lines.length === 0 || !lines[0].trim().startsWith('#EXTM3U')) {
+            // Validate M3U header and check if file is empty
+            if (lines.length === 0) {
+                throw new Error('Empty M3U file');
+            }
+            
+            if (!lines[0].trim().startsWith('#EXTM3U')) {
                 console.warn(`Warning: ${source.name} missing #EXTM3U header`);
             }
 
+            // Valid streaming protocols
+            const validProtocols = ['http://', 'https://', 'rtsp://', 'rtp://', 'udp://'];
             let current = {};
             let lineNumber = 0;
 
@@ -136,12 +142,10 @@ async function processSource(source, map) {
                         current = {};
                     }
                 } else if (trimmedLine && !trimmedLine.startsWith('#')) {
-                    // Validate URL format
-                    if (!trimmedLine.startsWith('http://') && 
-                        !trimmedLine.startsWith('https://') && 
-                        !trimmedLine.startsWith('rtsp://') && 
-                        !trimmedLine.startsWith('rtp://') &&
-                        !trimmedLine.startsWith('udp://')) {
+                    // Validate URL format using valid protocols array
+                    const hasValidProtocol = validProtocols.some(protocol => trimmedLine.startsWith(protocol));
+                    
+                    if (!hasValidProtocol) {
                         console.warn(`[${source.name}:${lineNumber}] Invalid stream URL format: ${trimmedLine.substring(0, 50)}`);
                         current = {};
                         continue;
