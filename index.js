@@ -49,10 +49,12 @@ const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
 
 // Admin UI: serve built Vite output if present, otherwise show error
 const builtAdminDir = path.join(publicDir, 'admin');
+const builtAdminIndexPath = path.join(builtAdminDir, 'index.html');
+const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
+
 app.get(['/', '/admin', '/admin.html'], (req, res) => {
-  const builtIndex = path.join(builtAdminDir, 'index.html');
-  if (fs.existsSync(builtIndex)) {
-    res.sendFile(builtIndex);
+  if (isAdminBuilt()) {
+    res.sendFile(builtAdminIndexPath);
   } else {
     // Admin UI not built - show helpful error message
     res.status(503).send(`
@@ -113,9 +115,7 @@ await startScheduler();
 // Friendly startup banner
 app.listen(port, () => {
   const base = `http://${config.host}:${port}`;
-  const builtIndex = path.join(builtAdminDir, 'index.html');
-  const adminBuilt = fs.existsSync(builtIndex);
-  const adminUrl = adminBuilt
+  const adminUrl = isAdminBuilt()
     ? `${base}/admin/`
     : `http://${config.host}:${adminDevPort}/admin/ (dev server - run 'npm run dev')`;
   
