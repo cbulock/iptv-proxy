@@ -1,8 +1,12 @@
 import fs from 'fs';
 import axios from 'axios';
+import pLimit from 'p-limit';
 import { loadConfig } from '../libs/config-loader.js';
 
 const outputPath = './data/channels.json';
+
+// Limit concurrent source fetches
+const limit = pLimit(3);
 
 function applyMapping(channel, map) {
     // Try name-based mapping first
@@ -33,50 +37,37 @@ function proxyURL(channel) {
     return `/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
 }
 
-export async function parseAll() {
-    const allChannels = [];
+/**
+ * Process a single M3U source
+ * @param {Object} source - Source configuration
+ * @param {Object} map - Channel mapping
+ * @returns {Promise<Array>} Array of channels
+ */
+async function processSource(source, map) {
+    const channels = [];
+    
+    try {
+        console.log(`Processing source: ${source.name}...`);
 
-    // Load config dynamically so updates take effect without restart
-    const m3uConfig = loadConfig('m3u');
-    const sources = m3uConfig.urls || [];
-    const map = loadConfig('channelMap');
+        if (source.type === 'hdhomerun') {
+            if (!source.url) throw new Error(`Missing URL for ${source.name}`);
 
-    for (const source of sources) {
-        try {
-            console.log(`Processing source: ${source.name}...`);
+            const discovery = await axios.get(`${source.url}/discover.json`);
+            const deviceInfo = discovery.data;
 
-            if (source.type === 'hdhomerun') {
-                if (!source.url) throw new Error(`Missing URL for ${source.name}`);
+            const lineup = (await axios.get(`${deviceInfo.BaseURL}/lineup.json`)).data;
 
-                const discovery = await axios.get(`${source.url}/discover.json`);
-                const deviceInfo = discovery.data;
-                const lineupUrl = deviceInfo.LineupURL;
-
-                const lineup = (await axios.get(`${deviceInfo.BaseURL}/lineup.json`)).data;
-
-                for (const chan of lineup) {
-                    const channel = {
+            for (const chan of lineup) {
+                const channel = {
+                    name: chan.GuideName,
+                    tvg_id: '',
+                    logo: '',
+                    url: proxyURL({
                         name: chan.GuideName,
-                        tvg_id: '',
-                        logo: '',
-                        url: proxyURL({
-                            name: chan.GuideName,
-                            source: source.name
-                        }),
-                        original_url: chan.URL,
-                        guideNumber: chan.GuideNumber,
-                        source: source.name,
-                        hdhomerun: {
-                            deviceID: deviceInfo.DeviceID,
-                            baseURL: deviceInfo.BaseURL,
-                            model: deviceInfo.ModelNumber
-                        }
-                    };
-
-                    allChannels.push(applyMapping(channel, map));
-                }
-
-                let current = {
+                        source: source.name
+                    }),
+                    original_url: chan.URL,
+                    guideNumber: chan.GuideNumber,
                     source: source.name,
                     hdhomerun: {
                         deviceID: deviceInfo.DeviceID,
@@ -84,42 +75,68 @@ export async function parseAll() {
                         model: deviceInfo.ModelNumber
                     }
                 };
-            } else {
-                // Standard M3U
-                const response = await axios.get(source.url);
-                const lines = response.data.split('\n');
 
-                let current = {};
+                channels.push(applyMapping(channel, map));
+            }
+        } else {
+            // Standard M3U - stream processing for large files
+            const response = await axios.get(source.url);
+            const lines = response.data.split('\n');
 
-                for (const line of lines) {
-                    if (line.startsWith('#EXTINF')) {
-                        const nameMatch = line.match(/,(.*)$/);
-                        const tvgIdMatch = line.match(/tvg-id="(.*?)"/);
-                        const tvgLogoMatch = line.match(/tvg-logo="(.*?)"/);
+            let current = {};
 
-                        current = {
-                            name: nameMatch ? nameMatch[1].trim() : 'Unknown',
-                            tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
-                            logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
-                            source: source.name
-                        };
-                    } else if (line && !line.startsWith('#')) {
-                        current.url = proxyURL(current);
-                        current.original_url = line.trim();
-                        allChannels.push(applyMapping(current, map));
-                        current = {};
-                    }
+            for (const line of lines) {
+                if (line.startsWith('#EXTINF')) {
+                    const nameMatch = line.match(/,(.*)$/);
+                    const tvgIdMatch = line.match(/tvg-id="(.*?)"/);
+                    const tvgLogoMatch = line.match(/tvg-logo="(.*?)"/);
+
+                    current = {
+                        name: nameMatch ? nameMatch[1].trim() : 'Unknown',
+                        tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
+                        logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
+                        source: source.name
+                    };
+                } else if (line && !line.startsWith('#')) {
+                    current.url = proxyURL(current);
+                    current.original_url = line.trim();
+                    channels.push(applyMapping(current, map));
+                    current = {};
                 }
             }
-        } catch (err) {
-            console.warn(`Failed to process ${source.name}: ${err.message}`);
         }
+        
+        console.log(`Processed ${channels.length} channels from ${source.name}`);
+    } catch (err) {
+        console.warn(`Failed to process ${source.name}: ${err.message}`);
     }
+    
+    return channels;
+}
+
+export async function parseAll() {
+    const startTime = Date.now();
+    
+    // Load config dynamically so updates take effect without restart
+    const m3uConfig = loadConfig('m3u');
+    const sources = m3uConfig.urls || [];
+    const map = loadConfig('channelMap');
+
+    // Process sources in parallel with concurrency limit
+    const channelArrays = await Promise.all(
+        sources.map(source => limit(() => processSource(source, map)))
+    );
+    
+    // Flatten the array of arrays
+    const allChannels = channelArrays.flat();
 
     fs.mkdirSync('./data', { recursive: true });
     fs.writeFileSync(outputPath, JSON.stringify(allChannels, null, 2));
-    console.log(`Parsed ${allChannels.length} channels to ${outputPath}`);
+    
+    const duration = Date.now() - startTime;
+    console.log(`Parsed ${allChannels.length} channels to ${outputPath} in ${duration}ms`);
 
     return allChannels.length;
 }
+
 

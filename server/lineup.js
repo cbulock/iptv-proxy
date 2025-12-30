@@ -2,6 +2,20 @@ import fs from 'fs';
 import axios from 'axios';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
+import { getChannels } from '../libs/channels-cache.js';
+
+// Cache for M3U output by host+protocol
+const m3uCache = new Map();
+const jsonCache = new Map();
+
+// Invalidate caches when channels are updated
+let lastChannelsUpdate = Date.now();
+
+function invalidateCaches() {
+  m3uCache.clear();
+  jsonCache.clear();
+  lastChannelsUpdate = Date.now();
+}
 
 export function setupLineupRoutes(app, config, usageHelpers = {}) {
   const {
@@ -9,10 +23,16 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     touchUsage = () => undefined,
     unregisterUsage = () => undefined
   } = usageHelpers;
-  const loadChannels = () =>
-    JSON.parse(fs.readFileSync('./data/channels.json', 'utf8'));
+  const loadChannels = () => getChannels();
 
   app.get('/lineup.json', (req, res) => {
+    const cacheKey = `${req.protocol}://${req.get('host')}`;
+    
+    // Check cache
+    if (jsonCache.has(cacheKey)) {
+      return res.json(jsonCache.get(cacheKey));
+    }
+    
     const channels = loadChannels();
 
     const lineup = channels.map(channel => ({
@@ -21,14 +41,26 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       URL: `${req.protocol}://${req.get('host')}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`
     }));
 
+    // Cache the result
+    jsonCache.set(cacheKey, lineup);
+    
     res.json(lineup);
   });
 
   app.get('/lineup.m3u', (req, res) => {
+    const cacheKey = `${req.protocol}://${req.get('host')}`;
+    
+    // Check cache
+    if (m3uCache.has(cacheKey)) {
+      res.set('Content-Type', 'application/x-mpegURL');
+      return res.send(m3uCache.get(cacheKey));
+    }
+    
     const channels = loadChannels();
     const tvgIdMap = new Map(); // For deduplication
+    const baseUrl = getBaseUrl(req);
 
-    const epgUrl = `${getBaseUrl(req)}/xmltv.xml`;
+    const epgUrl = `${baseUrl}/xmltv.xml`;
     let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
 
     for (const channel of channels) {
@@ -48,11 +80,14 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
         : '';
       const groupTitle = channel.source || '';
-      const streamUrl = `${getBaseUrl(req)}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
+      const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
 
       output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}\n`;
       output += `${streamUrl}\n`;
     }
+    
+    // Cache the result
+    m3uCache.set(cacheKey, output);
 
     res.set('Content-Type', 'application/x-mpegURL');
     res.send(output);
@@ -143,3 +178,6 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     }
   });
 }
+
+// Export cache invalidation function
+export { invalidateCaches as invalidateLineupCaches };

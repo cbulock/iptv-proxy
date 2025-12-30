@@ -3,6 +3,7 @@ import axios from 'axios';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import escapeHtml from 'escape-html';
 import { loadConfig } from '../libs/config-loader.js';
+import { getChannels } from '../libs/channels-cache.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
@@ -25,7 +26,21 @@ const builder = new XMLBuilder({
     format: true
 });
 
+// Cache for rewritten XML by protocol
+let rewrittenXMLCache = new Map();
+
 function rewriteImageUrls(xmlString, req) {
+    const protocol = req.get('X-Forwarded-Proto') ||
+        req.get('X-Forwarded-Protocol') ||
+        req.get('X-Url-Scheme') ||
+        (req.get('X-Forwarded-Ssl') === 'on' ? 'https' : req.protocol);
+    
+    // Check cache
+    const cacheKey = `${protocol}://${req.get('host')}`;
+    if (rewrittenXMLCache.has(cacheKey)) {
+        return rewrittenXMLCache.get(cacheKey);
+    }
+    
     const parsed = parser.parse(xmlString);
 
     const rewrite = (node, sourceName) => {
@@ -42,18 +57,23 @@ function rewriteImageUrls(xmlString, req) {
         rewrite(prog, prog["@_channel"] || "unknown");
     }
 
-    return builder.build(parsed);
+    const result = builder.build(parsed);
+    
+    // Cache the result
+    rewrittenXMLCache.set(cacheKey, result);
+    
+    return result;
 }
 
 export async function setupEPGRoutes(app) {
     const epgConfig = loadConfig('epg');
     const epgSources = epgConfig.urls || [];
 
-    const allChannels = JSON.parse(fs.readFileSync('./data/channels.json', 'utf8'));
-
     let mergedEPG = null;
 
     async function fetchAndMergeEPGs() {
+        const startTime = Date.now();
+        const allChannels = getChannels();
         const merged = { tv: { channel: [], programme: [] } };
 
         for (const source of epgSources) {
@@ -61,8 +81,14 @@ export async function setupEPGRoutes(app) {
             const sourceUrl = source.url;
 
             const sourceChannels = allChannels.filter(c => c.source === sourceName);
-            const tvgIds = new Set(sourceChannels.map(c => c.tvg_id).filter(Boolean));
-            const names = new Set(sourceChannels.map(c => c.name));
+            
+            // Build both Sets in a single pass for better performance
+            const tvgIds = new Set();
+            const names = new Set();
+            for (const ch of sourceChannels) {
+                if (ch.tvg_id) tvgIds.add(ch.tvg_id);
+                names.add(ch.name);
+            }
 
             try {
                 console.log(`Loading EPG: ${sourceName} (${sourceUrl})`);
@@ -94,12 +120,20 @@ export async function setupEPGRoutes(app) {
 
                     merged.tv.programme.push(...programmes);
                 }
+                
+                console.log(`Loaded ${merged.tv.programme.length} programmes from ${sourceName}`);
             } catch (err) {
                 console.warn(`Failed to load EPG from ${sourceName}:`, err.message);
             }
         }
 
         mergedEPG = builder.build(merged);
+        
+        // Clear rewritten cache when EPG is refreshed
+        rewrittenXMLCache.clear();
+        
+        const duration = Date.now() - startTime;
+        console.log(`EPG merge completed in ${duration}ms (${merged.tv.channel.length} channels, ${merged.tv.programme.length} programmes)`);
     }
 
     // Expose refresher
@@ -112,12 +146,6 @@ export async function setupEPGRoutes(app) {
         if (!mergedEPG) {
             return res.status(503).send('EPG not loaded yet');
         }
-
-        // Check for proxy headers to determine the correct protocol
-        const protocol = req.get('X-Forwarded-Proto') ||
-            req.get('X-Forwarded-Protocol') ||
-            req.get('X-Url-Scheme') ||
-            (req.get('X-Forwarded-Ssl') === 'on' ? 'https' : req.protocol);
 
         const rewritten = rewriteImageUrls(mergedEPG, req);
 
