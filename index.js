@@ -1,9 +1,9 @@
 import express from 'express';
 import fs from 'fs';
-import yaml from 'yaml';
 import chalk from 'chalk';
 import path from 'path';
 import { initConfig } from './server/init-config.js';
+import { loadAllConfigs } from './libs/config-loader.js';
 import viteConfig from './admin/vite.config.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes } from './server/lineup.js';
@@ -28,11 +28,10 @@ const publicDir = path.resolve('./public');
 app.use(express.static(publicDir));
 // Serve node_modules to allow ESM imports without a bundler
 app.use('/node_modules', express.static(path.resolve('./node_modules')));
-// Load config
-const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8')) || {};
-const appConfig = yaml.parse(fs.readFileSync('./config/app.yaml', 'utf8')) || {};
+// Load and validate config
+const configs = loadAllConfigs();
 const adminDevPort = viteConfig.server?.port || 5173;
-const config = { ...m3uConfig, ...appConfig, host: 'localhost' };
+const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
 
 // Admin UI: prefer built Vite output if present, otherwise redirect to dev server
 const builtAdminDir = path.join(publicDir, 'admin');

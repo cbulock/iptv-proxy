@@ -1,8 +1,8 @@
 import fs from 'fs';
 import axios from 'axios';
-import yaml from 'yaml';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import escapeHtml from 'escape-html';
+import { loadConfig } from '../libs/config-loader.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
@@ -46,7 +46,7 @@ function rewriteImageUrls(xmlString, req) {
 }
 
 export async function setupEPGRoutes(app) {
-    const epgConfig = yaml.parse(fs.readFileSync('./config/epg.yaml', 'utf8'));
+    const epgConfig = loadConfig('epg');
     const epgSources = epgConfig.urls || [];
 
     const allChannels = JSON.parse(fs.readFileSync('./data/channels.json', 'utf8'));

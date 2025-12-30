@@ -6,6 +6,7 @@ const CONFIG_DIR = './config';
 const DEFAULT_CONFIGS = {
   'app.yaml': `# Application configuration
 # base_url: https://your-domain.com
+{}
 `,
   'm3u.yaml': `# M3U playlist sources
 urls: []
@@ -27,6 +28,7 @@ urls: []
 # ChannelName:
 #   number: "1.1"
 #   tvg_id: "channel.id"
+{}
 `
 };
 

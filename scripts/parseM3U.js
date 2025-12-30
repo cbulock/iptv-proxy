@@ -1,6 +1,6 @@
 import fs from 'fs';
 import axios from 'axios';
-import yaml from 'yaml';
+import { loadConfig } from '../libs/config-loader.js';
 
 const outputPath = './data/channels.json';
 
@@ -37,9 +37,9 @@ export async function parseAll() {
     const allChannels = [];
 
     // Load config dynamically so updates take effect without restart
-    const m3uConfig = yaml.parse(fs.readFileSync('./config/m3u.yaml', 'utf8')) || {};
+    const m3uConfig = loadConfig('m3u');
     const sources = m3uConfig.urls || [];
-    const map = yaml.parse(fs.readFileSync('./config/channel-map.yaml', 'utf8')) || {};
+    const map = loadConfig('channelMap');
 
     for (const source of sources) {
         try {

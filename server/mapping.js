@@ -1,6 +1,6 @@
 import express from 'express';
 import fs from 'fs/promises';
-import yaml from 'yaml';
+import { loadConfig } from '../libs/config-loader.js';
 
 const router = express.Router();
 const CHANNELS_FILE = './data/channels.json';
@@ -21,7 +21,7 @@ router.get('/api/mapping/conflicts', async (req, res) => {
     }
 
     let mapping = {};
-    try { mapping = yaml.parse(await fs.readFile(CHANNEL_MAP_FILE, 'utf8')) || {}; } catch {}
+    try { mapping = loadConfig('channelMap'); } catch {}
 
     const conflicts = [];
     for (const [name, set] of byName.entries()) {

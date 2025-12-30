@@ -4,6 +4,7 @@ import yaml from 'yaml';
 import { parseAll } from '../scripts/parseM3U.js';
 import { refreshEPG } from './epg.js';
 import fsPromises from 'fs/promises';
+import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 
 const router = express.Router();
 
@@ -13,63 +14,19 @@ const APP_PATH = './config/app.yaml';
 const CHANNEL_MAP_PATH = './config/channel-map.yaml';
 
 function loadM3U() {
-  const text = fs.readFileSync(M3U_PATH, 'utf8');
-  return yaml.parse(text) || {};
+  return loadConfig('m3u');
 }
 
 function loadEPG() {
-  const text = fs.readFileSync(EPG_PATH, 'utf8');
-  return yaml.parse(text) || {};
+  return loadConfig('epg');
 }
 
 function loadAPP() {
-  const text = fs.readFileSync(APP_PATH, 'utf8');
-  return yaml.parse(text) || {};
+  return loadConfig('app');
 }
 
 function loadChannelMap() {
-  if (!fs.existsSync(CHANNEL_MAP_PATH)) return {};
-  const text = fs.readFileSync(CHANNEL_MAP_PATH, 'utf8');
-  return yaml.parse(text) || {};
-}
-
-function validateM3U(obj) {
-  if (!obj || typeof obj !== 'object') return 'Config root must be an object';
-  if (!Array.isArray(obj.urls)) return 'Config must have an array property "urls"';
-  for (const [i, u] of obj.urls.entries()) {
-    if (!u.name) return `urls[${i}].name missing`;
-    if (!u.url) return `urls[${i}].url missing`;
-    if (u.type && !['m3u','hdhomerun'].includes(String(u.type).toLowerCase())) {
-      return `urls[${i}].type must be one of: m3u, hdhomerun`;
-    }
-  }
-  return null;
-}
-
-function validateEPG(obj) {
-  if (!obj || typeof obj !== 'object') return 'Config root must be an object';
-  if (!Array.isArray(obj.urls)) return 'Config must have an array property "urls"';
-  for (const [i, u] of obj.urls.entries()) {
-    if (!u.name) return `urls[${i}].name missing`;
-    if (!u.url) return `urls[${i}].url missing`;
-  }
-  return null;
-}
-
-function validateAPP(obj) {
-  if (!obj || typeof obj !== 'object') return 'Config root must be an object';
-  if (obj.base_url !== undefined && typeof obj.base_url !== 'string') return 'base_url must be a string';
-  return null;
-}
-
-function validateChannelMap(obj) {
-  if (!obj || typeof obj !== 'object') return 'Mapping root must be an object';
-  for (const [k, v] of Object.entries(obj)) {
-    if (!v || typeof v !== 'object') return `Mapping for "${k}" must be an object`;
-    if (v.number !== undefined && typeof v.number !== 'string') return `Mapping[${k}].number must be a string`;
-    if (v.tvg_id !== undefined && typeof v.tvg_id !== 'string') return `Mapping[${k}].tvg_id must be a string`;
-  }
-  return null;
+  return loadConfig('channelMap');
 }
 
 router.get('/api/config/m3u', (req, res) => {
@@ -106,17 +63,10 @@ router.get('/api/config/channel-map', (req, res) => {
 
 router.put('/api/config/m3u', (req, res) => {
   const incoming = req.body;
-  const err = validateM3U(incoming);
-  if (err) return res.status(400).json({ error: err });
+  const validation = validateConfigData('m3u', incoming);
+  if (!validation.valid) return res.status(400).json({ error: validation.error });
   try {
-    // Normalize types to lowercase and default to 'm3u' when absent
-    const normalized = {
-      urls: incoming.urls.map(u => ({
-        ...u,
-        type: u.type ? String(u.type).toLowerCase() : 'm3u'
-      }))
-    };
-    const yamlText = yaml.stringify(normalized);
+    const yamlText = yaml.stringify(validation.value);
     fs.writeFileSync(M3U_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {
@@ -126,10 +76,10 @@ router.put('/api/config/m3u', (req, res) => {
 
 router.put('/api/config/epg', (req, res) => {
   const incoming = req.body;
-  const err = validateEPG(incoming);
-  if (err) return res.status(400).json({ error: err });
+  const validation = validateConfigData('epg', incoming);
+  if (!validation.valid) return res.status(400).json({ error: validation.error });
   try {
-    const yamlText = yaml.stringify(incoming);
+    const yamlText = yaml.stringify(validation.value);
     fs.writeFileSync(EPG_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {
@@ -139,10 +89,10 @@ router.put('/api/config/epg', (req, res) => {
 
 router.put('/api/config/app', (req, res) => {
   const incoming = req.body;
-  const err = validateAPP(incoming);
-  if (err) return res.status(400).json({ error: err });
+  const validation = validateConfigData('app', incoming);
+  if (!validation.valid) return res.status(400).json({ error: validation.error });
   try {
-    const yamlText = yaml.stringify(incoming || {});
+    const yamlText = yaml.stringify(validation.value || {});
     fs.writeFileSync(APP_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {
@@ -152,10 +102,10 @@ router.put('/api/config/app', (req, res) => {
 
 router.put('/api/config/channel-map', (req, res) => {
   const incoming = req.body || {};
-  const err = validateChannelMap(incoming);
-  if (err) return res.status(400).json({ error: err });
+  const validation = validateConfigData('channelMap', incoming);
+  if (!validation.valid) return res.status(400).json({ error: validation.error });
   try {
-    const yamlText = yaml.stringify(incoming || {});
+    const yamlText = yaml.stringify(validation.value || {});
     fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {
