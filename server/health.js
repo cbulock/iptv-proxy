@@ -1,10 +1,11 @@
 import express from 'express';
 import fs from 'fs/promises';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
+import { getDataPath } from '../libs/paths.js';
 
 const router = express.Router();
-const STATUS_FILE = './data/lineup_status.json';
-const LAST_LOG_FILE = './data/lineup_health_last.json';
+const STATUS_FILE = getDataPath('lineup_status.json');
+const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
 
 // Basic health check endpoint for Docker and monitoring
 router.get('/health', (req, res) => {

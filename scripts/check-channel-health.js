@@ -2,10 +2,11 @@ import fs from 'fs/promises';
 import axios from 'axios';
 import { loadConfig } from '../libs/config-loader.js';
 import pLimit from 'p-limit';
+import { getDataPath } from '../libs/paths.js';
 
-const CHANNELS_FILE = './data/channels.json';
-const STATUS_FILE = './data/lineup_status.json';
-const LAST_LOG_FILE = './data/lineup_health_last.json';
+const CHANNELS_FILE = getDataPath('channels.json');
+const STATUS_FILE = getDataPath('lineup_status.json');
+const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
 
 let config;
 let baseUrl = 'http://localhost:3000';
