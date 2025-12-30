@@ -48,7 +48,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
   });
 
   app.get('/lineup.m3u', (req, res) => {
-    const cacheKey = `${req.protocol}://${req.get('host')}`;
+    // Extract query parameters for filtering
+    const filterSource = req.query.source ? String(req.query.source) : null;
+    const filterGroup = req.query.group ? String(req.query.group) : null;
+    
+    // Create cache key including filters
+    const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}`;
     
     // Check cache
     if (m3uCache.has(cacheKey)) {
@@ -56,7 +61,16 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       return res.send(m3uCache.get(cacheKey));
     }
     
-    const channels = loadChannels();
+    let channels = loadChannels();
+    
+    // Apply filters (note: source and group both filter by channel.source since group-title=source)
+    if (filterSource) {
+      channels = channels.filter(ch => ch.source === filterSource);
+    } else if (filterGroup) {
+      // group-title in M3U is set to channel.source, so this filters the same way
+      channels = channels.filter(ch => ch.source === filterGroup);
+    }
+    
     const tvgIdMap = new Map(); // For deduplication
     const baseUrl = getBaseUrl(req);
 

@@ -9,6 +9,12 @@ const outputPath = getDataPath('channels.json');
 // Limit concurrent source fetches
 const limit = pLimit(3);
 
+// Status callback (optional, set by server)
+let statusCallback = null;
+export function setStatusCallback(callback) {
+    statusCallback = callback;
+}
+
 function applyMapping(channel, map) {
     // Try name-based mapping first
     let mapping = map[channel.name];
@@ -49,6 +55,7 @@ async function processSource(source, map) {
     
     try {
         console.log(`Processing source: ${source.name}...`);
+        if (statusCallback) statusCallback(source.name, 'pending');
 
         if (source.type === 'hdhomerun') {
             if (!source.url) throw new Error(`Missing URL for ${source.name}`);
@@ -108,8 +115,10 @@ async function processSource(source, map) {
         }
         
         console.log(`Processed ${channels.length} channels from ${source.name}`);
+        if (statusCallback) statusCallback(source.name, 'success');
     } catch (err) {
         console.warn(`Failed to process ${source.name}: ${err.message}`);
+        if (statusCallback) statusCallback(source.name, 'error', err.message);
     }
     
     return channels;

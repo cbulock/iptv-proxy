@@ -12,7 +12,9 @@ import { imageProxyRoute } from './libs/proxy-image.js';
 import channelsRoute from './server/channels.js';
 import configRoute from './server/config.js';
 import healthRouter from './server/health.js';
-import { parseAll } from './scripts/parseM3U.js';
+import statusRouter from './server/status.js';
+import { parseAll, setStatusCallback } from './scripts/parseM3U.js';
+import { updateSourceStatus, resetSourceStatus } from './server/status.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
 import { initChannelsCache, invalidateCache, onChannelsUpdate } from './libs/channels-cache.js';
 import getBaseUrl from './libs/getBaseUrl.js';
@@ -47,6 +49,9 @@ try {
 }
 
 const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
+
+// Set up source status tracking for parseM3U
+setStatusCallback(updateSourceStatus);
 
 // Admin UI: serve built Vite output if present, otherwise show error
 const builtAdminDir = path.join(publicDir, 'admin');
@@ -95,6 +100,7 @@ npm run build</pre>
 });
 
 // Parse channels from M3U sources before server setup
+resetSourceStatus();
 await parseAll();
 
 // Initialize channels cache after parsing
@@ -107,6 +113,7 @@ onChannelsUpdate(invalidateLineupCaches);
 app.use('/channels', channelsRoute);
 app.use(configRoute);
 app.use('/', healthRouter);
+app.use('/', statusRouter);
 app.use('/', usageRouter);
 imageProxyRoute(app);
 setupHDHRRoutes(app, config);

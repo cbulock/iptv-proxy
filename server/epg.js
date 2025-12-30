@@ -35,8 +35,10 @@ function rewriteImageUrls(xmlString, req) {
         req.get('X-Url-Scheme') ||
         (req.get('X-Forwarded-Ssl') === 'on' ? 'https' : req.protocol);
     
-    // Check cache
-    const cacheKey = `${protocol}://${req.get('host')}`;
+    // Check cache - include filter params in cache key
+    const filterSource = req.query.source || '';
+    const filterChannels = req.query.channels || '';
+    const cacheKey = `${protocol}://${req.get('host')}|source:${filterSource}|channels:${filterChannels}`;
     if (rewrittenXMLCache.has(cacheKey)) {
         return rewrittenXMLCache.get(cacheKey);
     }
@@ -147,7 +149,51 @@ export async function setupEPGRoutes(app) {
             return res.status(503).send('EPG not loaded yet');
         }
 
-        const rewritten = rewriteImageUrls(mergedEPG, req);
+        // Extract query parameters for filtering
+        const filterSource = req.query.source ? String(req.query.source) : null;
+        const filterChannels = req.query.channels ? String(req.query.channels).split(',') : null;
+        
+        let xmlToSend = mergedEPG;
+        
+        // Apply filters if specified
+        if ((filterSource || filterChannels) && typeof mergedEPG === 'string' && mergedEPG.trim()) {
+            try {
+                const parsed = parser.parse(mergedEPG);
+                const allChannels = getChannels();
+                
+                // Build set of allowed tvg_ids based on filters
+                let allowedTvgIds = new Set();
+                
+                if (filterSource) {
+                    // Filter by source
+                    const sourceChannels = allChannels.filter(c => c.source === filterSource);
+                    sourceChannels.forEach(c => {
+                        if (c.tvg_id) allowedTvgIds.add(c.tvg_id);
+                    });
+                } else if (filterChannels) {
+                    // Filter by specific channel IDs
+                    filterChannels.forEach(id => allowedTvgIds.add(id.trim()));
+                }
+                
+                // Filter channels and programmes
+                if (allowedTvgIds.size > 0 && parsed.tv) {
+                    const tv = parsed.tv;
+                    tv.channel = [].concat(tv.channel || []).filter(c =>
+                        allowedTvgIds.has(c["@_id"])
+                    );
+                    tv.programme = [].concat(tv.programme || []).filter(p =>
+                        allowedTvgIds.has(p["@_channel"])
+                    );
+                    
+                    xmlToSend = builder.build(parsed);
+                }
+            } catch (err) {
+                console.error('[EPG] Error filtering XMLTV:', err.message);
+                // Fall back to unfiltered XML
+            }
+        }
+
+        const rewritten = rewriteImageUrls(xmlToSend, req);
 
         res.set('Content-Type', 'application/xml');
         res.send(rewritten);
