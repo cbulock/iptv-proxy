@@ -64,7 +64,16 @@ function wrapTask(job) {
  */
 export function registerJob(name, schedule, task, runOnStart = false) {
   if (!cron.validate(schedule)) {
-    throw new Error(`Invalid cron expression for job "${name}": ${schedule}`);
+    const errorMsg = `Invalid cron expression for job "${name}": ${schedule}`;
+    console.error(`❌ ${errorMsg}`);
+    console.log(`   💡 Fix: Use valid cron syntax (minute hour day month weekday)`);
+    console.log(`      Examples:`);
+    console.log(`      • Every hour: "0 * * * *"`);
+    console.log(`      • Every 6 hours: "0 */6 * * *"`);
+    console.log(`      • Daily at 3 AM: "0 3 * * *"`);
+    console.log(`      • Twice daily: "0 6,18 * * *"`);
+    console.log(`      • Validate at: https://crontab.guru/`);
+    throw new Error(errorMsg);
   }
 
   jobs.push({
