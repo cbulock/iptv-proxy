@@ -82,8 +82,15 @@ async function processSource(source, map) {
             }
         } else {
             // Standard M3U - stream processing for large files
-            const response = await axios.get(source.url);
-            const lines = response.data.split('\n');
+            let data;
+            if (source.url.startsWith('file://')) {
+                const filePath = source.url.replace('file://', '');
+                data = fs.readFileSync(filePath, 'utf8');
+            } else {
+                const response = await axios.get(source.url);
+                data = response.data;
+            }
+            const lines = data.split('\n');
 
             let current = {};
 
