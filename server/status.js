@@ -6,6 +6,10 @@ import { getChannels } from '../libs/channels-cache.js';
 const router = express.Router();
 const CHANNELS_FILE = './data/channels.json';
 
+// Configuration constants
+const MAX_ERROR_HISTORY = 50;  // Maximum number of errors to keep in history
+const RECENT_ERROR_LIMIT = 10;  // Number of recent errors to show in status
+
 // Track parsing errors and source status
 let sourceStatus = {
   lastUpdate: null,
@@ -30,9 +34,9 @@ export function updateSourceStatus(sourceName, status, error = null) {
       error: error,
       timestamp: new Date().toISOString()
     });
-    // Keep only last 50 errors
-    if (sourceStatus.errors.length > 50) {
-      sourceStatus.errors = sourceStatus.errors.slice(-50);
+    // Keep only last MAX_ERROR_HISTORY errors
+    if (sourceStatus.errors.length > MAX_ERROR_HISTORY) {
+      sourceStatus.errors = sourceStatus.errors.slice(-MAX_ERROR_HISTORY);
     }
   }
 }
@@ -136,7 +140,7 @@ router.get('/status', async (req, res) => {
       
       parsing: {
         lastUpdate: sourceStatus.lastUpdate,
-        recentErrors: sourceStatus.errors.slice(-10) // Last 10 errors
+        recentErrors: sourceStatus.errors.slice(-RECENT_ERROR_LIMIT) // Last N errors
       }
     };
     

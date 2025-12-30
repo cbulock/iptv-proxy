@@ -63,12 +63,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     
     let channels = loadChannels();
     
-    // Apply filters
+    // Apply filters (note: source and group both filter by channel.source since group-title=source)
     if (filterSource) {
       channels = channels.filter(ch => ch.source === filterSource);
-    }
-    if (filterGroup) {
-      channels = channels.filter(ch => ch.source === filterGroup); // group-title maps to source
+    } else if (filterGroup) {
+      // group-title in M3U is set to channel.source, so this filters the same way
+      channels = channels.filter(ch => ch.source === filterGroup);
     }
     
     const tvgIdMap = new Map(); // For deduplication
