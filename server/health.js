@@ -1,5 +1,6 @@
 import express from 'express';
 import fs from 'fs/promises';
+import RateLimit from 'express-rate-limit';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
 import { getDataPath } from '../libs/paths.js';
 import { getChannels } from '../libs/channels-cache.js';
@@ -9,6 +10,12 @@ const router = express.Router();
 const STATUS_FILE = getDataPath('lineup_status.json');
 const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
 const CHANNELS_FILE = getDataPath('channels.json');
+
+// Rate limiter for health check endpoints
+const healthLimiter = RateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // limit each IP to 60 requests per minute
+});
 
 // Basic health check endpoint for Docker and monitoring
 // This is a liveness check - server is running
@@ -26,7 +33,7 @@ router.get('/health/live', (req, res) => {
 });
 
 // Readiness probe - checks if the server is ready to handle requests
-router.get('/health/ready', asyncHandler(async (req, res) => {
+router.get('/health/ready', healthLimiter, asyncHandler(async (req, res) => {
   const checks = {
     timestamp: new Date().toISOString(),
     ready: true,
