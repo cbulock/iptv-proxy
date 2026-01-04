@@ -125,7 +125,53 @@ export async function setupEPGRoutes(app) {
                 
                 console.log(`Loaded ${merged.tv.programme.length} programmes from ${sourceName}`);
             } catch (err) {
-                console.warn(`Failed to load EPG from ${sourceName}:`, err.message);
+                console.error(`❌ Failed to load EPG from ${sourceName}: ${err.message}`);
+                
+                // Provide actionable error messages
+                if (sourceUrl.startsWith('file://')) {
+                    const path = sourceUrl.replace('file://', '');
+                    console.log(`   💡 Fix: Local file error`);
+                    console.log(`      • Verify the file exists at: ${path}`);
+                    console.log(`      • Check file permissions (must be readable)`);
+                    console.log(`      • Ensure the path is correct (relative to project root)`);
+                } else if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN') {
+                    console.log(`   💡 Fix: DNS resolution failed`);
+                    console.log(`      • Check the hostname in the URL: ${sourceUrl}`);
+                    console.log(`      • Try using an IP address instead`);
+                    console.log(`      • Verify DNS server settings`);
+                } else if (err.code === 'ECONNREFUSED') {
+                    console.log(`   💡 Fix: Connection refused`);
+                    console.log(`      • Verify the EPG service is running`);
+                    console.log(`      • Check the port number is correct`);
+                    console.log(`      • Ensure firewall allows the connection`);
+                } else if (err.code === 'ETIMEDOUT') {
+                    console.log(`   💡 Fix: Connection timed out`);
+                    console.log(`      • The EPG source is taking too long to respond`);
+                    console.log(`      • Check network connectivity`);
+                    console.log(`      • Try again later if server is overloaded`);
+                } else if (err.response?.status === 404) {
+                    console.log(`   💡 Fix: EPG file not found (404)`);
+                    console.log(`      • Verify the URL is correct: ${sourceUrl}`);
+                    console.log(`      • Check that the EPG endpoint exists`);
+                } else if (err.response?.status === 401 || err.response?.status === 403) {
+                    console.log(`   💡 Fix: Authentication failed (${err.response.status})`);
+                    console.log(`      • Check credentials in the URL if required`);
+                    console.log(`      • Ensure proper URL encoding of username/password`);
+                } else if (err.response?.status >= 400 && err.response?.status < 500) {
+                    console.log(`   💡 Fix: Client error (${err.response.status})`);
+                    console.log(`      • The request was invalid or rejected by the server`);
+                    console.log(`      • Check the URL and request parameters`);
+                    console.log(`      • Review server documentation for this endpoint`);
+                } else if (err.message?.includes('parse') || err.message?.includes('XML')) {
+                    console.log(`   💡 Fix: Invalid XMLTV format`);
+                    console.log(`      • Verify the source provides valid XMLTV/XML data`);
+                    console.log(`      • Test the URL manually: curl "${sourceUrl}" | head`);
+                    console.log(`      • Validate XML at: https://www.xmlvalidation.com/`);
+                } else {
+                    console.log(`   💡 Fix: Check EPG source accessibility`);
+                    console.log(`      • Test manually: curl -I "${sourceUrl}"`);
+                    console.log(`      • See README.md troubleshooting section`);
+                }
             }
         }
 
@@ -146,7 +192,9 @@ export async function setupEPGRoutes(app) {
 
     app.get('/xmltv.xml', (req, res) => {
         if (!mergedEPG) {
-            return res.status(503).send('EPG not loaded yet');
+            const errorMsg = 'EPG not loaded yet. This usually happens during startup. Please wait a moment and try again.';
+            const fixMsg = 'If this persists, check server logs for EPG source errors.';
+            return res.status(503).send(`${errorMsg} ${fixMsg}`);
         }
 
         // Extract query parameters for filtering

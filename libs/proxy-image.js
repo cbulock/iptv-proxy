@@ -15,7 +15,16 @@ export function imageProxyRoute(app) {
       response.data.pipe(res);
     } catch (err) {
       console.warn(`Failed to fetch image from ${decodedUrl}: ${err.message}`);
-      res.status(502).send(`Failed to fetch image`);
+      // Return a more helpful error message
+      if (err.response?.status === 404) {
+        res.status(404).send(`Image not found: ${decodedUrl}`);
+      } else if (err.response?.status === 403) {
+        res.status(403).send(`Access denied to image: ${decodedUrl}`);
+      } else if (err.code === 'ENOTFOUND') {
+        res.status(502).send(`Cannot resolve hostname for image: ${decodedUrl}`);
+      } else {
+        res.status(502).send(`Failed to fetch image from source`);
+      }
     }
   });
 }
