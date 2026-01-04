@@ -11,6 +11,17 @@ import { getConfigPath } from '../libs/paths.js';
 
 const router = express.Router();
 
+// Rate limiter for configuration write endpoints to mitigate DoS via repeated disk writes
+const configWriteLimiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // limit each IP to 30 config write requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many configuration updates from this IP, please try again later.',
+  },
+});
+
 // Rate limiter for configuration write endpoints to mitigate DoS via frequent disk writes
 const configWriteLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -100,7 +111,7 @@ router.get('/api/config/channel-map', (req, res) => {
   }
 });
 
-router.put('/api/config/m3u', (req, res) => {
+router.put('/api/config/m3u', configWriteLimiter, (req, res) => {
   const incoming = req.body;
   const validation = validateConfigData('m3u', incoming);
   if (!validation.valid) return res.status(400).json({ 
@@ -120,7 +131,7 @@ router.put('/api/config/m3u', (req, res) => {
   }
 });
 
-router.put('/api/config/epg', (req, res) => {
+router.put('/api/config/epg', configWriteLimiter, (req, res) => {
   const incoming = req.body;
   const validation = validateConfigData('epg', incoming);
   if (!validation.valid) return res.status(400).json({ 
