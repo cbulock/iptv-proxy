@@ -2,17 +2,25 @@ import express from 'express';
 import fs from 'fs/promises';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
 import { getDataPath } from '../libs/paths.js';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 const STATUS_FILE = getDataPath('lineup_status.json');
 const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
+
+const channelHealthLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute window
+  max: 60, // limit each IP to 60 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Basic health check endpoint for Docker and monitoring
 router.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-router.get('/api/channel-health', async (req, res) => {
+router.get('/api/channel-health', channelHealthLimiter, async (req, res) => {
   try {
     let raw = {};
     try { raw = JSON.parse(await fs.readFile(STATUS_FILE, 'utf8')); } catch {}
@@ -26,7 +34,7 @@ router.get('/api/channel-health', async (req, res) => {
   }
 });
 
-router.post('/api/channel-health/run', async (req, res) => {
+router.post('/api/channel-health/run', channelHealthLimiter, async (req, res) => {
   try {
     const statusMap = await runHealthCheck();
     // After run we can re-read the file to pull details
