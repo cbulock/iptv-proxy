@@ -171,7 +171,7 @@ router.put('/api/config/app', configWriteLimiter, (req, res) => {
   }
 });
 
-router.put('/api/config/channel-map', (req, res) => {
+router.put('/api/config/channel-map', configWriteLimiter, (req, res) => {
   const incoming = req.body || {};
   const validation = validateConfigData('channelMap', incoming);
   if (!validation.valid) return res.status(400).json({ 
