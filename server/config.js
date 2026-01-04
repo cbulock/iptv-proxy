@@ -11,6 +11,14 @@ import { getConfigPath } from '../libs/paths.js';
 
 const router = express.Router();
 
+// Rate limiter for configuration write endpoints to mitigate DoS via frequent disk writes
+const configWriteLimiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
 // Rate limiter for write operations (more restrictive)
 const writeLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -132,7 +140,7 @@ router.put('/api/config/epg', (req, res) => {
   }
 });
 
-router.put('/api/config/app', (req, res) => {
+router.put('/api/config/app', configWriteLimiter, (req, res) => {
   const incoming = req.body;
   const validation = validateConfigData('app', incoming);
   if (!validation.valid) return res.status(400).json({ 
