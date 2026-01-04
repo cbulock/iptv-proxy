@@ -182,7 +182,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       if (usageKey) unregisterUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
       console.warn(
-        `[stream] failed ${source}/${name}: ${err.message}`,
+        '[stream] failed %s/%s: %s',
+        source,
+        name,
+        err.message,
         {
           status: err.response?.status,
           code: err.code
