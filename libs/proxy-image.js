@@ -1,5 +1,6 @@
 import axios from 'axios';
 import getBaseUrl from './getBaseUrl.js';
+import escapeHtml from 'escape-html';
 
 export function getProxiedImageUrl(originalUrl, source, req) {
   if (!originalUrl) return '';
@@ -17,11 +18,11 @@ export function imageProxyRoute(app) {
       console.warn(`Failed to fetch image from ${decodedUrl}: ${err.message}`);
       // Return a more helpful error message
       if (err.response?.status === 404) {
-        res.status(404).send(`Image not found: ${decodedUrl}`);
+        res.status(404).send(`Image not found: ${escapeHtml(decodedUrl)}`);
       } else if (err.response?.status === 403) {
-        res.status(403).send(`Access denied to image: ${decodedUrl}`);
+        res.status(403).send(`Access denied to image: ${escapeHtml(decodedUrl)}`);
       } else if (err.code === 'ENOTFOUND') {
-        res.status(502).send(`Cannot resolve hostname for image: ${decodedUrl}`);
+        res.status(502).send(`Cannot resolve hostname for image: ${escapeHtml(decodedUrl)}`);
       } else {
         res.status(502).send(`Failed to fetch image from source`);
       }
