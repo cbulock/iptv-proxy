@@ -20,26 +20,13 @@
 # Scheduler Configuration
 # ============================================================================
 
-# Configure automatic background tasks (uses node-cron syntax)
-
-# EPG Refresh Schedule
-# Default: Every 6 hours at :00 minutes
-# epg_refresh_schedule: "0 */6 * * *"
-
-# Example schedules:
-# - Every hour: "0 * * * *"
-# - Every 12 hours: "0 */12 * * *"
-# - Daily at 3 AM: "0 3 * * *"
-# - Twice daily (6 AM & 6 PM): "0 6,18 * * *"
-
-# Channel Health Check Schedule
-# Default: Every 4 hours
-# channel_health_schedule: "0 */4 * * *"
-
-# Channel Reload Schedule
-# Default: Disabled (manual reload only)
-# Uncomment to enable automatic channel reloading
-# channel_reload_schedule: "0 */12 * * *"
+# Note: Scheduler settings are currently hardcoded in the application.
+# The following schedules are active by default:
+# - Channel Health Check: Every 30 minutes (*/30 * * * *)
+# - EPG Refresh: Every 6 hours (0 */6 * * *)
+#
+# To modify schedules, you'll need to edit server/scheduler.js
+# Future versions may support configuration via this file.
 
 # ============================================================================
 # Image Proxy Configuration
@@ -61,19 +48,14 @@
 # Advanced Configuration Examples
 # ============================================================================
 
-# Example: Production setup with daily EPG refresh
+# Example: Production setup
 # base_url: "https://iptv.yourdomain.com"
-# epg_refresh_schedule: "0 3 * * *"
-# channel_health_schedule: "0 */6 * * *"
 
-# Example: Development setup with frequent updates
+# Example: Development setup
 # base_url: "http://localhost:34400"
-# epg_refresh_schedule: "*/30 * * * *"
-# channel_health_schedule: "*/15 * * * *"
 
 # Example: Behind a reverse proxy with subfolder
 # base_url: "https://media.example.com/iptv"
-# epg_refresh_schedule: "0 */6 * * *"
 
 # ============================================================================
 # Configuration Notes:
@@ -85,15 +67,15 @@
 # - Should NOT include trailing slash
 # - Must be accessible from your media player clients
 # 
-# Cron Expressions:
-# - Format: "minute hour day month weekday"
-# - Ranges: minute (0-59), hour (0-23), day (1-31), month (1-12), weekday (0-7)
-# - Special characters: * (any), */n (every n), n,m (multiple values), n-m (range)
-# 
 # Environment Variables:
 # - PORT: HTTP server port (default: 34400)
 # - CONFIG_PATH: Configuration directory path (default: ./config)
 # - NODE_ENV: Node environment (development, production)
+# 
+# Scheduler:
+# - Schedules are currently hardcoded (see note in Scheduler Configuration section)
+# - Jobs can be manually triggered via API: POST /api/scheduler/jobs/:name/run
+# - Available jobs: "Channel Health Check", "EPG Refresh"
 # 
 # ============================================================================
 # Troubleshooting:

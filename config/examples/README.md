@@ -85,7 +85,8 @@ Then edit the files to add your actual sources and mappings.
 ### Application Settings
 
 - `base_url` is auto-detected from request headers if not set
-- Use cron expressions for scheduler (minute hour day month weekday)
+- Scheduler settings are currently hardcoded (see app.example.yaml for details)
+- Jobs can be manually triggered via API endpoints
 - See examples for reverse proxy configuration
 - Set environment variables for PORT and CONFIG_PATH if needed
 
