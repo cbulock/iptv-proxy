@@ -73,38 +73,8 @@ jobs:
       - name: Run unit and integration tests
         run: npm test
 
-      - name: Validate M3U output format
-        run: |
-          # Create test output files if they don't exist
-          echo "Validating M3U format with test fixtures..."
-          node -e "
-          import { validateM3UFormat } from './test/validators.test.js';
-          import fs from 'fs';
-          const m3u = fs.readFileSync('./test/fixtures/valid-playlist.m3u', 'utf8');
-          const result = validateM3UFormat(m3u);
-          console.log('M3U Validation:', result);
-          if (!result.isValid) {
-            console.error('M3U validation failed:', result.errors);
-            process.exit(1);
-          }
-          console.log('✅ M3U format validation passed');
-          "
-
-      - name: Validate XMLTV output format
-        run: |
-          echo "Validating XMLTV format with test fixtures..."
-          node -e "
-          import { validateXMLTVFormat } from './test/validators.test.js';
-          import fs from 'fs';
-          const xml = fs.readFileSync('./test/fixtures/valid-epg.xml', 'utf8');
-          const result = validateXMLTVFormat(xml);
-          console.log('XMLTV Validation:', result);
-          if (!result.isValid) {
-            console.error('XMLTV validation failed:', result.errors);
-            process.exit(1);
-          }
-          console.log('✅ XMLTV format validation passed');
-          "
+      - name: Validate output formats
+        run: node scripts/validate-formats.js
 
   build-admin:
     name: Build Admin UI

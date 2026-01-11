@@ -51,7 +51,8 @@ export default [
       'config/',
       'admin/dist/',
       'admin/node_modules/',
-      '*.config.js',
+      'admin/vite.config.js',
+      'vite.config.js',
     ],
   },
 ];
