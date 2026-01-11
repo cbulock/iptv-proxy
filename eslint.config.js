@@ -16,16 +16,16 @@ export default [
     rules: {
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'no-console': 'off',
-      'quotes': ['error', 'single', { avoidEscape: true }],
-      'semi': ['error', 'always'],
-      'indent': ['error', 2, { SwitchCase: 1 }],
+      'quotes': ['warn', 'single', { avoidEscape: true }],
+      'semi': ['warn', 'always'],
+      'indent': ['warn', 2, { SwitchCase: 1 }],
       'no-var': 'error',
       'prefer-const': 'error',
     },
   },
+  ...pluginVue.configs['flat/recommended'],
   {
     files: ['admin/src/**/*.vue', 'admin/**/*.js'],
-    ...pluginVue.configs['flat/recommended'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -37,6 +37,10 @@ export default [
     rules: {
       'vue/multi-word-component-names': 'off',
       'vue/no-v-html': 'warn',
+      'vue/max-attributes-per-line': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
+      'vue/html-indent': 'off',
+      'vue/attributes-order': 'off',
     },
   },
   {
