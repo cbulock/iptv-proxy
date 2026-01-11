@@ -15,7 +15,13 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "mocha 'test/**/*.test.js' --timeout 5000",
+    "test:watch": "mocha 'test/**/*.test.js' --watch",
+    "test:coverage": "c8 mocha 'test/**/*.test.js'",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "serve": "node index.js",
     "admin:dev": "npm run dev --prefix admin",
     "admin:build": "npm run build --prefix admin",
@@ -37,6 +43,16 @@
     "yaml": "^2.8.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@eslint/js": "^9.39.2",
+    "chai": "^4.5.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.6.2",
+    "globals": "^17.0.0",
+    "mocha": "^10.8.2",
+    "nock": "^13.5.6",
+    "prettier": "^3.7.4",
+    "sinon": "^19.0.5"
   }
 }

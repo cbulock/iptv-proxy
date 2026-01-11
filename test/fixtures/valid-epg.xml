@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+  <channel id="channel1">
+    <display-name>Channel One</display-name>
+    <icon src="http://example.com/logo1.png" />
+  </channel>
+  <channel id="channel2">
+    <display-name>Channel Two</display-name>
+    <icon src="http://example.com/logo2.png" />
+  </channel>
+  <programme channel="channel1" start="20240101000000 +0000" stop="20240101010000 +0000">
+    <title>Test Show</title>
+    <desc>A test program</desc>
+  </programme>
+  <programme channel="channel2" start="20240101000000 +0000" stop="20240101020000 +0000">
+    <title>News Program</title>
+    <desc>Evening news</desc>
+  </programme>
+</tv>
