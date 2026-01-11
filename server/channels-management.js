@@ -5,6 +5,7 @@ import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 import { getConfigPath } from '../libs/paths.js';
 import { parseAll } from '../scripts/parseM3U.js';
 import { invalidateCache } from '../libs/channels-cache.js';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
@@ -17,13 +18,18 @@ function isSafeChannelKey(key) {
     key !== 'prototype'
   );
 }
+// Rate limiter for write-heavy channel management operations
+const channelsWriteLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 30, // limit each IP to 30 write requests per windowMs
+});
 
 /**
  * Reorder channels by updating their guide numbers
  * POST /api/channels/reorder
  * Body: { channels: [{ name: string, number: string }] }
  */
-router.post('/reorder', async (req, res) => {
+router.post('/reorder', channelsWriteLimiter, async (req, res) => {
   try {
     const { channels } = req.body;
     
@@ -81,7 +87,7 @@ router.post('/reorder', async (req, res) => {
  * POST /api/channels/rename
  * Body: { channels: [{ oldName: string, newName: string }] }
  */
-router.post('/rename', async (req, res) => {
+router.post('/rename', channelsWriteLimiter, async (req, res) => {
   try {
     const { channels } = req.body;
     
@@ -148,7 +154,7 @@ router.post('/rename', async (req, res) => {
  * Body: { channels: [{ name: string, group: string }] }
  * Note: This updates the source group, not the mapping
  */
-router.post('/group', async (req, res) => {
+router.post('/group', channelsWriteLimiter, async (req, res) => {
   try {
     const { channels } = req.body;
     
@@ -203,7 +209,7 @@ router.post('/group', async (req, res) => {
  * POST /api/channels/bulk-update
  * Body: { channels: [{ name: string, newName?: string, number?: string, group?: string }] }
  */
-router.post('/bulk-update', async (req, res) => {
+router.post('/bulk-update', channelsWriteLimiter, async (req, res) => {
   try {
     const { channels } = req.body;
     
