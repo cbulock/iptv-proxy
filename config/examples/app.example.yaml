@@ -1,0 +1,102 @@
+# Application Configuration
+# This file contains optional application-level settings.
+
+# ============================================================================
+# Base URL Configuration
+# ============================================================================
+
+# Optional: Set a custom base URL for the application
+# This is useful when running behind a reverse proxy or using a custom domain
+# If not set, the base URL is automatically detected from request headers
+# base_url: "https://iptv.example.com"
+
+# Examples:
+# - Direct access: Leave commented (auto-detect)
+# - Behind nginx: base_url: "https://iptv.example.com"
+# - Custom port: base_url: "https://iptv.example.com:8443"
+# - Subdirectory: base_url: "https://example.com/iptv"
+
+# ============================================================================
+# Scheduler Configuration
+# ============================================================================
+
+# Note: Scheduler settings are currently hardcoded in the application.
+# The following schedules are active by default:
+# - Channel Health Check: Every 30 minutes (*/30 * * * *)
+# - EPG Refresh: Every 6 hours (0 */6 * * *)
+#
+# To modify schedules, you'll need to edit server/scheduler.js
+# Future versions may support configuration via this file.
+
+# ============================================================================
+# Image Proxy Configuration
+# ============================================================================
+
+# Image proxying is enabled by default for all channel logos and EPG images
+# This helps avoid CORS issues and provides a consistent URL structure
+# No configuration needed - works automatically
+
+# ============================================================================
+# HTTP Server Configuration
+# ============================================================================
+
+# Port configuration is set via environment variable or defaults to 34400
+# To change: Set PORT environment variable before starting
+# Example: PORT=8080 npm start
+
+# ============================================================================
+# Advanced Configuration Examples
+# ============================================================================
+
+# Example: Production setup
+# base_url: "https://iptv.yourdomain.com"
+
+# Example: Development setup
+# base_url: "http://localhost:34400"
+
+# Example: Behind a reverse proxy with subfolder
+# base_url: "https://media.example.com/iptv"
+
+# ============================================================================
+# Configuration Notes:
+# ============================================================================
+# 
+# Base URL:
+# - Automatically detected from X-Forwarded-* headers if not explicitly set
+# - Used for generating absolute URLs in M3U playlists and stream proxying
+# - Should NOT include trailing slash
+# - Must be accessible from your media player clients
+# 
+# Environment Variables:
+# - PORT: HTTP server port (default: 34400)
+# - CONFIG_PATH: Configuration directory path (default: ./config)
+# - NODE_ENV: Node environment (development, production)
+# 
+# Scheduler:
+# - Schedules are currently hardcoded (see note in Scheduler Configuration section)
+# - Jobs can be manually triggered via API: POST /api/scheduler/jobs/:name/run
+# - Available jobs: "Channel Health Check", "EPG Refresh"
+# 
+# ============================================================================
+# Troubleshooting:
+# ============================================================================
+# 
+# - Wrong URLs in M3U: Set base_url explicitly to match your proxy configuration
+# - Scheduler not running: Check cron expression syntax, view logs for errors
+# - CORS errors with images: Ensure image proxy is working (should be automatic)
+# - Port conflict: Change PORT environment variable or check for conflicting services
+# - Behind reverse proxy: Set base_url and ensure proxy passes X-Forwarded-* headers
+# 
+# For more help, see the README.md troubleshooting section.
+
+# ============================================================================
+# Reverse Proxy Headers
+# ============================================================================
+# 
+# If running behind a reverse proxy, ensure these headers are forwarded:
+# - X-Forwarded-Proto: Protocol (http/https)
+# - X-Forwarded-Host: Original hostname
+# - X-Forwarded-For: Client IP address
+# - X-Real-IP: Client IP address (alternative to X-Forwarded-For)
+# 
+# See README.md for nginx, Caddy, and Traefik configuration examples.

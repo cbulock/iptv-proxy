@@ -1,0 +1,256 @@
+import express from 'express';
+import fs from 'fs/promises';
+import yaml from 'yaml';
+import { loadConfig, validateConfigData } from '../libs/config-loader.js';
+import { getConfigPath } from '../libs/paths.js';
+import { parseAll } from '../scripts/parseM3U.js';
+import { invalidateCache } from '../libs/channels-cache.js';
+
+const router = express.Router();
+const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
+
+/**
+ * Reorder channels by updating their guide numbers
+ * POST /api/channels/reorder
+ * Body: { channels: [{ name: string, number: string }] }
+ */
+router.post('/reorder', async (req, res) => {
+  try {
+    const { channels } = req.body;
+    
+    if (!Array.isArray(channels)) {
+      return res.status(400).json({ error: 'channels must be an array' });
+    }
+    
+    // Load current mapping
+    let mapping = {};
+    try {
+      mapping = loadConfig('channelMap');
+    } catch {}
+    
+    // Update guide numbers for specified channels
+    let updated = 0;
+    for (const ch of channels) {
+      if (!ch.name) continue;
+      
+      if (!mapping[ch.name]) {
+        mapping[ch.name] = {};
+      }
+      
+      mapping[ch.name].number = String(ch.number || '');
+      updated++;
+    }
+    
+    // Validate and save
+    const validation = validateConfigData('channelMap', mapping);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    
+    const yamlText = yaml.stringify(validation.value || {});
+    await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    
+    // Reload channels
+    await parseAll();
+    await invalidateCache();
+    
+    res.json({ 
+      status: 'success', 
+      message: `Reordered ${updated} channels`,
+      updated 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reorder channels', detail: err.message });
+  }
+});
+
+/**
+ * Rename channels by updating their display names
+ * POST /api/channels/rename
+ * Body: { channels: [{ oldName: string, newName: string }] }
+ */
+router.post('/rename', async (req, res) => {
+  try {
+    const { channels } = req.body;
+    
+    if (!Array.isArray(channels)) {
+      return res.status(400).json({ error: 'channels must be an array' });
+    }
+    
+    // Load current mapping
+    let mapping = {};
+    try {
+      mapping = loadConfig('channelMap');
+    } catch {}
+    
+    // Rename channels
+    let updated = 0;
+    for (const ch of channels) {
+      if (!ch.oldName || !ch.newName) continue;
+      
+      // If there was an existing mapping for oldName, migrate it to newName
+      if (mapping[ch.oldName]) {
+        // Move the mapping to the new key and update the display name
+        mapping[ch.newName] = {
+          ...mapping[ch.oldName],
+          name: ch.newName
+        };
+        delete mapping[ch.oldName];
+      } else {
+        // Create new mapping: the key is the source channel name (oldName),
+        // and 'name' field overrides the display name to newName
+        mapping[ch.oldName] = {
+          name: ch.newName
+        };
+      }
+      
+      updated++;
+    }
+    
+    // Validate and save
+    const validation = validateConfigData('channelMap', mapping);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    
+    const yamlText = yaml.stringify(validation.value || {});
+    await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    
+    // Reload channels
+    await parseAll();
+    await invalidateCache();
+    
+    res.json({ 
+      status: 'success', 
+      message: `Renamed ${updated} channels`,
+      updated 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to rename channels', detail: err.message });
+  }
+});
+
+/**
+ * Update channel groups (via group-title in M3U)
+ * POST /api/channels/group
+ * Body: { channels: [{ name: string, group: string }] }
+ * Note: This updates the source group, not the mapping
+ */
+router.post('/group', async (req, res) => {
+  try {
+    const { channels } = req.body;
+    
+    if (!Array.isArray(channels)) {
+      return res.status(400).json({ error: 'channels must be an array' });
+    }
+    
+    // Load current mapping
+    let mapping = {};
+    try {
+      mapping = loadConfig('channelMap');
+    } catch {}
+    
+    // Update groups
+    let updated = 0;
+    for (const ch of channels) {
+      if (!ch.name) continue;
+      
+      if (!mapping[ch.name]) {
+        mapping[ch.name] = {};
+      }
+      
+      mapping[ch.name].group = String(ch.group || '');
+      updated++;
+    }
+    
+    // Validate and save
+    const validation = validateConfigData('channelMap', mapping);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    
+    const yamlText = yaml.stringify(validation.value || {});
+    await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    
+    // Reload channels
+    await parseAll();
+    await invalidateCache();
+    
+    res.json({ 
+      status: 'success', 
+      message: `Updated groups for ${updated} channels`,
+      updated 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update groups', detail: err.message });
+  }
+});
+
+/**
+ * Bulk update channels (combine reorder, rename, group operations)
+ * POST /api/channels/bulk-update
+ * Body: { channels: [{ name: string, newName?: string, number?: string, group?: string }] }
+ */
+router.post('/bulk-update', async (req, res) => {
+  try {
+    const { channels } = req.body;
+    
+    if (!Array.isArray(channels)) {
+      return res.status(400).json({ error: 'channels must be an array' });
+    }
+    
+    // Load current mapping
+    let mapping = {};
+    try {
+      mapping = loadConfig('channelMap');
+    } catch {}
+    
+    // Apply updates
+    let updated = 0;
+    for (const ch of channels) {
+      if (!ch.name) continue;
+      
+      const targetKey = ch.newName || ch.name;
+      
+      // Migrate existing mapping if renaming
+      if (ch.newName && ch.name !== ch.newName && mapping[ch.name]) {
+        mapping[targetKey] = { ...mapping[ch.name] };
+        delete mapping[ch.name];
+      }
+      
+      if (!mapping[targetKey]) {
+        mapping[targetKey] = {};
+      }
+      
+      // Apply updates
+      if (ch.newName) mapping[targetKey].name = ch.newName;
+      if (ch.number !== undefined) mapping[targetKey].number = String(ch.number);
+      if (ch.group !== undefined) mapping[targetKey].group = String(ch.group);
+      
+      updated++;
+    }
+    
+    // Validate and save
+    const validation = validateConfigData('channelMap', mapping);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    
+    const yamlText = yaml.stringify(validation.value || {});
+    await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    
+    // Reload channels
+    await parseAll();
+    await invalidateCache();
+    
+    res.json({ 
+      status: 'success', 
+      message: `Updated ${updated} channels`,
+      updated 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to bulk update channels', detail: err.message });
+  }
+});
+
+export default router;

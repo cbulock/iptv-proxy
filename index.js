@@ -13,6 +13,8 @@ import channelsRoute from './server/channels.js';
 import configRoute from './server/config.js';
 import healthRouter from './server/health.js';
 import statusRouter from './server/status.js';
+import mappingRouter from './server/mapping.js';
+import channelsManagementRouter from './server/channels-management.js';
 import { parseAll, setStatusCallback } from './scripts/parseM3U.js';
 import { updateSourceStatus, resetSourceStatus } from './server/status.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
@@ -31,8 +33,10 @@ app.use(express.json({ limit: '1mb' }));
 // Use absolute path for static assets to avoid CWD issues
 const publicDir = path.resolve('./public');
 app.use(express.static(publicDir));
-// Serve node_modules to allow ESM imports without a bundler
-app.use('/node_modules', express.static(path.resolve('./node_modules')));
+// Optionally serve node_modules in development to allow ESM imports without a bundler
+if (process.env.NODE_ENV === 'development') {
+  app.use('/node_modules', express.static(path.resolve('./node_modules')));
+}
 // Load and validate config
 const configs = loadAllConfigs();
 
@@ -113,6 +117,8 @@ onChannelsUpdate(invalidateLineupCaches);
 // Register routes
 app.use('/channels', channelsRoute);
 app.use(configRoute);
+app.use(mappingRouter);
+app.use('/api/channels', channelsManagementRouter);
 app.use('/', healthRouter);
 app.use('/', statusRouter);
 app.use('/', usageRouter);

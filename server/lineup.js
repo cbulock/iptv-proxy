@@ -120,6 +120,17 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         // Log but continue processing other channels
         console.warn(`[lineup.m3u] Skipping invalid channel: ${channelErr.message}`);
       }
+      if (tvgId) tvgIdMap.set(tvgId, true);
+
+      const tvgName = channel.name || '';
+      const tvgLogo = channel.logo
+        ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
+        : '';
+      const groupTitle = channel.group || channel.source || '';
+      const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
+
+      output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}\n`;
+      output += `${streamUrl}\n`;
     }
     
     // Cache the result
@@ -140,17 +151,20 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     if (!channel) return res.status(404).send('Channel not found');
 
     const startTime = Date.now();
-    console.info(`[stream] ${source}/${name} -> ${channel.original_url}`);
+    console.info('[stream] %s/%s -> %s', source, name, channel.original_url);
 
     if (req.method === 'HEAD') {
       try {
         const response = await axios.head(channel.original_url, { timeout: 5000 });
         res.set(response.headers);
         res.status(response.status || 200).end();
-        console.info(`[stream] ${source}/${name} head ok in ${Date.now() - startTime}ms`);
+        console.info('[stream] %s/%s head ok in %dms', source, name, Date.now() - startTime);
       } catch (err) {
         console.warn(
-          `[stream] head failed ${source}/${name}: ${err.message}`,
+          '[stream] head failed %s/%s: %s',
+          source,
+          name,
+          err.message,
           {
             status: err.response?.status,
             code: err.code
@@ -193,18 +207,21 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       await registerViewer();
 
       response.data.on('error', err => {
-        console.warn(`[stream] upstream error ${source}/${name}: ${err.message}`);
+        console.warn('[stream] upstream error %s/%s: %s', source, name, err.message);
         res.destroy(err);
       });
 
       res.set(response.headers);
       response.data.pipe(res);
-      console.info(`[stream] ${source}/${name} ready in ${Date.now() - startTime}ms`);
+      console.info('[stream] %s/%s ready in %dms', source, name, Date.now() - startTime);
     } catch (err) {
       if (usageKey) unregisterUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
       console.warn(
-        `[stream] failed ${source}/${name}: ${err.message}`,
+        '[stream] failed %s/%s: %s',
+        source,
+        name,
+        err.message,
         {
           status: err.response?.status,
           code: err.code
