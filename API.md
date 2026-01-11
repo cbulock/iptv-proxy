@@ -1,0 +1,205 @@
+# API Documentation
+
+## Diagnostics Endpoints
+
+### GET /status
+
+Comprehensive system diagnostics endpoint that provides information about the current state of the IPTV proxy.
+
+**Response:**
+```json
+{
+  "timestamp": "2025-12-30T04:19:09.594Z",
+  "uptime": 41.195943614,
+  "channels": {
+    "total": 4,
+    "bySource": {
+      "TestSource": 3,
+      "OtherSource": 1
+    },
+    "mapped": 2,
+    "unmapped": 2,
+    "file": {
+      "size": 947,
+      "modified": "2025-12-30T04:13:25.480Z"
+    }
+  },
+  "sources": {
+    "m3u": {
+      "count": 2,
+      "configured": [
+        {
+          "name": "TestSource",
+          "type": "m3u",
+          "url": "http://example.com/playlist.m3u"
+        }
+      ],
+      "status": {
+        "TestSource": {
+          "status": "success",
+          "lastUpdate": "2025-12-30T04:13:25.480Z",
+          "error": null
+        }
+      }
+    },
+    "epg": {
+      "count": 1,
+      "configured": [
+        {
+          "name": "TestSource",
+          "url": "http://example.com/epg.xml"
+        }
+      ]
+    }
+  },
+  "mappings": {
+    "total": 5,
+    "channelsCovered": 2,
+    "channelsNotCovered": 2,
+    "coveragePercent": 50
+  },
+  "parsing": {
+    "lastUpdate": "2025-12-30T04:13:25.480Z",
+    "recentErrors": []
+  }
+}
+```
+
+## Dynamic Mapping Management Endpoints
+
+### POST /api/mapping
+
+Add or update a single channel mapping.
+
+**Request Body:**
+```json
+{
+  "key": "Channel Name",
+  "mapping": {
+    "name": "New Channel Name",
+    "tvg_id": "channel.id",
+    "number": "101",
+    "logo": "http://example.com/logo.png"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "status": "saved",
+  "key": "Channel Name",
+  "mapping": {
+    "name": "New Channel Name",
+    "tvg_id": "channel.id",
+    "number": "101",
+    "logo": "http://example.com/logo.png"
+  }
+}
+```
+
+### DELETE /api/mapping/:key
+
+Remove a channel mapping by key. The key should be URL-encoded.
+
+**Example:**
+```bash
+DELETE /api/mapping/Channel%20Name
+```
+
+**Response:**
+```json
+{
+  "status": "deleted",
+  "key": "Channel Name"
+}
+```
+
+### POST /api/mapping/bulk
+
+Add or update multiple channel mappings at once.
+
+**Request Body:**
+```json
+{
+  "mappings": {
+    "Channel A": {
+      "name": "Channel A HD",
+      "tvg_id": "a.1",
+      "number": "1"
+    },
+    "Channel B": {
+      "name": "Channel B HD",
+      "tvg_id": "b.2",
+      "number": "2"
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "status": "saved",
+  "count": 2
+}
+```
+
+## Filtering on Existing Endpoints
+
+### GET /lineup.m3u
+
+The M3U playlist endpoint now supports filtering by source or group.
+
+**Query Parameters:**
+- `source` - Filter channels by source name (e.g., `?source=TestSource`)
+- `group` - Filter channels by group-title (mapped to source name)
+
+**Examples:**
+```bash
+# Get all channels from TestSource
+GET /lineup.m3u?source=TestSource
+
+# Get all channels from a specific group
+GET /lineup.m3u?group=TestSource
+```
+
+### GET /xmltv.xml
+
+The XMLTV EPG endpoint now supports filtering by source or specific channel IDs.
+
+**Query Parameters:**
+- `source` - Filter EPG data by source name (e.g., `?source=TestSource`)
+- `channels` - Comma-separated list of channel IDs to include (e.g., `?channels=test1,test2,demo1`)
+
+**Examples:**
+```bash
+# Get EPG data only for TestSource channels
+GET /xmltv.xml?source=TestSource
+
+# Get EPG data for specific channels
+GET /xmltv.xml?channels=test1,test2,demo1
+```
+
+## Existing Endpoints (Unchanged)
+
+The following endpoints remain unchanged:
+
+- `GET /health` - Basic health check
+- `GET /lineup.json` - JSON lineup for HDHomeRun compatibility
+- `GET /channels` - List all channels
+- `GET /api/config/m3u` - Get M3U configuration
+- `GET /api/config/epg` - Get EPG configuration
+- `GET /api/config/app` - Get app configuration
+- `GET /api/config/channel-map` - Get channel mappings
+- `PUT /api/config/m3u` - Update M3U configuration
+- `PUT /api/config/epg` - Update EPG configuration
+- `PUT /api/config/app` - Update app configuration
+- `PUT /api/config/channel-map` - Update channel mappings
+- `POST /api/reload/channels` - Reload channels from sources
+- `POST /api/reload/epg` - Reload EPG data
+- `GET /api/channel-health` - Get channel health status
+- `POST /api/channel-health/run` - Run channel health check
+- `GET /api/mapping/candidates` - Get mapping candidates
+- `GET /api/mapping/unmapped` - Get unmapped channels
+- `GET /api/mapping/conflicts` - Get mapping conflicts

@@ -1,0 +1,203 @@
+# Channel Mapping Configuration
+# This file allows you to normalize and override channel metadata across all sources.
+# Mappings can be by channel name OR tvg-id.
+
+# ============================================================================
+# Basic Channel Mapping Examples
+# ============================================================================
+
+# Map by channel name - useful when tvg-id is missing or inconsistent
+"NBC Los Angeles":
+  number: "4.1"           # Guide/channel number (displayed in media players)
+  tvg_id: "nbc.losangeles" # EPG identifier (must match XMLTV channel ID)
+  name: "NBC LA"          # Override display name
+  logo: "https://example.com/logos/nbc.png"  # Override channel logo
+
+"ABC 7":
+  number: "7.1"
+  tvg_id: "abc.7"
+  # Name not specified - will use original "ABC 7" from source
+
+# ============================================================================
+# Map by tvg-id - useful when channel names vary across sources
+# ============================================================================
+
+"cbs.2.losangeles":
+  number: "2.1"
+  name: "CBS 2"
+  logo: "https://example.com/logos/cbs.png"
+
+# ============================================================================
+# HDHomeRun OTA Channel Mapping
+# ============================================================================
+
+# OTA channels often need guide number normalization
+"FOX 11":
+  number: "11.1"
+  tvg_id: "kttv.11.1"
+  name: "FOX 11 LA"
+
+"PBS SoCal":
+  number: "28.1"
+  tvg_id: "koce.28.1"
+
+# Map subchannel to a custom number
+"Create":
+  number: "28.2"
+  tvg_id: "koce.28.2"
+
+# ============================================================================
+# Cable/IPTV Channel Mapping
+# ============================================================================
+
+# Map premium channels with custom branding
+"HBO HD East":
+  number: "300"
+  tvg_id: "hbo.east"
+  name: "HBO East"
+  logo: "https://example.com/logos/hbo.png"
+
+"Showtime HD":
+  number: "350"
+  tvg_id: "showtime.east"
+  name: "Showtime"
+
+# ============================================================================
+# Sports Channels
+# ============================================================================
+
+"ESPN":
+  number: "206"
+  tvg_id: "espn.us"
+  logo: "https://example.com/logos/espn.png"
+
+"ESPN2":
+  number: "207"
+  tvg_id: "espn2.us"
+
+"Fox Sports 1":
+  number: "210"
+  tvg_id: "fs1.us"
+  name: "FS1"
+
+# ============================================================================
+# News Channels
+# ============================================================================
+
+"CNN HD":
+  number: "200"
+  tvg_id: "cnn.us"
+  name: "CNN"
+
+"Fox News Channel":
+  number: "205"
+  tvg_id: "foxnews.us"
+  name: "FOX News"
+
+# ============================================================================
+# ErsatzTV Virtual Channels
+# ============================================================================
+
+# ErsatzTV generates virtual channels with custom IDs
+"The Simpsons 24/7":
+  number: "104"
+  tvg_id: "C3.147.ersatztv.org"
+  name: "Simpsons"
+  logo: "https://example.com/logos/simpsons.png"
+
+"Classic Movies":
+  number: "120"
+  tvg_id: "C20.194.ersatztv.org"
+
+"Saturday Morning Cartoons":
+  number: "125"
+  tvg_id: "C25.195.ersatztv.org"
+  name: "Sat AM Cartoons"
+
+# ============================================================================
+# Edge Cases and Advanced Mapping
+# ============================================================================
+
+# Channels with special characters in names
+"Kids & Family":
+  number: "500"
+  tvg_id: "kids.family"
+
+# Multiple sources providing the same channel - map both
+"Discovery HD":
+  number: "250"
+  tvg_id: "discovery.us"
+  name: "Discovery"
+
+# Can also map by the source-specific tvg-id if they differ
+"discovery.channel.hd":
+  number: "250"
+  tvg_id: "discovery.us"  # Normalize to common ID
+  name: "Discovery"
+
+# Channels without EPG (set tvg_id to empty or guide number)
+"Local Access":
+  number: "99"
+  # No tvg_id - EPG won't work, but channel will still appear
+
+# Override only the channel number (useful for reordering)
+"Weather Channel":
+  number: "999"
+  # All other attributes remain from source
+
+# Map multiple variations of the same channel name
+"HBO":
+  number: "300"
+  tvg_id: "hbo.east"
+
+"HBO East":
+  number: "300"
+  tvg_id: "hbo.east"
+
+"HBO (East)":
+  number: "300"
+  tvg_id: "hbo.east"
+
+# ============================================================================
+# Mapping by Original Stream URL (less common)
+# ============================================================================
+
+# Override stream URL (useful for fixing broken streams)
+# "Channel Name":
+#   number: "123"
+#   tvg_id: "channel.123"
+#   url: "http://alternate-stream-url.com/stream.m3u8"
+
+# ============================================================================
+# Configuration Notes:
+# ============================================================================
+# 
+# Mapping Precedence:
+# 1. Channel "name" from source M3U is checked first
+# 2. If no match, "tvg_id" from source M3U is checked
+# 3. If still no match, original channel data is used unchanged
+# 4. If no tvg_id exists after mapping, the guide number is used as fallback
+# 
+# Best Practices:
+# - Use consistent tvg_id format across all mappings (e.g., "network.station.subchannel")
+# - Always include a "number" to control channel ordering
+# - Match tvg_id with the channel IDs in your XMLTV EPG sources
+# - Use descriptive but concise channel names
+# - Only override what needs to change (other fields are inherited from source)
+# 
+# Performance:
+# - Mappings are applied during channel parsing, not on every request
+# - Large mapping files (1000+ entries) have minimal performance impact
+# - Changes require a channel reload: POST /api/reload/channels
+# 
+# ============================================================================
+# Troubleshooting:
+# ============================================================================
+# 
+# - Mapping not applied: Check that the key exactly matches the channel name or tvg_id
+# - EPG not matching: Verify tvg_id in mapping matches XMLTV <channel id="">
+# - Duplicate channels: Ensure different sources have different channel names or map them
+# - Channel order wrong: Set explicit "number" fields for desired ordering
+# - Changes not visible: Run channel reload via API or restart the server
+# 
+# For more help, see the README.md troubleshooting section.

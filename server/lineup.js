@@ -48,7 +48,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
   });
 
   app.get('/lineup.m3u', (req, res) => {
-    const cacheKey = `${req.protocol}://${req.get('host')}`;
+    // Extract query parameters for filtering
+    const filterSource = req.query.source ? String(req.query.source) : null;
+    const filterGroup = req.query.group ? String(req.query.group) : null;
+    
+    // Create cache key including filters
+    const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}`;
     
     // Check cache
     if (m3uCache.has(cacheKey)) {
@@ -56,7 +61,16 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       return res.send(m3uCache.get(cacheKey));
     }
     
-    const channels = loadChannels();
+    let channels = loadChannels();
+    
+    // Apply filters (note: source and group both filter by channel.source since group-title=source)
+    if (filterSource) {
+      channels = channels.filter(ch => ch.source === filterSource);
+    } else if (filterGroup) {
+      // group-title in M3U is set to channel.source, so this filters the same way
+      channels = channels.filter(ch => ch.source === filterGroup);
+    }
+    
     const tvgIdMap = new Map(); // For deduplication
     const baseUrl = getBaseUrl(req);
 
@@ -104,17 +118,20 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     if (!channel) return res.status(404).send('Channel not found');
 
     const startTime = Date.now();
-    console.info(`[stream] ${source}/${name} -> ${channel.original_url}`);
+    console.info('[stream] %s/%s -> %s', source, name, channel.original_url);
 
     if (req.method === 'HEAD') {
       try {
         const response = await axios.head(channel.original_url, { timeout: 5000 });
         res.set(response.headers);
         res.status(response.status || 200).end();
-        console.info(`[stream] ${source}/${name} head ok in ${Date.now() - startTime}ms`);
+        console.info('[stream] %s/%s head ok in %dms', source, name, Date.now() - startTime);
       } catch (err) {
         console.warn(
-          `[stream] head failed ${source}/${name}: ${err.message}`,
+          '[stream] head failed %s/%s: %s',
+          source,
+          name,
+          err.message,
           {
             status: err.response?.status,
             code: err.code
@@ -157,18 +174,21 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       await registerViewer();
 
       response.data.on('error', err => {
-        console.warn(`[stream] upstream error ${source}/${name}: ${err.message}`);
+        console.warn('[stream] upstream error %s/%s: %s', source, name, err.message);
         res.destroy(err);
       });
 
       res.set(response.headers);
       response.data.pipe(res);
-      console.info(`[stream] ${source}/${name} ready in ${Date.now() - startTime}ms`);
+      console.info('[stream] %s/%s ready in %dms', source, name, Date.now() - startTime);
     } catch (err) {
       if (usageKey) unregisterUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
       console.warn(
-        `[stream] failed ${source}/${name}: ${err.message}`,
+        '[stream] failed %s/%s: %s',
+        source,
+        name,
+        err.message,
         {
           status: err.response?.status,
           code: err.code

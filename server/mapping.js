@@ -3,12 +3,18 @@ import fs from 'fs/promises';
 import { loadConfig } from '../libs/config-loader.js';
 import { getConfigPath, getDataPath } from '../libs/paths.js';
 import { generateSuggestions, detectDuplicates } from '../libs/channel-matcher.js';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 const CHANNELS_FILE = getDataPath('channels.json');
 const CHANNEL_MAP_FILE = getConfigPath('channel-map.yaml');
 
-router.get('/api/mapping/conflicts', async (req, res) => {
+const conflictsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs for this endpoint
+});
+
+router.get('/api/mapping/conflicts', conflictsLimiter, async (req, res) => {
   try {
     let channels = [];
     try { channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8')); } catch {}

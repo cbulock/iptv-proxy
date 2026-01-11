@@ -151,98 +151,339 @@ This allows you to use OTA tuners like any other playlist source.
 
 ---
 
-## Advanced Features
+## Advanced Configuration
 
-### Channel Management API
+### Running Behind a Reverse Proxy
 
-The server provides HTTP endpoints for dynamic channel management:
+IPTV Proxy is designed to work seamlessly behind reverse proxies like nginx, Caddy, or Traefik. The application automatically detects the correct base URL from forwarded headers.
 
-#### Reorder Channels
-```bash
-curl -X POST http://localhost:34400/api/channels/reorder \
-  -H "Content-Type: application/json" \
-  -d '{"channels": [
-    {"name": "Channel One", "number": "101"},
-    {"name": "Channel Two", "number": "102"}
-  ]}'
+#### Nginx Configuration
+
+```nginx
+server {
+    listen 80;
+    server_name iptv.example.com;
+
+    location / {
+        proxy_pass http://localhost:34400;
+        proxy_http_version 1.1;
+        
+        # Forward client information
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # WebSocket support (for admin UI)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
 ```
 
-#### Rename Channels
-```bash
-curl -X POST http://localhost:34400/api/channels/rename \
-  -H "Content-Type: application/json" \
-  -d '{"channels": [
-    {"oldName": "Old Name", "newName": "New Name"}
-  ]}'
+For HTTPS with Let's Encrypt:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name iptv.example.com;
+    
+    ssl_certificate /etc/letsencrypt/live/iptv.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/iptv.example.com/privkey.pem;
+    
+    location / {
+        proxy_pass http://localhost:34400;
+        proxy_http_version 1.1;
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
 ```
 
-#### Update Channel Groups
-```bash
-curl -X POST http://localhost:34400/api/channels/group \
-  -H "Content-Type: application/json" \
-  -d '{"channels": [
-    {"name": "Channel One", "group": "Entertainment"}
-  ]}'
+#### Caddy Configuration
+
+Caddy automatically handles headers and SSL certificates:
+
+```caddy
+iptv.example.com {
+    reverse_proxy localhost:34400
+}
 ```
 
-#### Bulk Update (Combined Operations)
-```bash
-curl -X POST http://localhost:34400/api/channels/bulk-update \
-  -H "Content-Type: application/json" \
-  -d '{"channels": [
-    {"name": "Old Name", "newName": "New Name", "number": "101", "group": "News"}
-  ]}'
+With a subfolder path:
+
+```caddy
+example.com {
+    reverse_proxy /iptv/* localhost:34400
+}
 ```
 
-### Mapping Intelligence
+#### Traefik Configuration (Docker Compose)
 
-#### Detect Duplicate Channels
-```bash
-curl http://localhost:34400/api/mapping/duplicates
+```yaml
+services:
+  iptv-proxy:
+    image: ghcr.io/cbulock/iptv-proxy:latest
+    container_name: iptv-proxy
+    volumes:
+      - ./config:/config
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.iptv.rule=Host(`iptv.example.com`)"
+      - "traefik.http.routers.iptv.entrypoints=websecure"
+      - "traefik.http.routers.iptv.tls.certresolver=letsencrypt"
+      - "traefik.http.services.iptv.loadbalancer.server.port=34400"
 ```
 
-Returns channels with duplicate names or tvg-ids, helping identify potential conflicts.
+### Docker Compose Setup
 
-#### Auto-Suggest Mappings
-```bash
-curl "http://localhost:34400/api/mapping/suggestions?threshold=0.7&max=3"
+Here's a complete Docker Compose configuration:
+
+```yaml
+version: '3.8'
+
+services:
+  iptv-proxy:
+    image: ghcr.io/cbulock/iptv-proxy:latest
+    container_name: iptv-proxy
+    restart: unless-stopped
+    ports:
+      - "34400:34400"
+    volumes:
+      - ./config:/config
+    environment:
+      - TZ=America/New_York
+      # Optional: Set explicit base URL if auto-detection doesn't work
+      # - BASE_URL=https://iptv.example.com
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:34400/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 ```
 
-Uses fuzzy matching (Levenshtein distance) to suggest potential mappings for unmapped channels. The `threshold` parameter controls match sensitivity (0-1), and `max` limits suggestions per channel.
+### Using with Media Servers
 
-### EPG Validation
+#### Plex Live TV & DVR
 
-Validate your merged EPG for correctness and coverage:
+1. Go to Settings → Live TV & DVR
+2. Click "Set Up Plex DVR"
+3. Enter the tuner URL: `http://your-server:34400/`
+4. Plex will auto-detect the HDHomeRun-compatible lineup
+5. Enter the EPG URL: `http://your-server:34400/xmltv.xml`
+6. Complete the channel mapping in Plex
+
+#### Jellyfin Live TV
+
+1. Go to Dashboard → Live TV
+2. Add a new "Tuner Device"
+3. Select "M3U Tuner"
+4. Enter the M3U URL: `http://your-server:34400/lineup.m3u`
+5. Enter the EPG URL: `http://your-server:34400/xmltv.xml`
+6. Save and refresh guide data
+
+#### Emby Live TV
+
+1. Go to Settings → Live TV
+2. Click "Add" under TV Sources
+3. Select "M3U Playlist"
+4. Enter the M3U URL: `http://your-server:34400/lineup.m3u`
+5. Enter the EPG URL: `http://your-server:34400/xmltv.xml`
+6. Configure refresh intervals and save
+
+### Environment Variables
+
+- `PORT` - HTTP server port (default: 34400)
+- `CONFIG_PATH` - Configuration directory (default: `./config`)
+- `NODE_ENV` - Node environment (default: `production`)
+
+### Example Configurations
+
+For more detailed configuration examples covering edge cases, see the `config/examples/` directory:
+
+- `m3u.example.yaml` - Comprehensive M3U source examples
+- `epg.example.yaml` - EPG source configuration examples
+- `channel-map.example.yaml` - Advanced channel mapping scenarios
+- `app.example.yaml` - Application settings and scheduler configuration
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### Channels Not Appearing
+
+**Problem:** M3U playlist is empty or channels are missing.
+
+**Solutions:**
+1. Check that your M3U sources are accessible:
+   ```bash
+   curl -I http://your-source/playlist.m3u
+   ```
+2. Review server logs for source fetch errors
+3. Verify config files are valid YAML (use a YAML validator)
+4. Ensure source URLs in `m3u.yaml` are correct
+5. Check API status endpoint: `http://localhost:34400/status`
+
+#### EPG Data Not Showing
+
+**Problem:** Program guide is empty in your media player.
+
+**Solutions:**
+1. Verify channel IDs match between M3U and XMLTV:
+   - M3U channels need `tvg-id` attribute
+   - XMLTV must have `<channel id="...">` matching the tvg-id
+2. Check EPG sources are accessible and contain data
+3. Use channel-map.yaml to normalize tvg_id across sources
+4. Force EPG refresh: `POST http://localhost:34400/api/reload/epg`
+5. Inspect the merged XMLTV: `curl http://localhost:34400/xmltv.xml | head -100`
+
+#### HDHomeRun Device Not Found
+
+**Problem:** HDHomeRun tuner doesn't show up in channel list.
+
+**Solutions:**
+1. Verify the device is on your network: `ping hdhomerun-device.local`
+2. Test the discover endpoint: `curl http://device-ip/discover.json`
+3. Ensure `type: "hdhomerun"` is set in m3u.yaml
+4. Check firewall rules aren't blocking access
+5. Try using IP address instead of hostname
+
+#### Wrong URLs in M3U Playlist
+
+**Problem:** Generated M3U contains wrong server addresses.
+
+**Solutions:**
+1. Set explicit `base_url` in `app.yaml`:
+   ```yaml
+   base_url: "https://iptv.example.com"
+   ```
+2. Ensure reverse proxy forwards headers correctly:
+   - X-Forwarded-Proto
+   - X-Forwarded-Host
+   - X-Forwarded-For
+3. Check that your reverse proxy configuration matches the examples above
+4. Test URL generation: `curl -v http://localhost:34400/lineup.m3u`
+
+#### Configuration Changes Not Applied
+
+**Problem:** Updated config files but changes aren't visible.
+
+**Solutions:**
+1. Reload channels: `POST http://localhost:34400/api/reload/channels`
+2. Reload EPG: `POST http://localhost:34400/api/reload/epg`
+3. Or restart the server: `docker restart iptv-proxy`
+4. Verify YAML syntax is valid (indentation matters!)
+5. Check server logs for validation errors
+
+#### Authentication Issues
+
+**Problem:** Source requires authentication and returns 401/403 errors.
+
+**Solutions:**
+1. URL-encode credentials in the source URL:
+   ```yaml
+   url: "https://username:password@provider.com/playlist.m3u"
+   ```
+2. For complex authentication, consider using a local proxy
+3. Check if the service requires API keys or tokens (may need code modification)
+4. Test authentication separately with curl:
+   ```bash
+   curl -u username:password http://provider.com/playlist.m3u
+   ```
+
+#### High Memory Usage
+
+**Problem:** Server consumes too much RAM.
+
+**Solutions:**
+1. Large EPG files can use significant memory - consider:
+   - Filtering to only needed channels
+   - Using smaller, source-specific EPG files
+   - Increasing server resources
+2. Check for memory leaks by monitoring over time
+3. Reduce the number of concurrent source fetches
+4. Consider pagination or streaming for very large files
+
+#### Admin UI Not Available
+
+**Problem:** Admin interface shows "Not Available" message.
+
+**Solutions:**
+1. Build the admin UI:
+   ```bash
+   npm run admin:build
+   ```
+2. Or run in development mode with hot reload:
+   ```bash
+   npm run dev
+   ```
+3. For Docker, ensure you're using an image with the admin UI built
+4. Check that `public/admin/index.html` exists
+
+#### Scheduler Not Running
+
+**Problem:** EPG doesn't auto-refresh or scheduled tasks don't execute.
+
+**Solutions:**
+1. Check cron expression syntax in `app.yaml`
+2. Verify scheduler is running: check `/api/scheduler/jobs` endpoint
+3. Review server logs for scheduler errors
+4. Test cron expressions using an online validator
+5. Ensure time zone is set correctly (TZ environment variable)
+
+### Debug Mode
+
+Enable verbose logging for troubleshooting:
 
 ```bash
-curl http://localhost:34400/api/epg/validate
+DEBUG=* npm start
 ```
 
-Returns:
-- Channel and programme counts
-- Validation errors and warnings
-- Coverage statistics (which channels have/lack EPG data)
-- Detailed error information
+Or in Docker:
 
-### Admin Web Interface
-
-Access the admin interface at `http://localhost:34400/admin/` to:
-- Configure M3U and EPG sources
-- Manage channel mappings visually
-- View duplicate channels and mapping suggestions
-- Validate EPG data and check coverage
-- Monitor channel health and active viewers
-- Manage scheduled tasks
-
-**Note:** The admin UI must be built first:
-```bash
-npm run admin:build
+```yaml
+environment:
+  - DEBUG=*
 ```
 
-Or for development with hot reload:
-```bash
-npm run dev
-```
+### Getting Help
+
+If you're still experiencing issues:
+
+1. Check the [API documentation](API.md) for endpoint details
+2. Review server logs for error messages
+3. Use the `/status` endpoint to check system health
+4. Open an issue on GitHub with:
+   - Server logs
+   - Configuration files (remove sensitive data)
+   - Steps to reproduce the problem
+   - Expected vs actual behavior
+
+---
+
+## API Endpoints
+
+The server provides several API endpoints for configuration and management. See [API.md](API.md) for complete documentation.
+
+**Key Endpoints:**
+- `GET /lineup.m3u` - M3U playlist
+- `GET /xmltv.xml` - EPG data
+- `GET /status` - System diagnostics
+- `GET /health` - Health check
+- `POST /api/reload/channels` - Reload M3U sources
+- `POST /api/reload/epg` - Reload EPG data
+- `GET /api/config/*` - Get/update configuration
 
 ---
 
@@ -251,7 +492,9 @@ npm run dev
 - Your XMLTV sources can be remote URLs or local files (use `file://` prefix).
 - M3U sources also support `file://` URLs for local files.
 - All `tvg_id`s in channels must match the `<channel id="...">` in EPG sources to link correctly.
-- Duplicate `tvg_id`s in the output M3U are automatically deduplicated with suffixes (e.g., `1.1_1`).
+- Duplicate `tvg_id`s will be overwritten in favor of the last one processed.
+- Configuration files are automatically created with defaults on first run.
+- The server automatically caches channels and EPG data for performance.
 
 ---
 
