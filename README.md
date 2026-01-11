@@ -609,6 +609,42 @@ The server provides several API endpoints for configuration and management. See 
 
 ---
 
+## Testing and Code Quality
+
+This project includes comprehensive test coverage and code quality tools:
+
+- **Unit Tests**: Test individual functions in isolation
+- **Integration Tests**: Test complete workflows with mocked dependencies
+- **Output Format Validation**: Ensure M3U and XMLTV outputs are valid
+- **Linting**: ESLint for JavaScript/ESM and Vue.js code
+- **Formatting**: Prettier for consistent code style
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run linter
+npm run lint
+
+# Auto-fix lint issues
+npm run lint:fix
+
+# Check code formatting
+npm run format:check
+
+# Auto-format code
+npm run format
+```
+
+For detailed information about testing, see [TESTING.md](TESTING.md).
+
+---
+
 ## License
 
 MIT

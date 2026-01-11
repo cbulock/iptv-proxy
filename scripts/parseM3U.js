@@ -15,7 +15,7 @@ export function setStatusCallback(callback) {
     statusCallback = callback;
 }
 
-function applyMapping(channel, map) {
+export function applyMapping(channel, map) {
     // Try name-based mapping first
     let mapping = map[channel.name];
 
@@ -41,7 +41,7 @@ function applyMapping(channel, map) {
     return channel;
 }
 
-function proxyURL(channel) {
+export function proxyURL(channel) {
     return `/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
 }
 
