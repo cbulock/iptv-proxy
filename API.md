@@ -370,3 +370,245 @@ The following endpoints remain available:
 - `GET /api/mapping/conflicts` - Get mapping conflicts
 
 All endpoints now include proper error handling and will return appropriate HTTP status codes with detailed error messages.
+
+---
+
+## Cache Management
+
+The IPTV Proxy includes a sophisticated caching system to improve performance and reduce load on source servers.
+
+### GET /api/cache/stats
+
+Get statistics for all caches.
+
+**Response:**
+```json
+{
+  "caches": {
+    "epg": {
+      "name": "epg",
+      "size": 5,
+      "ttl": 21600000,
+      "hits": 150,
+      "misses": 10,
+      "hitRate": "93.75%",
+      "entries": [
+        {
+          "key": "https://example.com|source:|channels:",
+          "age": 3600,
+          "ttlRemaining": 18000,
+          "expired": false
+        }
+      ]
+    },
+    "m3u": {
+      "name": "m3u",
+      "size": 3,
+      "ttl": 3600000,
+      "hits": 200,
+      "misses": 5,
+      "hitRate": "97.56%",
+      "entries": []
+    }
+  },
+  "timestamp": "2026-01-11T03:00:00.000Z"
+}
+```
+
+### POST /api/cache/clear
+
+Clear all caches.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "All caches cleared",
+  "timestamp": "2026-01-11T03:00:00.000Z"
+}
+```
+
+### POST /api/cache/clear/:name
+
+Clear a specific cache by name.
+
+**URL Parameters:**
+- `name` - Cache name (e.g., `epg`, `m3u`, `lineup-json`)
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Cache 'epg' cleared",
+  "timestamp": "2026-01-11T03:00:00.000Z"
+}
+```
+
+### PUT /api/cache/ttl/:name
+
+Update the TTL for a specific cache.
+
+**URL Parameters:**
+- `name` - Cache name
+
+**Request Body:**
+```json
+{
+  "ttl": 7200
+}
+```
+Note: TTL is in seconds.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Cache 'epg' TTL updated",
+  "name": "epg",
+  "ttl": 7200,
+  "timestamp": "2026-01-11T03:00:00.000Z"
+}
+```
+
+---
+
+## Preview API
+
+The Preview API allows you to test configuration changes before saving them.
+
+### POST /api/preview/m3u
+
+Preview merged M3U playlist with temporary configuration.
+
+**Request Body:**
+```json
+{
+  "m3uConfig": {
+    "urls": [
+      {
+        "name": "Test Source",
+        "url": "https://example.com/playlist.m3u"
+      }
+    ]
+  },
+  "channelMapConfig": {
+    "Channel Name": {
+      "number": "100",
+      "tvg_id": "channel-id"
+    }
+  }
+}
+```
+
+**Response:**
+Returns an M3U playlist file with `Content-Type: application/x-mpegURL`.
+
+### POST /api/preview/channels
+
+Preview merged channels as JSON with temporary configuration.
+
+**Request Body:**
+```json
+{
+  "m3uConfig": {
+    "urls": [
+      {
+        "name": "Test Source",
+        "url": "https://example.com/playlist.m3u"
+      }
+    ]
+  },
+  "channelMapConfig": {
+    "Channel Name": {
+      "number": "100"
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "channels": [
+    {
+      "name": "Channel Name",
+      "tvg_id": "channel-id",
+      "logo": "https://example.com/logo.png",
+      "url": "https://example.com/stream",
+      "guideNumber": "100",
+      "source": "Test Source"
+    }
+  ],
+  "count": 1,
+  "sources": ["Test Source"]
+}
+```
+
+### POST /api/preview/epg
+
+Preview merged EPG with temporary configuration.
+
+**Request Body:**
+```json
+{
+  "epgConfig": {
+    "urls": [
+      {
+        "name": "Test EPG",
+        "url": "https://example.com/xmltv.xml"
+      }
+    ]
+  },
+  "channels": [
+    {
+      "name": "Channel Name",
+      "tvg_id": "channel-id",
+      "source": "Test EPG"
+    }
+  ]
+}
+```
+
+**Response:**
+Returns an XMLTV file with `Content-Type: application/xml`.
+
+### POST /api/preview/epg/json
+
+Preview merged EPG as JSON with temporary configuration.
+
+**Request Body:**
+```json
+{
+  "epgConfig": {
+    "urls": [
+      {
+        "name": "Test EPG",
+        "url": "https://example.com/xmltv.xml"
+      }
+    ]
+  },
+  "channels": [
+    {
+      "name": "Channel Name",
+      "tvg_id": "channel-id",
+      "source": "Test EPG"
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "channels": 50,
+  "programmes": 1000,
+  "sources": ["Test EPG"],
+  "data": {
+    "tv": {
+      "channel": [],
+      "programme": []
+    }
+  }
+}
+```
+

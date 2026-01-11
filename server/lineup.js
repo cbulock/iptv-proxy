@@ -4,21 +4,30 @@ import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
+import cacheManager from '../libs/cache-manager.js';
+import { loadConfig } from '../libs/config-loader.js';
 
-// Cache for M3U output by host+protocol
-const m3uCache = new Map();
-const jsonCache = new Map();
+// M3U and JSON lineup caches
+let m3uCache = null;
+let jsonCache = null;
 
 // Invalidate caches when channels are updated
 let lastChannelsUpdate = Date.now();
 
 function invalidateCaches() {
-  m3uCache.clear();
-  jsonCache.clear();
+  if (m3uCache) m3uCache.clear();
+  if (jsonCache) jsonCache.clear();
   lastChannelsUpdate = Date.now();
 }
 
 export function setupLineupRoutes(app, config, usageHelpers = {}) {
+  // Initialize lineup caches with TTL from config (default: 1 hour)
+  const appConfig = loadConfig('app');
+  const m3uTTL = (appConfig.cache?.m3u_ttl ?? 3600) * 1000; // Convert seconds to milliseconds
+  m3uCache = cacheManager.createCache('m3u', m3uTTL);
+  jsonCache = cacheManager.createCache('lineup-json', m3uTTL);
+  console.log(`Lineup caches initialized with TTL: ${m3uTTL / 1000}s`);
+
   const {
     registerUsage = async () => undefined,
     touchUsage = () => undefined,
@@ -30,8 +39,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     const cacheKey = `${req.protocol}://${req.get('host')}`;
     
     // Check cache
-    if (jsonCache.has(cacheKey)) {
-      return res.json(jsonCache.get(cacheKey));
+    const cached = jsonCache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
     }
     
     const channels = loadChannels();
@@ -65,9 +75,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}`;
     
     // Check cache
-    if (m3uCache.has(cacheKey)) {
+    const cached = m3uCache.get(cacheKey);
+    if (cached) {
       res.set('Content-Type', 'application/x-mpegURL');
-      return res.send(m3uCache.get(cacheKey));
+      return res.send(cached);
     }
     
     let channels = loadChannels();

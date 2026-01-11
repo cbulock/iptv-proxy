@@ -44,7 +44,19 @@ const epgSchema = Joi.object({
 const appSchema = Joi.object({
   base_url: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
     'string.uri': 'app.yaml "base_url" must be a valid URL'
-  })
+  }),
+  cache: Joi.object({
+    epg_ttl: Joi.number().integer().min(0).optional().messages({
+      'number.base': 'cache.epg_ttl must be a number',
+      'number.integer': 'cache.epg_ttl must be an integer',
+      'number.min': 'cache.epg_ttl must be at least 0'
+    }),
+    m3u_ttl: Joi.number().integer().min(0).optional().messages({
+      'number.base': 'cache.m3u_ttl must be a number',
+      'number.integer': 'cache.m3u_ttl must be an integer',
+      'number.min': 'cache.m3u_ttl must be at least 0'
+    })
+  }).optional()
 }).unknown(true).default({});
 
 const channelMapSchema = Joi.object().pattern(

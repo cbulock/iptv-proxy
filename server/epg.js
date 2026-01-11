@@ -6,6 +6,7 @@ import { loadConfig } from '../libs/config-loader.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import { validateEPG, validateEPGCoverage } from '../libs/epg-validator.js';
+import cacheManager from '../libs/cache-manager.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
@@ -28,8 +29,8 @@ const builder = new XMLBuilder({
     format: true
 });
 
-// Cache for rewritten XML by protocol
-let rewrittenXMLCache = new Map();
+// EPG cache (replaces rewrittenXMLCache)
+let epgCache = null;
 
 function rewriteImageUrls(xmlString, req) {
     const protocol = req.get('X-Forwarded-Proto') ||
@@ -41,8 +42,8 @@ function rewriteImageUrls(xmlString, req) {
     const filterSource = req.query.source || '';
     const filterChannels = req.query.channels || '';
     const cacheKey = `${protocol}://${req.get('host')}|source:${filterSource}|channels:${filterChannels}`;
-    if (rewrittenXMLCache.has(cacheKey)) {
-        return rewrittenXMLCache.get(cacheKey);
+    if (epgCache && epgCache.has(cacheKey)) {
+        return epgCache.get(cacheKey);
     }
     
     const parsed = parser.parse(xmlString);
@@ -64,14 +65,22 @@ function rewriteImageUrls(xmlString, req) {
     const result = builder.build(parsed);
     
     // Cache the result
-    rewrittenXMLCache.set(cacheKey, result);
+    if (epgCache) {
+        epgCache.set(cacheKey, result);
+    }
     
     return result;
 }
 
 export async function setupEPGRoutes(app) {
     const epgConfig = loadConfig('epg');
+    const appConfig = loadConfig('app');
     const epgSources = epgConfig.urls || [];
+    
+    // Initialize EPG cache with TTL from config (default: 6 hours)
+    const epgTTL = (appConfig.cache?.epg_ttl ?? 21600) * 1000; // Convert seconds to milliseconds
+    epgCache = cacheManager.createCache('epg', epgTTL);
+    console.log(`EPG cache initialized with TTL: ${epgTTL / 1000}s`);
 
     let mergedEPG = null;
 
@@ -219,8 +228,10 @@ export async function setupEPGRoutes(app) {
             }
         }
         
-        // Clear rewritten cache when EPG is refreshed
-        rewrittenXMLCache.clear();
+        // Clear EPG cache when EPG is refreshed
+        if (epgCache) {
+            epgCache.clear();
+        }
         
         const duration = Date.now() - startTime;
         console.log(`EPG merge completed in ${duration}ms (${merged.tv.channel.length} channels, ${merged.tv.programme.length} programmes)`);
