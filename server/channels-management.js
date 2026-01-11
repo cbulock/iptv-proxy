@@ -10,6 +10,14 @@ import rateLimit from 'express-rate-limit';
 const router = express.Router();
 const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
 
+function isSafeChannelKey(key) {
+  return (
+    typeof key === 'string' &&
+    key !== '__proto__' &&
+    key !== 'constructor' &&
+    key !== 'prototype'
+  );
+}
 // Rate limiter for write-heavy channel management operations
 const channelsWriteLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute window
@@ -39,6 +47,9 @@ router.post('/reorder', channelsWriteLimiter, async (req, res) => {
     let updated = 0;
     for (const ch of channels) {
       if (!ch.name) continue;
+      if (!isSafeChannelKey(ch.name)) {
+        return res.status(400).json({ error: 'Invalid channel name' });
+      }
       
       if (!mapping[ch.name]) {
         mapping[ch.name] = {};
@@ -218,6 +229,10 @@ router.post('/bulk-update', channelsWriteLimiter, async (req, res) => {
       if (!ch.name) continue;
       
       const targetKey = ch.newName || ch.name;
+      
+      if (!isSafeChannelKey(ch.name) || !isSafeChannelKey(targetKey)) {
+        return res.status(400).json({ error: 'Invalid channel name' });
+      }
       
       // Migrate existing mapping if renaming
       if (ch.newName && ch.name !== ch.newName && mapping[ch.name]) {
