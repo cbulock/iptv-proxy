@@ -284,8 +284,8 @@ ${protocol}://example.com/stream`;
     });
 
     it('should detect malformed XML structure', () => {
-      // Test with truly malformed XML - unmatched closing tag
-      const xml = '<?xml version="1.0"?><tv><channel><display-name>Test</channel></tv>';
+      // Test with truly malformed XML - missing closing tag for channel
+      const xml = '<?xml version="1.0"?><tv><channel id="ch1"><display-name>Test</display-name></tv>';
 
       const result = validateXMLTVFormat(xml);
       
