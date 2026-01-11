@@ -14,6 +14,11 @@ const conflictsLimiter = rateLimit({
   max: 100, // limit each IP to 100 requests per windowMs for this endpoint
 });
 
+const suggestionsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs for this endpoint
+});
+
 router.get('/api/mapping/conflicts', conflictsLimiter, async (req, res) => {
   try {
     let channels = [];
@@ -77,7 +82,7 @@ router.get('/api/mapping/duplicates', async (req, res) => {
 });
 
 // New endpoint: auto-suggest mappings for unmapped channels
-router.get('/api/mapping/suggestions', async (req, res) => {
+router.get('/api/mapping/suggestions', suggestionsLimiter, async (req, res) => {
   try {
     let channels = [];
     try {
