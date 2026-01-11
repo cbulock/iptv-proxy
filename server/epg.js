@@ -316,7 +316,7 @@ export async function setupEPGRoutes(app) {
                 `Could not retrieve image from ${escapeHtml(decodedUrl)}`
             );
         }
-    });
+    }));
 
     // New endpoint: validate current merged EPG
     app.get('/api/epg/validate', (req, res) => {
