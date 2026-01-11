@@ -17,6 +17,8 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 - 🔍 **NEW:** Automatic duplicate channel detection
 - ✅ **NEW:** EPG validation with coverage analysis
 - 🔧 **NEW:** Dynamic channel management API (reorder, rename, group)
+- ⚡ **NEW:** Advanced caching system with configurable TTL for EPG and M3U data
+- 👁️ **NEW:** Live preview API to test configuration changes before saving
 
 This project was inspired by [xTeVe](https://github.com/xteve-project/xTeVe) and [Threadfin](https://github.com/Threadfin/Threadfin), but I wanted something a little lighter and had better control over using the feeds through reverse proxies.
 
@@ -303,6 +305,111 @@ services:
 4. Enter the M3U URL: `http://your-server:34400/lineup.m3u`
 5. Enter the EPG URL: `http://your-server:34400/xmltv.xml`
 6. Configure refresh intervals and save
+
+### Cache Configuration
+
+IPTV Proxy includes an advanced caching system to improve performance and reduce load on upstream sources.
+
+#### Configuring Cache TTL
+
+Add cache settings to your `app.yaml`:
+
+```yaml
+cache:
+  # EPG cache TTL in seconds (default: 21600 = 6 hours)
+  epg_ttl: 21600
+  
+  # M3U cache TTL in seconds (default: 3600 = 1 hour)
+  m3u_ttl: 3600
+```
+
+Setting TTL to `0` disables automatic expiration (cache persists until manually cleared).
+
+#### Cache Management API
+
+- `GET /api/cache/stats` - View cache statistics and hit rates
+- `POST /api/cache/clear` - Clear all caches
+- `POST /api/cache/clear/:name` - Clear specific cache (e.g., `epg`, `m3u`)
+- `PUT /api/cache/ttl/:name` - Update TTL for specific cache
+
+**Example: View cache statistics**
+```bash
+curl http://localhost:34400/api/cache/stats
+```
+
+**Example: Clear EPG cache**
+```bash
+curl -X POST http://localhost:34400/api/cache/clear/epg
+```
+
+**Example: Update M3U cache TTL to 2 hours**
+```bash
+curl -X PUT http://localhost:34400/api/cache/ttl/m3u \
+  -H "Content-Type: application/json" \
+  -d '{"ttl": 7200}'
+```
+
+### Preview API
+
+Test configuration changes before saving them with the preview API.
+
+#### Preview M3U Changes
+
+```bash
+curl -X POST http://localhost:34400/api/preview/m3u \
+  -H "Content-Type: application/json" \
+  -d '{
+    "m3uConfig": {
+      "urls": [
+        {
+          "name": "Test Source",
+          "url": "https://example.com/playlist.m3u"
+        }
+      ]
+    },
+    "channelMapConfig": {
+      "Channel Name": {
+        "number": "100",
+        "tvg_id": "custom-id"
+      }
+    }
+  }'
+```
+
+Returns the merged M3U playlist with your temporary configuration applied.
+
+#### Preview Channels as JSON
+
+```bash
+curl -X POST http://localhost:34400/api/preview/channels \
+  -H "Content-Type: application/json" \
+  -d '{
+    "m3uConfig": { ... },
+    "channelMapConfig": { ... }
+  }'
+```
+
+Returns channel data as JSON for inspection before saving.
+
+#### Preview EPG Changes
+
+```bash
+curl -X POST http://localhost:34400/api/preview/epg \
+  -H "Content-Type: application/json" \
+  -d '{
+    "epgConfig": {
+      "urls": [
+        {
+          "name": "Test EPG",
+          "url": "https://example.com/xmltv.xml"
+        }
+      ]
+    },
+    "channels": [...]
+  }'
+```
+
+Returns the merged XMLTV with your temporary configuration applied.
 
 ### Environment Variables
 

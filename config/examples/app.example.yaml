@@ -17,6 +17,38 @@
 # - Subdirectory: base_url: "https://example.com/iptv"
 
 # ============================================================================
+# Cache Configuration
+# ============================================================================
+
+# Configure caching behavior for parsed EPG and M3U data
+# TTL values are in seconds. Set to 0 to disable caching (cache never expires until manually invalidated)
+
+# cache:
+#   # EPG cache TTL (default: 21600 = 6 hours)
+#   # How long to cache parsed EPG data before re-fetching from sources
+#   epg_ttl: 21600
+#   
+#   # M3U cache TTL (default: 3600 = 1 hour)
+#   # How long to cache parsed M3U data before re-fetching from sources
+#   m3u_ttl: 3600
+
+# Examples:
+# - Short TTL for frequently changing content:
+#   cache:
+#     epg_ttl: 1800    # 30 minutes
+#     m3u_ttl: 600     # 10 minutes
+#
+# - Long TTL for stable content:
+#   cache:
+#     epg_ttl: 86400   # 24 hours
+#     m3u_ttl: 43200   # 12 hours
+#
+# - No expiration (manual invalidation only):
+#   cache:
+#     epg_ttl: 0
+#     m3u_ttl: 0
+
+# ============================================================================
 # Scheduler Configuration
 # ============================================================================
 
