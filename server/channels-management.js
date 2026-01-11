@@ -171,7 +171,7 @@ router.post('/group', channelsWriteLimiter, async (req, res) => {
     // Update groups
     let updated = 0;
     for (const ch of channels) {
-      if (!ch.name) continue;
+      if (!ch.name || !isSafeChannelKey(ch.name)) continue;
       
       if (!mapping[ch.name]) {
         mapping[ch.name] = {};
