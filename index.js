@@ -13,6 +13,8 @@ import channelsRoute from './server/channels.js';
 import configRoute from './server/config.js';
 import healthRouter from './server/health.js';
 import statusRouter from './server/status.js';
+import mappingRouter from './server/mapping.js';
+import channelsManagementRouter from './server/channels-management.js';
 import { parseAll, setStatusCallback } from './scripts/parseM3U.js';
 import { updateSourceStatus, resetSourceStatus } from './server/status.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
@@ -114,6 +116,8 @@ onChannelsUpdate(invalidateLineupCaches);
 // Register routes
 app.use('/channels', channelsRoute);
 app.use(configRoute);
+app.use(mappingRouter);
+app.use('/api/channels', channelsManagementRouter);
 app.use('/', healthRouter);
 app.use('/', statusRouter);
 app.use('/', usageRouter);

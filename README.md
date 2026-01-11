@@ -6,9 +6,13 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 
 - 🧩 Merge multiple M3U sources into a single playlist
 - 🗓️ Merge multiple EPG sources (including local files) into a unified `xmltv.xml`
-- 📺 Channel mapping to control display names, guide numbers, and logos
+- 📺 Channel mapping to control display names, guide numbers, logos, and groups
 - 🧠 Fallback guide info via guide number when `tvg_id` is missing
 - 🔁 HTTP server that hosts `/lineup.m3u` and `/xmltv.xml`
+- 🎯 **NEW:** Smart channel mapping with fuzzy matching suggestions
+- 🔍 **NEW:** Automatic duplicate channel detection
+- ✅ **NEW:** EPG validation with coverage analysis
+- 🔧 **NEW:** Dynamic channel management API (reorder, rename, group)
 
 This project was inspired by [xTeVe](https://github.com/xteve-project/xTeVe) and [Threadfin](https://github.com/Threadfin/Threadfin), but I wanted something a little lighter and had better control over using the feeds through reverse proxies.
 
@@ -74,13 +78,24 @@ Use this file to normalize channel metadata. You can define mapping by either ch
 "The Simpsons":
   number: "104"
   tvg_id: "C3.147.ersatztv.org"
+  group: "Entertainment"
 "Evening Comedy":
   number: "120"
   tvg_id: "C20.194.ersatztv.org"
+  name: "Comedy Channel"
 "FOX 47":
   number: "47"
   tvg_id: "47.1"
+  logo: "http://example.com/logo.png"
 ```
+
+**Available mapping fields:**
+- `name` - Override the display name
+- `number` - Set the guide/channel number
+- `tvg_id` - Set or override the tvg-id
+- `logo` - Set or override the logo URL
+- `group` - Set the group-title (category) for the channel
+- `url` - Override the stream URL
 
 ### Channel Mapping Precedence
 
@@ -474,7 +489,8 @@ The server provides several API endpoints for configuration and management. See 
 
 ## Notes
 
-- Your XMLTV sources can be remote URLs or local files.
+- Your XMLTV sources can be remote URLs or local files (use `file://` prefix).
+- M3U sources also support `file://` URLs for local files.
 - All `tvg_id`s in channels must match the `<channel id="...">` in EPG sources to link correctly.
 - Duplicate `tvg_id`s will be overwritten in favor of the last one processed.
 - Configuration files are automatically created with defaults on first run.

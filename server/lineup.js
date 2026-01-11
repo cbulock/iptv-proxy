@@ -93,7 +93,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       const tvgLogo = channel.logo
         ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
         : '';
-      const groupTitle = channel.source || '';
+      const groupTitle = channel.group || channel.source || '';
       const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
 
       output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}\n`;
