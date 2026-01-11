@@ -9,6 +9,10 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 - 📺 Channel mapping to control display names, guide numbers, logos, and groups
 - 🧠 Fallback guide info via guide number when `tvg_id` is missing
 - 🔁 HTTP server that hosts `/lineup.m3u` and `/xmltv.xml`
+- 🛡️ Robust error handling for malformed sources and network failures
+- 🔄 Graceful handling of invalid M3U entries and XML data
+- 🌐 Full reverse proxy support with `X-Forwarded-*` headers
+- 💚 Health check endpoints for monitoring and orchestration (liveness, readiness)
 - 🎯 **NEW:** Smart channel mapping with fuzzy matching suggestions
 - 🔍 **NEW:** Automatic duplicate channel detection
 - ✅ **NEW:** EPG validation with coverage analysis

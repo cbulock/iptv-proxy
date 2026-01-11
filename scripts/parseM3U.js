@@ -95,6 +95,21 @@ async function processSource(source, map) {
             }
         } else {
             // Standard M3U - stream processing for large files
+            let response;
+            try {
+                response = await axios.get(source.url, {
+                    timeout: 30000,
+                    maxContentLength: 50 * 1024 * 1024, // 50MB max
+                    validateStatus: (status) => status === 200
+                });
+            } catch (fetchErr) {
+                throw new Error(`Failed to fetch M3U: ${fetchErr.message}`);
+            }
+
+            if (!response.data || typeof response.data !== 'string') {
+                throw new Error('Invalid M3U data: expected text content');
+            }
+
             let data;
             if (source.url.startsWith('file://')) {
                 const filePath = source.url.replace('file://', '');
@@ -105,26 +120,57 @@ async function processSource(source, map) {
             }
             const lines = data.split('\n');
 
+            // Validate M3U header and check if file is empty
+            if (lines.length === 0) {
+                throw new Error('Empty M3U file');
+            }
+            
+            if (!lines[0].trim().startsWith('#EXTM3U')) {
+                console.warn(`Warning: ${source.name} missing #EXTM3U header`);
+            }
+
+            // Valid streaming protocols
+            const validProtocols = ['http://', 'https://', 'rtsp://', 'rtp://', 'udp://'];
             let current = {};
+            let lineNumber = 0;
 
             for (const line of lines) {
-                if (line.startsWith('#EXTINF')) {
-                    const nameMatch = line.match(/,(.*)$/);
-                    const tvgIdMatch = line.match(/tvg-id="(.*?)"/);
-                    const tvgLogoMatch = line.match(/tvg-logo="(.*?)"/);
-                    const groupMatch = line.match(/group-title="(.*?)"/);
+                lineNumber++;
+                const trimmedLine = line.trim();
+                
+                if (!trimmedLine) continue; // Skip empty lines
+                
+                if (trimmedLine.startsWith('#EXTINF')) {
+                    try {
+                        const nameMatch = trimmedLine.match(/,(.*)$/);
+                        const tvgIdMatch = trimmedLine.match(/tvg-id="(.*?)"/);
+                        const tvgLogoMatch = trimmedLine.match(/tvg-logo="(.*?)"/);
 
-                    current = {
-                        name: nameMatch ? nameMatch[1].trim() : 'Unknown',
-                        tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
-                        logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
-                        group: groupMatch ? groupMatch[1] : '',
-                        source: source.name
-                    };
-                } else if (line && !line.startsWith('#')) {
-                    current.url = proxyURL(current);
-                    current.original_url = line.trim();
-                    channels.push(applyMapping(current, map));
+                        current = {
+                            name: nameMatch ? nameMatch[1].trim() : 'Unknown',
+                            tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
+                            logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
+                            source: source.name
+                        };
+                    } catch (lineErr) {
+                        console.warn(`[${source.name}:${lineNumber}] Malformed EXTINF: ${lineErr.message}`);
+                        current = {};
+                    }
+                } else if (trimmedLine && !trimmedLine.startsWith('#')) {
+                    // Validate URL format using valid protocols array
+                    const hasValidProtocol = validProtocols.some(protocol => trimmedLine.startsWith(protocol));
+                    
+                    if (!hasValidProtocol) {
+                        console.warn(`[${source.name}:${lineNumber}] Invalid stream URL format: ${trimmedLine.substring(0, 50)}`);
+                        current = {};
+                        continue;
+                    }
+
+                    if (current.name) {
+                        current.url = proxyURL(current);
+                        current.original_url = trimmedLine;
+                        channels.push(applyMapping(current, map));
+                    }
                     current = {};
                 }
             }

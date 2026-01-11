@@ -4,6 +4,7 @@ import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import escapeHtml from 'escape-html';
 import { loadConfig } from '../libs/config-loader.js';
 import { getChannels } from '../libs/channels-cache.js';
+import { asyncHandler, AppError } from './error-handler.js';
 import { validateEPG, validateEPGCoverage } from '../libs/epg-validator.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
@@ -100,17 +101,49 @@ export async function setupEPGRoutes(app) {
 
                 if (sourceUrl.startsWith('file://')) {
                     const path = sourceUrl.replace('file://', '');
-                    xmlData = fs.readFileSync(path, 'utf-8');
+                    try {
+                        xmlData = fs.readFileSync(path, 'utf-8');
+                    } catch (fileErr) {
+                        throw new Error(`Failed to read file: ${fileErr.message}`);
+                    }
                 } else {
-                    const response = await axios.get(sourceUrl, { timeout: 15000 });
-                    xmlData = response.data;
+                    try {
+                        const response = await axios.get(sourceUrl, { 
+                            timeout: 15000,
+                            validateStatus: (status) => status === 200
+                        });
+                        xmlData = response.data;
+                    } catch (httpErr) {
+                        throw new Error(`Failed to fetch EPG: ${httpErr.message}`);
+                    }
                 }
 
-                const parsed = parser.parse(xmlData);
+                // Validate that we got XML data
+                if (!xmlData || typeof xmlData !== 'string' || xmlData.trim().length === 0) {
+                    throw new Error('Empty or invalid EPG data received');
+                }
+
+                // Validate basic XML structure (allow whitespace/comments before declaration)
+                const trimmedXml = xmlData.trim();
+                if (!trimmedXml.includes('<?xml') && !trimmedXml.includes('<tv')) {
+                    throw new Error('Invalid XML format - missing XML declaration or root element');
+                }
+
+                let parsed;
+                try {
+                    parsed = parser.parse(xmlData);
+                } catch (parseErr) {
+                    throw new Error(`XML parsing failed: ${parseErr.message}`);
+                }
+
+                // Validate parsed structure
+                if (!parsed || !parsed.tv) {
+                    throw new Error('Invalid XMLTV structure - missing <tv> root element');
+                }
 
                 if (parsed.tv?.channel) {
                     const channels = [].concat(parsed.tv.channel).filter(c =>
-                        tvgIds.has(c["@_id"]) || names.has(c["display-name"])
+                        c && (tvgIds.has(c["@_id"]) || names.has(c["display-name"]))
                     );
 
                     merged.tv.channel.push(...channels);
@@ -118,7 +151,7 @@ export async function setupEPGRoutes(app) {
 
                 if (parsed.tv?.programme) {
                     const programmes = [].concat(parsed.tv.programme).filter(p =>
-                        tvgIds.has(p["@_channel"]) || names.has(p["@_channel"])
+                        p && (tvgIds.has(p["@_channel"]) || names.has(p["@_channel"]))
                     );
 
                     merged.tv.programme.push(...programmes);
@@ -176,7 +209,15 @@ export async function setupEPGRoutes(app) {
             }
         }
 
-        mergedEPG = builder.build(merged);
+        try {
+            mergedEPG = builder.build(merged);
+        } catch (buildErr) {
+            console.error('Failed to build merged EPG XML:', buildErr.message);
+            // Keep the old EPG if build fails
+            if (!mergedEPG) {
+                mergedEPG = '<?xml version="1.0" encoding="UTF-8"?>\n<tv></tv>';
+            }
+        }
         
         // Clear rewritten cache when EPG is refreshed
         rewrittenXMLCache.clear();
@@ -191,11 +232,9 @@ export async function setupEPGRoutes(app) {
     await fetchAndMergeEPGs();
     setInterval(fetchAndMergeEPGs, 6 * 60 * 60 * 1000);
 
-    app.get('/xmltv.xml', (req, res) => {
+    app.get('/xmltv.xml', asyncHandler(async (req, res) => {
         if (!mergedEPG) {
-            const errorMsg = 'EPG not loaded yet. This usually happens during startup. Please wait a moment and try again.';
-            const fixMsg = 'If this persists, check server logs for EPG source errors.';
-            return res.status(503).send(`${errorMsg} ${fixMsg}`);
+            throw new AppError('EPG not loaded yet', 503);
         }
 
         // Extract query parameters for filtering
@@ -208,6 +247,11 @@ export async function setupEPGRoutes(app) {
         if ((filterSource || filterChannels) && typeof mergedEPG === 'string' && mergedEPG.trim()) {
             try {
                 const parsed = parser.parse(mergedEPG);
+                
+                if (!parsed || !parsed.tv) {
+                    throw new Error('Invalid EPG structure');
+                }
+                
                 const allChannels = getChannels();
                 
                 // Build set of allowed tvg_ids based on filters
@@ -215,7 +259,7 @@ export async function setupEPGRoutes(app) {
                 
                 if (filterSource) {
                     // Filter by source
-                    const sourceChannels = allChannels.filter(c => c.source === filterSource);
+                    const sourceChannels = allChannels.filter(c => c && c.source === filterSource);
                     sourceChannels.forEach(c => {
                         if (c.tvg_id) allowedTvgIds.add(c.tvg_id);
                     });
@@ -228,16 +272,16 @@ export async function setupEPGRoutes(app) {
                 if (allowedTvgIds.size > 0 && parsed.tv) {
                     const tv = parsed.tv;
                     tv.channel = [].concat(tv.channel || []).filter(c =>
-                        allowedTvgIds.has(c["@_id"])
+                        c && allowedTvgIds.has(c["@_id"])
                     );
                     tv.programme = [].concat(tv.programme || []).filter(p =>
-                        allowedTvgIds.has(p["@_channel"])
+                        p && allowedTvgIds.has(p["@_channel"])
                     );
                     
                     xmlToSend = builder.build(parsed);
                 }
-            } catch (err) {
-                console.error('[EPG] Error filtering XMLTV:', err.message);
+            } catch (filterErr) {
+                console.error('[EPG] Error filtering XMLTV:', filterErr.message);
                 // Fall back to unfiltered XML
             }
         }
@@ -246,16 +290,31 @@ export async function setupEPGRoutes(app) {
 
         res.set('Content-Type', 'application/xml');
         res.send(rewritten);
-    });
+    }));
 
-    app.get('/images/:source/:url', async (req, res) => {
+    app.get('/images/:source/:url', asyncHandler(async (req, res) => {
         const decodedUrl = decodeURIComponent(req.params.url);
+        
+        // Validate URL format
+        if (!decodedUrl.startsWith('http://') && !decodedUrl.startsWith('https://')) {
+            throw new AppError('Invalid image URL', 400, 'URL must start with http:// or https://');
+        }
+        
         try {
-            const response = await axios.get(decodedUrl, { responseType: 'stream' });
+            const response = await axios.get(decodedUrl, { 
+                responseType: 'stream',
+                timeout: 10000,
+                maxRedirects: 5
+            });
             res.set(response.headers);
             response.data.pipe(res);
         } catch (err) {
-            res.status(502).send(`Failed to fetch image from ${escapeHtml(decodedUrl)}`);
+            const statusCode = err.response?.status || 502;
+            throw new AppError(
+                `Failed to fetch image`,
+                statusCode,
+                `Could not retrieve image from ${escapeHtml(decodedUrl)}`
+            );
         }
     });
 

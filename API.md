@@ -1,5 +1,171 @@
 # API Documentation
 
+## Error Handling
+
+All API endpoints now provide consistent error responses with appropriate HTTP status codes.
+
+### Error Response Format
+
+```json
+{
+  "error": "Error Type",
+  "message": "Human-readable error message",
+  "path": "/api/endpoint",
+  "timestamp": "2025-12-30T20:00:00.000Z",
+  "details": "Additional error details (optional)"
+}
+```
+
+### HTTP Status Codes
+
+- `200 OK` - Request successful
+- `400 Bad Request` - Invalid request parameters or body
+- `404 Not Found` - Resource or endpoint not found
+- `500 Internal Server Error` - Unexpected server error
+- `502 Bad Gateway` - Upstream service (M3U/EPG source) unavailable
+- `503 Service Unavailable` - Service not ready (e.g., EPG not loaded)
+
+### Example Error Responses
+
+**404 Not Found:**
+```json
+{
+  "error": "Not Found",
+  "message": "The requested resource was not found",
+  "path": "/nonexistent",
+  "method": "GET"
+}
+```
+
+**503 Service Unavailable:**
+```json
+{
+  "error": "EPG not loaded yet",
+  "message": "EPG not loaded yet",
+  "path": "/xmltv.xml",
+  "timestamp": "2025-12-30T20:00:00.000Z"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Internal Server Error",
+  "message": "An unexpected error occurred",
+  "path": "/lineup.m3u",
+  "timestamp": "2025-12-30T20:00:00.000Z"
+}
+```
+
+## Reverse Proxy Support
+
+The server fully supports reverse proxy deployments with proper header forwarding.
+
+### Supported Headers
+
+The following headers are honored for base URL generation:
+
+- `X-Forwarded-Proto` - Protocol (http/https)
+- `X-Forwarded-Protocol` - Alternative protocol header
+- `X-Url-Scheme` - Alternative protocol header
+- `X-Forwarded-Ssl` - Set to "on" for HTTPS
+- `X-Forwarded-Host` - Original host header
+
+### Example Configuration
+
+**Nginx:**
+```nginx
+location / {
+    proxy_pass http://localhost:34400;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+```
+
+**Apache:**
+```apache
+<Location />
+    ProxyPass http://localhost:34400/
+    ProxyPassReverse http://localhost:34400/
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Host "%{HTTP_HOST}e"
+</Location>
+```
+
+## Health Check Endpoints
+
+### GET /health
+
+Basic health check that returns 200 if the server is running.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-12-30T20:00:00.000Z"
+}
+```
+
+### GET /health/live
+
+Liveness probe for Kubernetes or Docker health checks. Indicates if the server process is running.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Server is alive",
+  "timestamp": "2025-12-30T20:00:00.000Z"
+}
+```
+
+### GET /health/ready
+
+Readiness probe that checks if the server is ready to handle requests. Returns 200 if ready, 503 if not ready.
+
+**Response (Ready):**
+```json
+{
+  "timestamp": "2025-12-30T20:00:00.000Z",
+  "ready": true,
+  "checks": {
+    "channels": {
+      "status": "ok",
+      "count": 42,
+      "available": true
+    },
+    "channelsFile": {
+      "status": "ok",
+      "size": 12345,
+      "modified": "2025-12-30T19:00:00.000Z"
+    }
+  }
+}
+```
+
+**Response (Not Ready):**
+```json
+{
+  "timestamp": "2025-12-30T20:00:00.000Z",
+  "ready": false,
+  "checks": {
+    "channels": {
+      "status": "warning",
+      "count": 0,
+      "available": false,
+      "message": "No channels loaded"
+    },
+    "channelsFile": {
+      "status": "ok",
+      "size": 2,
+      "modified": "2025-12-30T19:00:00.000Z"
+    }
+  }
+}
+```
+
 ## Diagnostics Endpoints
 
 ### GET /status
@@ -181,11 +347,10 @@ GET /xmltv.xml?source=TestSource
 GET /xmltv.xml?channels=test1,test2,demo1
 ```
 
-## Existing Endpoints (Unchanged)
+## Existing Endpoints
 
-The following endpoints remain unchanged:
+The following endpoints remain available:
 
-- `GET /health` - Basic health check
 - `GET /lineup.json` - JSON lineup for HDHomeRun compatibility
 - `GET /channels` - List all channels
 - `GET /api/config/m3u` - Get M3U configuration
@@ -203,3 +368,5 @@ The following endpoints remain unchanged:
 - `GET /api/mapping/candidates` - Get mapping candidates
 - `GET /api/mapping/unmapped` - Get unmapped channels
 - `GET /api/mapping/conflicts` - Get mapping conflicts
+
+All endpoints now include proper error handling and will return appropriate HTTP status codes with detailed error messages.
