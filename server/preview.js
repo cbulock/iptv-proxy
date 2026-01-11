@@ -8,14 +8,12 @@ import fs from 'fs';
 import axios from 'axios';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import RateLimit from 'express-rate-limit';
-import pLimit from 'p-limit';
 import { validateConfigData } from '../libs/config-loader.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
 const router = express.Router();
-const limit = pLimit(3);
 
 // Rate limiter for preview endpoints
 const previewLimiter = RateLimit({
