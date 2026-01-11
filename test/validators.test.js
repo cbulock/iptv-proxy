@@ -94,12 +94,12 @@ export function validateXMLTVFormat(xmlContent) {
   const trimmedContent = xmlContent.trim();
   
   // Check for XML declaration (optional but recommended)
-  if (!trimmedContent.includes('<?xml')) {
+  if (!/^\s*<\?xml/i.test(trimmedContent)) {
     warnings.push('XMLTV file missing XML declaration');
   }
 
-  // Check for root <tv> element
-  if (!trimmedContent.includes('<tv')) {
+  // Check for root <tv> element (must be an actual tag, not in comments/text)
+  if (!/<tv[\s>]/i.test(trimmedContent)) {
     errors.push('XMLTV file must have <tv> root element');
     return { isValid: false, errors, warnings };
   }
