@@ -33,7 +33,7 @@
     "escape-html": "^1.0.3",
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.1",
-    "fast-xml-parser": "^5.2.5",
+    "fast-xml-parser": "^5.3.4",
     "joi": "^18.0.2",
     "node-cron": "^4.2.1",
     "node-ssdp": "^4.0.1",
