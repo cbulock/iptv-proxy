@@ -121,6 +121,7 @@ router.put('/api/config/m3u', configWriteLimiter, (req, res) => {
     fs.writeFileSync(M3U_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {
+    console.error('Error writing m3u.yaml:', e);
     res.status(500).json({ 
       error: 'Failed to write m3u.yaml', 
       detail: e.message,
@@ -141,6 +142,7 @@ router.put('/api/config/epg', configWriteLimiter, (req, res) => {
     fs.writeFileSync(EPG_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {
+    console.error('Error writing epg.yaml:', e);
     res.status(500).json({ 
       error: 'Failed to write epg.yaml', 
       detail: e.message,
@@ -161,6 +163,7 @@ router.put('/api/config/app', configWriteLimiter, (req, res) => {
     fs.writeFileSync(APP_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {
+    console.error('Error writing app.yaml:', e);
     res.status(500).json({ 
       error: 'Failed to write app.yaml', 
       detail: e.message,
@@ -180,8 +183,7 @@ router.put('/api/config/channel-map', configWriteLimiter, (req, res) => {
     const yamlText = yaml.stringify(validation.value || {});
     fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
-  } catch (e) {
-    res.status(500).json({ 
+  } catch (e) {    console.error('Error writing channel-map.yaml:', e);    res.status(500).json({ 
       error: 'Failed to write channel-map.yaml', 
       detail: e.message,
       fix: 'Check file permissions on the config directory and ensure disk space is available.'
