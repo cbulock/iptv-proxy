@@ -39,9 +39,6 @@ RUN chmod +x /usr/src/app/healthcheck.sh
 RUN mkdir -p /config /data && \
     chmod 777 /config /data
 
-# Install su-exec for privilege dropping (optional)
-RUN apk add --no-cache su-exec
-
 # Set config and data directory paths
 ENV CONFIG_PATH=/config
 ENV DATA_PATH=/data
