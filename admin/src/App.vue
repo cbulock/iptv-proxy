@@ -381,7 +381,7 @@ async function saveChannels() {
   state.savingChannels = true;
   const cleaned = state.channelSources
       .filter((u) => u.name && u.url)
-      .map(u => ({ ...u, type: u.type ? String(u.type).toLowerCase() : 'm3u' }));
+      .map(u => ({ name: u.name, url: u.url, type: u.type ? String(u.type).toLowerCase() : 'm3u' }));
     const body = { urls: cleaned };
     const r = await fetch("/api/config/m3u", {
       method: "PUT",
@@ -421,7 +421,7 @@ async function reloadChannels() {
 async function saveEPG() {
   try {
     state.savingEPG = true;
-    const cleaned = state.epgSources.filter(u => u.name && u.url);
+    const cleaned = state.epgSources.filter(u => u.name && u.url).map(u => ({ name: u.name, url: u.url }));
     const body = { urls: cleaned };
     const r = await fetch('/api/config/epg', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
