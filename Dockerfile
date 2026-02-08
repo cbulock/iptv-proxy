@@ -23,23 +23,15 @@ WORKDIR /usr/src/app
 # Copy production dependencies
 COPY --from=deps /build/node_modules ./node_modules
 
-# Copy application source
-COPY package*.json ./
-COPY index.js ./
-COPY libs ./libs
-COPY scripts ./scripts
-COPY server ./server
-COPY public ./public
+# Copy healthcheck and entrypoint
 COPY healthcheck.sh ./
+COPY entrypoint.sh ./
+RUN chmod +x /usr/src/app/entrypoint.sh /usr/src/app/healthcheck.sh
 
-# Create non-root user for security and config/data directories
-RUN mkdir -p /config /data && \
-    chmod 777 /config /data && \
-    addgroup -g 1001 -S appuser && \
-    adduser -u 1001 -S appuser -G appuser && \
-    chown -R appuser:appuser /usr/src/app
+# Create mounted volume directories (permissions will be handled at runtime)
+RUN mkdir -p /config /data
 
-# Install su-exec for dropping privileges (optional, not used currently)
+# Install su-exec for privilege dropping and other utilities
 RUN apk add --no-cache su-exec
 
 # Set config and data directory paths
@@ -55,5 +47,5 @@ EXPOSE 34400
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD /bin/sh /usr/src/app/healthcheck.sh
 
-# Run the server
-CMD ["node", "index.js"]
+# Use entrypoint script to handle permissions and optional user switching
+ENTRYPOINT ["/usr/src/app/entrypoint.sh"]

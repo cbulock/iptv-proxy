@@ -133,18 +133,25 @@ docker run -d \
   iptv-proxy
 ```
 
-**Note:** The config and data directory locations are determined by the `CONFIG_PATH` and `DATA_PATH` environment variables (defaults to `/config` and `/data` in Docker). If you need to use different paths, you can override them:
+**Permissions are handled automatically** — the container will ensure the mounted directories are writable on startup.
+
+**Optional: Run with a specific user ID** (recommended for multi-user systems):
 
 ```bash
+# Get your UID
+id -u  # e.g., 1000
+
 docker run -d \
   --name iptv-proxy \
   -p 34400:34400 \
-  -e CONFIG_PATH=/custom/config/path \
-  -e DATA_PATH=/custom/data/path \
-  -v /absolute/path/to/your/project/config:/custom/config/path \
-  -v /absolute/path/to/your/project/data:/custom/data/path \
+  -e USER_ID=1000 \
+  -e GROUP_ID=1000 \
+  -v /absolute/path/to/your/project/config:/config \
+  -v /absolute/path/to/your/project/data:/data \
   iptv-proxy
 ```
+
+This will run the container as your user, so files are owned by you instead of root.
 
 ---
 
