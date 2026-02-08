@@ -16,6 +16,8 @@ const CHANNELS_FILE = getDataPath('channels.json');
 const healthLimiter = RateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 60, // limit each IP to 60 requests per minute
+  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: (req) => req.ip || 'unknown',
 });
 
 const channelHealthLimiter = rateLimit({
@@ -23,6 +25,8 @@ const channelHealthLimiter = rateLimit({
   max: 60, // limit each IP to 60 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: (req) => req.ip || 'unknown',
 });
 
 // Basic health check endpoint for Docker and monitoring

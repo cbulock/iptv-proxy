@@ -19,6 +19,8 @@ const router = express.Router();
 const previewLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50, // limit each IP to 50 preview requests per window
+  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: (req) => req.ip || 'unknown',
   message: {
     error: 'Too many preview requests from this IP, please try again later.',
   },

@@ -15,6 +15,8 @@ const RECENT_ERROR_LIMIT = 10;  // Number of recent errors to show in status
 const statusLimiter = RateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 30, // limit each IP to 30 requests per minute
+  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: (req) => req.ip || 'unknown',
 });
 
 // Track parsing errors and source status

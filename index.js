@@ -69,6 +69,8 @@ const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
 const adminLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
+  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: (req) => req.ip || 'unknown',
 });
 
 app.get(['/', '/admin', '/admin.html'], adminLimiter, (req, res) => {
