@@ -806,8 +806,8 @@ function rowKeyFn(row) {
 }
 
 const mappingColumns = [
-  { title: 'EPG Channel', key: 'name', render(row) { return h(NSelect, { filterable: true, options: state.candidates.epgNames.map(n => ({ label: n, value: n })), value: row?.name ?? '', onUpdateValue: v => row.name = v }); } },
-  { title: 'M3U Channel', key: 'tvg_id', render(row) { return h(NSelect, { filterable: true, options: (state.candidates.tvgOptions?.length ? state.candidates.tvgOptions : state.candidates.tvgIds.map(n => ({ label: n, value: n }))), value: row?.tvg_id ?? '', onUpdateValue: v => row.tvg_id = v }); } },
+  { title: 'EPG Channel', key: 'name', render(row) { return h(NSelect, { filterable: true, creatable: true, options: state.candidates.epgNames.map(n => ({ label: n, value: n })), value: row?.name ?? '', onUpdateValue: v => row.name = v }); } },
+  { title: 'M3U Channel', key: 'tvg_id', render(row) { return h(NSelect, { filterable: true, creatable: true, options: (state.candidates.tvgOptions?.length ? state.candidates.tvgOptions : state.candidates.tvgIds?.map(n => ({ label: n, value: n })) || []), value: row?.tvg_id ?? '', onUpdateValue: v => row.tvg_id = v }); } },
   { title: 'Channel Number', key: 'number', render(row) { return h(NInput, { value: row?.number ?? '', onUpdateValue: v => row.number = v, placeholder: 'e.g. 101' }); } },
   { title: 'Remove', key: 'remove', render(row) { return h(NButton, { type:'error', size:'small', onClick: () => removeMappingRow(state.mappingRows.indexOf(row)) }, { default: () => '✕' }); } }
 ];

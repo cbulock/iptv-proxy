@@ -243,6 +243,29 @@ router.get('/api/mapping/epg-channels', readLimiter, async (req, res) => {
   }
 });
 
+// Get raw M3U channel IDs (before mapping is applied)
+// This shows the tvg_ids that come directly from the M3U sources
+router.get('/api/mapping/m3u-channels', readLimiter, async (req, res) => {
+  try {
+    const m3u = loadM3U();
+    const m3uChannels = [];
+    
+    if (m3u && m3u.urls && Array.isArray(m3u.urls)) {
+      for (const source of m3u.urls) {
+        m3uChannels.push({
+          source: source.name || 'Unknown',
+          url: source.url,
+          type: source.type || 'm3u'
+        });
+      }
+    }
+    
+    res.json({ m3uSources: m3uChannels });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load M3U sources', detail: e.message });
+  }
+});
+
 // Helper data endpoints for mapping UI
 router.get('/api/mapping/candidates', async (req, res) => {
   try {
@@ -279,11 +302,22 @@ router.get('/api/mapping/candidates', async (req, res) => {
     // Get unique channel names from CURRENT channels
     const epgNames = Array.from(new Set(channels.map(c => c.name))).sort();
     
+    // Also include original M3U tvg_ids from the sources (before mapping)
+    // This allows users to map to the correct M3U tvg_id even if it's not yet in channels.json
+    const originalTvgMap = new Map();
+    for (const c of channels) {
+      const originalId = c.tvg_id; // This is what the M3U provided before mapping
+      if (originalId && !originalTvgMap.has(originalId)) {
+        originalTvgMap.set(originalId, c.name || originalId);
+      }
+    }
+    
     res.json({ 
       epgNames, 
       tvgOptions,
       m3uSources,
-      epgSources
+      epgSources,
+      originalTvgIds: Array.from(originalTvgMap.keys())
     });
   } catch (e) {
     res.status(500).json({ error: 'Failed to load candidates', detail: e.message });
