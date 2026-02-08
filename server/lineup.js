@@ -171,27 +171,17 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         res.status(response.status || 200).end();
         console.info('[stream] %s/%s head ok in %dms', source, name, Date.now() - startTime);
       } catch (err) {
-        // HEAD failed, try a quick GET with abort after headers
-        try {
-          const response = await axios.get(channel.original_url, {
-            timeout: 5000,
-            responseType: 'stream',
-            maxContentLength: 1024 * 8,
-          });
-          res.set(response.headers);
-          response.data.destroy(); // abort stream
-          res.status(response.status || 200).end();
-          console.info('[stream] %s/%s head fallback (GET) ok in %dms', source, name, Date.now() - startTime);
-        } catch (getErr) {
-          console.warn(
-            '[stream] head failed %s/%s: %s (and GET fallback failed: %s)',
-            source,
-            name,
-            err.message,
-            getErr.message
-          );
-          res.status(502).end();
-        }
+        console.warn(
+          '[stream] head failed %s/%s: %s',
+          source,
+          name,
+          err.message,
+          {
+            status: err.response?.status,
+            code: err.code
+          }
+        );
+        res.status(502).end();
       }
       return;
     }
