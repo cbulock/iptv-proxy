@@ -1,6 +1,7 @@
 import fs from 'fs';
 import express from 'express';
 import yaml from 'yaml';
+import axios from 'axios';
 import RateLimit from 'express-rate-limit';
 import { parseAll } from '../scripts/parseM3U.js';
 import { refreshEPG } from './epg.js';
@@ -353,8 +354,6 @@ router.get('/api/mapping/m3u-channels', readLimiter, async (req, res) => {
 // Helper data endpoints for mapping UI
 router.get('/api/mapping/candidates', async (req, res) => {
   try {
-    const channels = getChannels();
-    
     // Get M3U sources for reference
     const m3u = loadM3U();
     const m3uSources = m3u?.urls?.map(u => u.name) || [];
@@ -363,87 +362,107 @@ router.get('/api/mapping/candidates', async (req, res) => {
     const epg = loadEPG();
     const epgSources = epg?.urls?.map(u => u.name) || [];
     
-    // Get all available M3U tvg_ids from sources
-    let m3uTvgIds = [];
-    try {
-      // Inline M3U parsing to get available tvg_ids
-      if (m3u?.urls && Array.isArray(m3u.urls)) {
-        for (const source of m3u.urls) {
-          if (!source.url || !source.name) continue;
+    // Parse M3U files directly to get tvg_ids (not from cached channels.json)
+    const tvgMap = new Map(); // key: tvg_id, value: { name, sources }
+    
+    if (m3u?.urls && Array.isArray(m3u.urls)) {
+      for (const source of m3u.urls) {
+        if (!source.url || !source.name) continue;
+        
+        try {
+          let data;
           
-          try {
-            let data;
+          if (source.url.startsWith('file://')) {
+            // Local file
+            const filePath = source.url.replace('file://', '');
+            console.log(`[Mapping] Parsing local M3U: ${filePath}`);
+            data = fs.readFileSync(filePath, 'utf8');
+          } else if (source.type === 'hdhomerun') {
+            // HDHomeRun discovery
+            console.log(`[Mapping] Fetching HDHomeRun lineup from: ${source.url}`);
+            const discovery = await axios.get(`${source.url}/discover.json`, { timeout: 10000 });
+            const deviceInfo = discovery.data;
+            const lineup = (await axios.get(`${deviceInfo.BaseURL}/lineup.json`, { timeout: 10000 })).data;
             
-            if (source.url.startsWith('file://')) {
-              const filePath = source.url.replace('file://', '');
-              data = fs.readFileSync(filePath, 'utf8');
-            } else if (source.type === 'hdhomerun') {
-              const discovery = await axios.get(`${source.url}/discover.json`);
-              const deviceInfo = discovery.data;
-              const lineup = (await axios.get(`${deviceInfo.BaseURL}/lineup.json`)).data;
-              
-              for (const chan of lineup) {
-                if (chan.GuideNumber) {
-                  m3uTvgIds.push({ value: chan.GuideNumber, label: `${chan.GuideName} (${chan.GuideNumber})` });
+            for (const chan of lineup) {
+              if (chan.GuideNumber) {
+                const tvgId = chan.GuideNumber;
+                if (!tvgMap.has(tvgId)) {
+                  tvgMap.set(tvgId, { name: chan.GuideName || chan.GuideNumber, sources: new Set() });
                 }
-              }
-              continue;
-            } else {
-              const response = await axios.get(source.url, {
-                timeout: 30000,
-                maxContentLength: 50 * 1024 * 1024,
-                validateStatus: (status) => status === 200
-              });
-              data = response.data;
-            }
-            
-            if (typeof data === 'string') {
-              const lines = data.split('\n');
-              let currentName = '';
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (trimmed.startsWith('#EXTINF')) {
-                  const tvgIdMatch = trimmed.match(/tvg-id="(.*?)"/);
-                  const nameMatch = trimmed.match(/,(.*)$/);
-                  if (tvgIdMatch && tvgIdMatch[1]) {
-                    currentName = nameMatch ? nameMatch[1].trim() : '';
-                    m3uTvgIds.push({ 
-                      value: tvgIdMatch[1], 
-                      label: `${currentName} (${tvgIdMatch[1]})`
-                    });
-                  }
-                }
+                tvgMap.get(tvgId).sources.add(source.name);
               }
             }
-          } catch (err) {
-            console.warn(`[Mapping] Failed to parse M3U source "${source.name}": ${err.message}`);
+            continue;
+          } else {
+            // HTTP/HTTPS M3U
+            console.log(`[Mapping] Fetching M3U from: ${source.url}`);
+            const response = await axios.get(source.url, {
+              timeout: 30000,
+              maxContentLength: 50 * 1024 * 1024,
+              validateStatus: (status) => status === 200
+            });
+            data = response.data;
           }
+          
+          // Parse M3U file
+          if (typeof data === 'string') {
+            const lines = data.split('\n');
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('#EXTINF')) {
+                const tvgIdMatch = trimmed.match(/tvg-id="(.*?)"/);
+                const nameMatch = trimmed.match(/,(.*)$/);
+                
+                if (tvgIdMatch && tvgIdMatch[1]) {
+                  const tvgId = tvgIdMatch[1];
+                  const name = nameMatch ? nameMatch[1].trim() : tvgId;
+                  
+                  if (!tvgMap.has(tvgId)) {
+                    tvgMap.set(tvgId, { name, sources: new Set() });
+                  }
+                  tvgMap.get(tvgId).sources.add(source.name);
+                }
+              }
+            }
+            console.log(`[Mapping] Parsed ${tvgMap.size} tvg_ids from M3U source: ${source.name}`);
+          }
+        } catch (err) {
+          console.error(`[Mapping] Failed to parse M3U source "${source.name}": ${err.message}`);
         }
       }
-    } catch (err) {
-      console.warn(`[Mapping] Error building M3U tvg_id list: ${err.message}`);
     }
     
-    // Remove duplicates based on value
-    const seenValues = new Set();
-    const uniqueM3uTvgIds = m3uTvgIds.filter(item => {
-      if (seenValues.has(item.value)) return false;
-      seenValues.add(item.value);
-      return true;
-    }).sort((a, b) => a.label.localeCompare(b.label));
+    // Convert to dropdown options format
+    const tvgOptions = Array.from(tvgMap.entries())
+      .map(([tvgId, data]) => ({
+        value: tvgId,
+        label: `${data.name} (${tvgId})`,
+        sources: Array.from(data.sources).join(', ')
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
     
-    // Get unique channel names from CURRENT channels
-    const epgNames = Array.from(new Set(channels.map(c => c.name))).sort();
+    console.log(`[Mapping] Total unique tvg_ids available: ${tvgOptions.length}`);
     
+    // Get EPG channel names for reference
+    const epgNames = [];
     res.json({ 
       epgNames, 
-      tvgOptions: uniqueM3uTvgIds,
+      tvgOptions,
       m3uSources,
-      epgSources
+      epgSources,
+      debug: {
+        uniqueTvgIds: tvgOptions.length,
+        m3uSourcesParsed: m3uSources.length
+      }
     });
   } catch (e) {
-    console.error(`[Mapping] Failed to load candidates: ${e.message}`);
-    res.status(500).json({ error: 'Failed to load candidates', detail: e.message });
+    console.error(`[Mapping] Error in candidates endpoint: ${e.message}`);
+    console.error(e.stack);
+    res.status(500).json({ 
+      error: 'Failed to load candidates', 
+      detail: e.message 
+    });
   }
 });
 
