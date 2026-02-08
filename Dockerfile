@@ -36,10 +36,14 @@ COPY healthcheck.sh ./
 RUN mkdir -p /config && \
     addgroup -g 1001 -S appuser && \
     adduser -u 1001 -S appuser -G appuser && \
-    chown -R appuser:appuser /usr/src/app /config
+    chown -R appuser:appuser /usr/src/app
 
-# Switch to non-root user
-USER appuser
+# Create entrypoint script that fixes bind mount permissions and starts app
+RUN echo '#!/bin/sh\nset -e\n# Fix config directory permissions for bind mounts\nchmod 777 /config 2>/dev/null || true\nchown -R appuser:appuser /config 2>/dev/null || true\n# Run app as appuser\nexec su-exec appuser node index.js' > /usr/src/app/entrypoint.sh && \
+    chmod +x /usr/src/app/entrypoint.sh
+
+# Install su-exec for dropping privileges
+RUN apk add --no-cache su-exec
 
 # Set config directory path
 ENV CONFIG_PATH=/config
@@ -53,5 +57,5 @@ EXPOSE 34400
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD /bin/sh /usr/src/app/healthcheck.sh
 
-# Run the server
-CMD ["node", "index.js"]
+# Run via entrypoint
+ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
