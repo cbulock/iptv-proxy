@@ -41,8 +41,9 @@ RUN mkdir -p /config /data && \
 # Install su-exec for dropping privileges (optional, not used currently)
 RUN apk add --no-cache su-exec
 
-# Set config directory path
+# Set config and data directory paths
 ENV CONFIG_PATH=/config
+ENV DATA_PATH=/data
 
 VOLUME ["/config", "/data"]
 

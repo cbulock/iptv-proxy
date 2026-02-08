@@ -133,15 +133,16 @@ docker run -d \
   iptv-proxy
 ```
 
-**Note:** The config directory location is determined by the `CONFIG_PATH` environment variable (defaults to `/config` in Docker). If you need to use a different path, you can override it:
+**Note:** The config and data directory locations are determined by the `CONFIG_PATH` and `DATA_PATH` environment variables (defaults to `/config` and `/data` in Docker). If you need to use different paths, you can override them:
 
 ```bash
 docker run -d \
   --name iptv-proxy \
   -p 34400:34400 \
   -e CONFIG_PATH=/custom/config/path \
+  -e DATA_PATH=/custom/data/path \
   -v /absolute/path/to/your/project/config:/custom/config/path \
-  -v /absolute/path/to/your/project/data:/data \
+  -v /absolute/path/to/your/project/data:/custom/data/path \
   iptv-proxy
 ```
 
