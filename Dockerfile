@@ -23,6 +23,14 @@ WORKDIR /usr/src/app
 # Copy production dependencies
 COPY --from=deps /build/node_modules ./node_modules
 
+# Copy application files
+COPY package*.json ./
+COPY index.js ./
+COPY libs ./libs
+COPY scripts ./scripts
+COPY server ./server
+COPY public ./public
+
 # Copy healthcheck and entrypoint
 COPY healthcheck.sh ./
 COPY entrypoint.sh ./
