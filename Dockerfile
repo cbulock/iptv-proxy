@@ -31,15 +31,13 @@ COPY scripts ./scripts
 COPY server ./server
 COPY public ./public
 COPY healthcheck.sh ./
+COPY entrypoint.sh ./
 
 # Create non-root user for security and config directory
 RUN mkdir -p /config && \
     addgroup -g 1001 -S appuser && \
     adduser -u 1001 -S appuser -G appuser && \
-    chown -R appuser:appuser /usr/src/app
-
-# Create entrypoint script that fixes bind mount permissions and starts app
-RUN echo '#!/bin/sh\nset -e\necho "Starting entrypoint..."\necho "Fixing config directory permissions..."\nls -la /config || echo "Config dir does not exist yet"\nchmod -R 777 /config 2>&1 || echo "chmod failed"\nchown -R root:root /config 2>&1 || echo "chown failed"\nls -la /config || echo "Config dir check failed"\necho "Permissions fixed, starting Node app..."\nnode index.js' > /usr/src/app/entrypoint.sh && \
+    chown -R appuser:appuser /usr/src/app && \
     chmod +x /usr/src/app/entrypoint.sh
 
 # Install su-exec for dropping privileges (optional, not used currently)
