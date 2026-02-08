@@ -39,7 +39,7 @@ RUN mkdir -p /config && \
     chown -R appuser:appuser /usr/src/app
 
 # Create entrypoint script that fixes bind mount permissions and starts app
-RUN echo '#!/bin/sh\nset -e\n# Fix config directory permissions for bind mounts\nchmod 777 /config 2>/dev/null || true\nchown -R appuser:appuser /config 2>/dev/null || true\n# Run app as appuser\nexec su-exec appuser node index.js' > /usr/src/app/entrypoint.sh && \
+RUN echo '#!/bin/sh\nset -e\n# Fix config directory permissions for bind mounts\nchmod -R 777 /config 2>/dev/null || true\nchown -R appuser:appuser /config 2>/dev/null || true\n# Run app as appuser\nexec su-exec appuser node index.js' > /usr/src/app/entrypoint.sh && \
     chmod +x /usr/src/app/entrypoint.sh
 
 # Install su-exec for dropping privileges
