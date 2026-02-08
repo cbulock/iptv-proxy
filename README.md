@@ -114,7 +114,7 @@ Use this file to normalize channel metadata. You can define mapping by either ch
 
 ## Running in Docker
 
-You can build and run IPTV-Proxy in a container. The folder `/config` inside the container is where your YAML configs live, so you must mount your host `config/` directory there.
+You can build and run IPTV-Proxy in a container. The folder `/config` contains your YAML configs and `/data` contains generated files (like `channels.json`), so you must mount both directories from your host.
 
 ### Build the image
 
@@ -129,6 +129,7 @@ docker run -d \
   --name iptv-proxy \
   -p 34400:34400 \
   -v /absolute/path/to/your/project/config:/config \
+  -v /absolute/path/to/your/project/data:/data \
   iptv-proxy
 ```
 
@@ -140,6 +141,7 @@ docker run -d \
   -p 34400:34400 \
   -e CONFIG_PATH=/custom/config/path \
   -v /absolute/path/to/your/project/config:/custom/config/path \
+  -v /absolute/path/to/your/project/data:/data \
   iptv-proxy
 ```
 
@@ -265,6 +267,7 @@ services:
       - "34400:34400"
     volumes:
       - ./config:/config
+      - ./data:/data
     environment:
       - TZ=America/New_York
       # Optional: Set explicit base URL if auto-detection doesn't work
