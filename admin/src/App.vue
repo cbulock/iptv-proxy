@@ -390,8 +390,10 @@ async function saveChannels() {
     });
     const j = await r.json();
   if (!r.ok) throw new Error(j.error || "Save channels failed");
-  setStatus("Channels saved. Reload channels to apply.");
+  setStatus("Channels saved. Reloading...");
   message.success('Channels saved');
+  // Automatically reload channels after save
+  await reloadChannels();
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
@@ -428,8 +430,10 @@ async function saveEPG() {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Save EPG failed');
-    setStatus('EPG saved. Reload EPG to apply.');
+    setStatus('EPG saved. Reloading...');
     message.success('EPG saved');
+    // Automatically reload EPG after save
+    await reloadEPG();
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
