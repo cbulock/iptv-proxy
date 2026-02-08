@@ -31,15 +31,15 @@ COPY scripts ./scripts
 COPY server ./server
 COPY public ./public
 
-# Copy healthcheck and entrypoint
+# Copy healthcheck
 COPY healthcheck.sh ./
-COPY entrypoint.sh ./
-RUN chmod +x /usr/src/app/entrypoint.sh /usr/src/app/healthcheck.sh
+RUN chmod +x /usr/src/app/healthcheck.sh
 
-# Create mounted volume directories (permissions will be handled at runtime)
-RUN mkdir -p /config /data
+# Create mounted volume directories with world-writable permissions
+RUN mkdir -p /config /data && \
+    chmod 777 /config /data
 
-# Install su-exec for privilege dropping and other utilities
+# Install su-exec for privilege dropping (optional)
 RUN apk add --no-cache su-exec
 
 # Set config and data directory paths
@@ -55,5 +55,5 @@ EXPOSE 34400
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD /bin/sh /usr/src/app/healthcheck.sh
 
-# Use entrypoint script to handle permissions and optional user switching
-ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+# Run the application
+CMD ["node", "index.js"]
