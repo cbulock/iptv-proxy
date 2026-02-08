@@ -218,25 +218,73 @@ router.post('/api/reload/epg', async (req, res) => {
   }
 });
 
+// Get available EPG channels (from all configured EPG sources)
+router.get('/api/mapping/epg-channels', readLimiter, async (req, res) => {
+  try {
+    const epg = loadEPG();
+    const epgChannels = [];
+    
+    if (epg && epg.urls && Array.isArray(epg.urls)) {
+      for (const source of epg.urls) {
+        if (!source.url) continue;
+        
+        // Extract channel IDs from merged XMLTV (simple parsing)
+        // In production, this would read from the merged EPG file
+        epgChannels.push({
+          source: source.name || 'Unknown',
+          url: source.url
+        });
+      }
+    }
+    
+    res.json({ epgSources: epgChannels });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load EPG sources', detail: e.message });
+  }
+});
+
 // Helper data endpoints for mapping UI
 router.get('/api/mapping/candidates', async (req, res) => {
   try {
-    const epg = loadEPG();
     const channels = getChannels();
+    
+    // Get M3U sources for reference
+    const m3u = loadM3U();
+    const m3uSources = m3u?.urls?.map(u => u.name) || [];
+    
+    // Get EPG sources for reference
+    const epg = loadEPG();
+    const epgSources = epg?.urls?.map(u => u.name) || [];
+    
+    // Build tvg options from CURRENT channels (not stale data)
     const tvgMap = new Map();
+    const sourceMap = new Map(); // track which source provides each tvg_id
+    
     for (const c of channels) {
       if (!c.tvg_id) continue;
       if (!tvgMap.has(c.tvg_id)) {
         tvgMap.set(c.tvg_id, c.name || c.tvg_id);
+        sourceMap.set(c.tvg_id, c.source || 'Unknown');
       }
     }
-    const tvgIds = Array.from(tvgMap.keys()).sort();
+    
     const tvgOptions = Array.from(tvgMap.entries())
-      .map(([id, name]) => ({ value: id, label: `${name} (${id})` }))
+      .map(([id, name]) => ({ 
+        value: id, 
+        label: `${name} (${id})`,
+        source: sourceMap.get(id)
+      }))
       .sort((a, b) => a.label.localeCompare(b.label));
-    // EPG display-names will come from merged XML normally; fall back to channel names grouped by source
+    
+    // Get unique channel names from CURRENT channels
     const epgNames = Array.from(new Set(channels.map(c => c.name))).sort();
-    res.json({ epgNames, tvgIds, tvgOptions });
+    
+    res.json({ 
+      epgNames, 
+      tvgOptions,
+      m3uSources,
+      epgSources
+    });
   } catch (e) {
     res.status(500).json({ error: 'Failed to load candidates', detail: e.message });
   }
