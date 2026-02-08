@@ -1,0 +1,8 @@
+node_modules
+public
+data
+config
+admin/dist
+admin/node_modules
+package-lock.json
+admin/package-lock.json

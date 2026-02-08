@@ -1,6 +1,7 @@
 node_modules
-config
+config/*
+!config/examples
 data
 
 # Ignore the admin build output folder
-public/admin 
+public/admin

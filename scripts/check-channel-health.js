@@ -1,17 +1,18 @@
 import fs from 'fs/promises';
 import axios from 'axios';
-import yaml from 'yaml';
+import { loadConfig } from '../libs/config-loader.js';
 import pLimit from 'p-limit';
+import { getDataPath } from '../libs/paths.js';
 
-const CHANNELS_FILE = './data/channels.json';
-const STATUS_FILE = './data/lineup_status.json';
-const LAST_LOG_FILE = './data/lineup_health_last.json';
+const CHANNELS_FILE = getDataPath('channels.json');
+const STATUS_FILE = getDataPath('lineup_status.json');
+const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
 
 let config;
 let baseUrl = 'http://localhost:3000';
 async function loadBaseUrl() {
     try {
-        config = yaml.parse(await fs.readFile('./config/app.yaml', 'utf8'));
+        config = loadConfig('app');
         if (config && config.base_url) baseUrl = config.base_url;
     } catch (err) {
         // fallback to default, do not exit

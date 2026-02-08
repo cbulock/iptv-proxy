@@ -1,0 +1,113 @@
+# EPG (Electronic Program Guide) Sources Configuration
+# This file defines XMLTV sources that provide program guide data for your channels.
+
+urls:
+  # ============================================================================
+  # Remote XMLTV Sources
+  # ============================================================================
+  
+  # EPG from a streaming service or IPTV provider
+  - name: "Premium IPTV"
+    url: "https://example.com/iptv/epg.xml"
+  
+  # EPG from ErsatzTV (local media server)
+  - name: "ErsatzTV"
+    url: "http://192.168.1.100:8409/iptv/xmltv.xml"
+  
+  # EPG from Plex DVR
+  - name: "Plex DVR"
+    url: "http://plex.local:32400/livetv/epg.xml"
+  
+  # EPG from Jellyfin
+  - name: "Jellyfin"
+    url: "http://jellyfin.local:8096/LiveTv/xmltv.xml"
+  
+  # EPG with authentication (URL-encoded credentials)
+  - name: "Authenticated EPG"
+    url: "https://username:password@secure-epg.com/guide.xml"
+  
+  # ============================================================================
+  # Local XMLTV Files
+  # ============================================================================
+  
+  # Local EPG file (e.g., from HDHomeRun DVR or manual export)
+  - name: "HDHomeRun"
+    url: "file://./data/hdhr-epg.xml"
+  
+  # Local EPG file from Schedules Direct export
+  # - name: "Schedules Direct"
+  #   url: "file://./data/schedules-direct.xml"
+  
+  # ============================================================================
+  # Third-Party EPG Aggregators
+  # ============================================================================
+  
+  # Gracenote EPG (via HDHomeRun DVR or compatible service)
+  # - name: "Gracenote"
+  #   url: "http://hdhomerun-dvr.local/xmltv.xml"
+  
+  # TV Guide / Zap2it data (via compatible service)
+  # - name: "TV Guide"
+  #   url: "https://tvguide-api.example.com/xmltv.xml"
+  
+  # European EPG services (e.g., xmltv.co.uk, xmltv.se)
+  # - name: "XMLTV UK"
+  #   url: "https://xmltv.co.uk/feed/1234567890"
+  
+  # ============================================================================
+  # Edge Cases and Advanced Scenarios
+  # ============================================================================
+  
+  # Large EPG files (100+ MB) - may take longer to process
+  # - name: "Large EPG"
+  #   url: "https://large-epg-provider.com/full-guide.xml"
+  
+  # EPG source with custom headers (requires code modification)
+  # - name: "Custom Headers EPG"
+  #   url: "https://api.epg-service.com/xmltv"
+  
+  # Compressed EPG (gzipped XMLTV) - requires manual decompression
+  # - name: "Compressed EPG"
+  #   url: "https://epg-provider.com/guide.xml.gz"
+  
+  # EPG behind a reverse proxy with SSL
+  # - name: "Proxied EPG"
+  #   url: "https://proxy.example.com:8443/epg/xmltv.xml"
+
+# ============================================================================
+# Configuration Notes:
+# ============================================================================
+# 
+# - Each EPG source must have a unique "name" (should match the M3U source name for best results)
+# - The "name" is used to associate EPG data with channels from the corresponding M3U source
+# - EPG files are merged together - duplicate program entries are preserved
+# - Channels in the EPG must have matching channel IDs with the tvg-id in your M3U
+# - Use channel-map.yaml to ensure tvg-id consistency between M3U and EPG sources
+# - EPG data is cached and refreshed periodically (configurable via scheduler)
+# - Local files (file://) are read from disk, remote files are downloaded via HTTP(S)
+# 
+# ============================================================================
+# Channel ID Matching:
+# ============================================================================
+# 
+# For EPG data to appear in your media player:
+# 1. M3U channels must have a tvg-id attribute (e.g., tvg-id="nbc.1")
+# 2. XMLTV must have a <channel id="nbc.1"> matching that tvg-id
+# 3. XMLTV <programme> tags must reference the channel ID (e.g., channel="nbc.1")
+# 
+# If channel IDs don't match:
+# - Use channel-map.yaml to normalize tvg_id values
+# - Or edit your source M3U/XMLTV files to align IDs
+# 
+# ============================================================================
+# Troubleshooting:
+# ============================================================================
+# 
+# - "No EPG data": Verify channel IDs match between M3U and XMLTV
+# - "Failed to fetch EPG": Check URL accessibility and network connectivity
+# - "Failed to parse XMLTV": Ensure the file is valid XML (use an XML validator)
+# - EPG not updating: Check the scheduler configuration in app.yaml
+# - Missing programs: Verify the source EPG contains data for your channels
+# - Large EPG slow: Consider filtering to only needed channels or optimize source
+# 
+# For more help, see the README.md troubleshooting section.
