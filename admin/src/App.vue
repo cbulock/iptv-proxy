@@ -194,7 +194,11 @@ async function loadChannels() {
       state.channelSources.length,
       ...(cfg.urls && Array.isArray(cfg.urls) ? cfg.urls : [])
     );
-    state.channelSources.forEach(s => { s.type = s.type ? String(s.type).toLowerCase() : 'm3u'; });
+    state.channelSources.forEach((s, i) => { 
+      s.type = s.type ? String(s.type).toLowerCase() : 'm3u';
+      // Add stable ID for row-key if missing
+      if (!s._id) s._id = `ch_${Date.now()}_${i}`;
+    });
     setStatus('Loaded channel config');
   } catch (e) {
     setStatus("Failed to load config: " + e.message, false);
@@ -207,6 +211,10 @@ async function loadEPG() {
     const r = await fetch('/api/config/epg');
     const cfg = await r.json();
     state.epgSources.splice(0, state.epgSources.length, ...(cfg.urls && Array.isArray(cfg.urls) ? cfg.urls : []));
+    state.epgSources.forEach((s, i) => {
+      // Add stable ID for row-key if missing
+      if (!s._id) s._id = `epg_${Date.now()}_${i}`;
+    });
     setStatus('Loaded EPG config');
   } catch (e) {
     setStatus('Failed to load EPG config: ' + e.message, false);
@@ -314,6 +322,9 @@ async function reloadChannels() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "Reload failed");
     setStatus(`Reloaded ${j.channels} channels.`);
+    // Refresh mapping data after channels reload
+    await loadMapping();
+    message.success('Mapping updated with new channels');
   } catch (e) {
     setStatus(e.message, false);
   } finally {
@@ -349,6 +360,9 @@ async function reloadEPG() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Reload EPG failed');
     setStatus('EPG reloaded.');
+    // Refresh health data after EPG reload
+    await loadHealth();
+    message.success('Health data updated with new EPG');
   } catch (e) {
     setStatus(e.message, false);
   } finally {
@@ -397,11 +411,11 @@ async function saveMapping() {
 
 function addSource() { addChannelSource(); }
 function addChannelSource() {
-  state.channelSources.push({ name: '', type: 'm3u', url: '' });
+  state.channelSources.push({ _id: `ch_${Date.now()}_${Math.random()}`, name: '', type: 'm3u', url: '' });
 }
 function removeChannelSource(i) { state.channelSources.splice(i,1); }
 
-function addEPGSource() { state.epgSources.push({ name: '', url: '' }); }
+function addEPGSource() { state.epgSources.push({ _id: `epg_${Date.now()}_${Math.random()}`, name: '', url: '' }); }
 function removeEPGSource(i) { state.epgSources.splice(i,1); }
 
 function addMappingRow() { state.mappingRows.push({ name: '', number: '', tvg_id: '' }); }
@@ -639,6 +653,8 @@ const epgColumns = [
 ];
 
 function rowKeyFn(row) {
+  // Use stable _id if available, otherwise generate a fallback
+  if (row?._id) return row._id;
   return (row?.name || '') + '|' + (row?.url ?? row?.tvg_id ?? '');
 }
 
