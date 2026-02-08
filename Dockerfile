@@ -31,14 +31,12 @@ COPY scripts ./scripts
 COPY server ./server
 COPY public ./public
 COPY healthcheck.sh ./
-COPY entrypoint.sh ./
 
 # Create non-root user for security and config directory
 RUN mkdir -p /config && \
     addgroup -g 1001 -S appuser && \
     adduser -u 1001 -S appuser -G appuser && \
-    chown -R appuser:appuser /usr/src/app && \
-    chmod +x /usr/src/app/entrypoint.sh
+    chown -R appuser:appuser /usr/src/app
 
 # Install su-exec for dropping privileges (optional, not used currently)
 RUN apk add --no-cache su-exec
@@ -55,5 +53,5 @@ EXPOSE 34400
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD /bin/sh /usr/src/app/healthcheck.sh
 
-# Run via entrypoint
-ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+# Run the server
+CMD ["node", "index.js"]
