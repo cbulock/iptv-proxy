@@ -39,16 +39,7 @@ RUN mkdir -p /config && \
     chown -R appuser:appuser /usr/src/app
 
 # Create entrypoint script that fixes bind mount permissions and starts app
-RUN mkdir -p /usr/src/app && echo '#!/bin/sh
-set -e
-echo "Starting entrypoint..."
-echo "Fixing config directory permissions..."
-ls -la /config || echo "Config dir does not exist yet"
-chmod -R 777 /config 2>&1 || echo "chmod failed with: $?"
-chown -R root:root /config 2>&1 || echo "chown failed with: $?"
-ls -la /config || echo "Config dir check failed"
-echo "Permissions fixed, starting Node app..."
-node index.js' > /usr/src/app/entrypoint.sh && \
+RUN echo '#!/bin/sh\nset -e\necho "Starting entrypoint..."\necho "Fixing config directory permissions..."\nls -la /config || echo "Config dir does not exist yet"\nchmod -R 777 /config 2>&1 || echo "chmod failed"\nchown -R root:root /config 2>&1 || echo "chown failed"\nls -la /config || echo "Config dir check failed"\necho "Permissions fixed, starting Node app..."\nnode index.js' > /usr/src/app/entrypoint.sh && \
     chmod +x /usr/src/app/entrypoint.sh
 
 # Install su-exec for dropping privileges (optional, not used currently)
