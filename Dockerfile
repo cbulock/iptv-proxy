@@ -34,9 +34,10 @@ COPY healthcheck.sh ./
 
 # Create non-root user for security and config/data directories
 RUN mkdir -p /config /data && \
+    chmod 777 /config /data && \
     addgroup -g 1001 -S appuser && \
     adduser -u 1001 -S appuser -G appuser && \
-    chown -R appuser:appuser /usr/src/app /config /data
+    chown -R appuser:appuser /usr/src/app
 
 # Install su-exec for dropping privileges (optional, not used currently)
 RUN apk add --no-cache su-exec
