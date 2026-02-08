@@ -362,12 +362,18 @@ router.get('/api/mapping/candidates', async (req, res) => {
     const epg = loadEPG();
     const epgSources = epg?.urls?.map(u => u.name) || [];
     
+    console.log(`[Mapping] Starting candidates endpoint - found ${m3uSources.length} M3U sources`);
+    
     // Parse M3U files directly to get tvg_ids (not from cached channels.json)
     const tvgMap = new Map(); // key: tvg_id, value: { name, sources }
+    let totalParsed = 0;
     
     if (m3u?.urls && Array.isArray(m3u.urls)) {
       for (const source of m3u.urls) {
-        if (!source.url || !source.name) continue;
+        if (!source.url || !source.name) {
+          console.log(`[Mapping] Skipping source - missing url or name`);
+          continue;
+        }
         
         try {
           let data;
@@ -375,7 +381,7 @@ router.get('/api/mapping/candidates', async (req, res) => {
           if (source.url.startsWith('file://')) {
             // Local file
             const filePath = source.url.replace('file://', '');
-            console.log(`[Mapping] Parsing local M3U: ${filePath}`);
+            console.log(`[Mapping] Parsing local M3U from: ${filePath}`);
             data = fs.readFileSync(filePath, 'utf8');
           } else if (source.type === 'hdhomerun') {
             // HDHomeRun discovery
@@ -384,19 +390,23 @@ router.get('/api/mapping/candidates', async (req, res) => {
             const deviceInfo = discovery.data;
             const lineup = (await axios.get(`${deviceInfo.BaseURL}/lineup.json`, { timeout: 10000 })).data;
             
+            let hdhrCount = 0;
             for (const chan of lineup) {
               if (chan.GuideNumber) {
                 const tvgId = chan.GuideNumber;
                 if (!tvgMap.has(tvgId)) {
                   tvgMap.set(tvgId, { name: chan.GuideName || chan.GuideNumber, sources: new Set() });
+                  hdhrCount++;
                 }
                 tvgMap.get(tvgId).sources.add(source.name);
               }
             }
+            console.log(`[Mapping] Parsed ${hdhrCount} channels from HDHomeRun source: ${source.name}`);
+            totalParsed += hdhrCount;
             continue;
           } else {
             // HTTP/HTTPS M3U
-            console.log(`[Mapping] Fetching M3U from: ${source.url}`);
+            console.log(`[Mapping] Fetching M3U from HTTP(S): ${source.url}`);
             const response = await axios.get(source.url, {
               timeout: 30000,
               maxContentLength: 50 * 1024 * 1024,
@@ -408,6 +418,7 @@ router.get('/api/mapping/candidates', async (req, res) => {
           // Parse M3U file
           if (typeof data === 'string') {
             const lines = data.split('\n');
+            let sourceCount = 0;
             for (const line of lines) {
               const trimmed = line.trim();
               if (trimmed.startsWith('#EXTINF')) {
@@ -420,17 +431,22 @@ router.get('/api/mapping/candidates', async (req, res) => {
                   
                   if (!tvgMap.has(tvgId)) {
                     tvgMap.set(tvgId, { name, sources: new Set() });
+                    sourceCount++;
                   }
                   tvgMap.get(tvgId).sources.add(source.name);
                 }
               }
             }
-            console.log(`[Mapping] Parsed ${tvgMap.size} tvg_ids from M3U source: ${source.name}`);
+            console.log(`[Mapping] Parsed ${sourceCount} new tvg_ids from M3U source: ${source.name}`);
+            totalParsed += sourceCount;
           }
         } catch (err) {
           console.error(`[Mapping] Failed to parse M3U source "${source.name}": ${err.message}`);
+          console.error(err.stack);
         }
       }
+    } else {
+      console.log(`[Mapping] No M3U sources found or m3u.urls is not an array`);
     }
     
     // Convert to dropdown options format
@@ -442,7 +458,7 @@ router.get('/api/mapping/candidates', async (req, res) => {
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
     
-    console.log(`[Mapping] Total unique tvg_ids available: ${tvgOptions.length}`);
+    console.log(`[Mapping] Finished parsing - total tvg_ids collected: ${tvgMap.size}, tvgOptions returned: ${tvgOptions.length}`);
     
     // Get EPG channel names for reference
     const epgNames = [];
@@ -453,7 +469,8 @@ router.get('/api/mapping/candidates', async (req, res) => {
       epgSources,
       debug: {
         uniqueTvgIds: tvgOptions.length,
-        m3uSourcesParsed: m3uSources.length
+        m3uSourcesParsed: m3uSources.length,
+        totalParsedChannels: totalParsed
       }
     });
   } catch (e) {
@@ -461,7 +478,8 @@ router.get('/api/mapping/candidates', async (req, res) => {
     console.error(e.stack);
     res.status(500).json({ 
       error: 'Failed to load candidates', 
-      detail: e.message 
+      detail: e.message,
+      stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
     });
   }
 });
