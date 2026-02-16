@@ -190,7 +190,12 @@
             <div v-else style="opacity:.6">No health data yet. Run a health check.</div>
             <div class="foot">Channel health statuses are stored in <code>data/lineup_status.json</code>.</div>
           </n-tab-pane>
-          <n-tab-pane name="usage" tab="Usage">
+          <n-tab-pane name="usage">
+            <template #tab>
+              <n-badge :value="activeUsage.length" :show-zero="true" :max="99">
+                Usage
+              </n-badge>
+            </template>
             <n-space align="center" wrap style="margin-bottom:.75rem;">
               <n-button type="primary" @click="loadUsage" :loading="loadingUsage">{{ loadingUsage ? 'Loading...' : 'Refresh' }}</n-button>
             </n-space>
@@ -228,7 +233,7 @@
 
 <script setup>
 import { reactive, toRefs, h, watch, computed } from 'vue';
-import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, createDiscreteApi } from 'naive-ui';
+import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, createDiscreteApi } from 'naive-ui';
 const { message } = createDiscreteApi(['message']);
 
 const state = reactive({

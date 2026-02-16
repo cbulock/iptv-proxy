@@ -97,8 +97,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
   const {
     registerUsage = async () => undefined,
-    touchUsage = () => undefined,
-    unregisterUsage = () => undefined
+    touchUsage = () => undefined
   } = usageHelpers;
   const loadChannels = () => getChannels();
 
@@ -266,7 +265,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       const cleanup = () => {
         if (usageInterval) clearInterval(usageInterval);
         usageInterval = null;
-        if (usageKey) unregisterUsage(usageKey);
+        if (usageKey) touchUsage(usageKey);
         usageKey = null;
       };
       res.on('close', cleanup);
@@ -306,7 +305,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       response.data.pipe(res);
       console.info('[stream] %s/%s ready in %dms', source, name, Date.now() - startTime);
     } catch (err) {
-      if (usageKey && !upstreamOverride) unregisterUsage(usageKey);
+      if (usageKey) touchUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
       console.warn(
         '[stream] failed %s/%s: %s',

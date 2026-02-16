@@ -4,6 +4,7 @@ import { getDataPath } from '../libs/paths.js';
 
 const router = express.Router();
 const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, startedAt, lastSeen }
+const ACTIVE_IDLE_TTL_MS = 5 * 60 * 1000;
 let channelsCache = [];
 
 async function loadChannels() {
@@ -16,11 +17,20 @@ function findChannelMeta(channelId) {
   return byId ? { name: byId.name || byId.display_name || '', tvg_id: byId.tvg_id || '' } : {};
 }
 
+function normalizeIp(ip) {
+  const raw = String(ip || '').trim();
+  if (!raw) return '';
+  const first = raw.split(',')[0].trim();
+  if (first.startsWith('::ffff:')) return first.slice(7);
+  return first;
+}
+
 export async function registerUsage({ ip, channelId }) {
   if (!channelsCache.length) await loadChannels();
   const meta = findChannelMeta(channelId);
   const now = new Date().toISOString();
-  const key = `${ip}|${channelId}`;
+  const normalizedIp = normalizeIp(ip);
+  const key = `${normalizedIp}|${channelId}`;
   const existing = ACTIVE.get(key);
   if (existing) {
     existing.lastSeen = now;
@@ -28,7 +38,7 @@ export async function registerUsage({ ip, channelId }) {
     if (!existing.tvg_id && meta.tvg_id) existing.tvg_id = meta.tvg_id;
     return key;
   }
-  ACTIVE.set(key, { ip, channelId, ...meta, startedAt: now, lastSeen: now });
+  ACTIVE.set(key, { ip: normalizedIp, channelId, ...meta, startedAt: now, lastSeen: now });
   return key;
 }
 
@@ -42,8 +52,8 @@ export function unregisterUsage(key) {
 }
 
 router.get('/api/usage/active', (req, res) => {
-  // prune entries idle > 2 minutes
-  const cutoff = Date.now() - 2 * 60 * 1000;
+  // prune entries idle beyond grace window
+  const cutoff = Date.now() - ACTIVE_IDLE_TTL_MS;
   for (const [k, v] of ACTIVE.entries()) {
     if (new Date(v.lastSeen).getTime() < cutoff) ACTIVE.delete(k);
   }
