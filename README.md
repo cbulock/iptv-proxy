@@ -49,7 +49,34 @@ By default, the server runs on `http://localhost:34400` and serves:
 
 ## Configuration
 
-All configuration is done in `epg.yaml`, `m3u.yaml`, and `channel-map.yaml`.
+All configuration is done in `epg.yaml`, `m3u.yaml`, `channel-map.yaml`, and `app.yaml`.
+
+### `app.yaml`
+
+Configure application-level settings including authentication, base URL, and caching.
+
+```yaml
+# Admin Authentication (optional)
+# Enable to protect the admin UI and API endpoints
+admin_auth:
+  username: "admin"
+  password: "your-secure-password"
+
+# Base URL (optional)
+# Set when running behind a reverse proxy
+# base_url: "https://iptv.example.com"
+
+# Cache Configuration (optional)
+# cache:
+#   epg_ttl: 21600  # EPG cache TTL in seconds (default: 6 hours)
+#   m3u_ttl: 3600   # M3U cache TTL in seconds (default: 1 hour)
+```
+
+**Authentication:**
+- When `admin_auth` is configured, the admin UI and all management API endpoints require HTTP Basic Authentication
+- Protects endpoints: `/`, `/admin`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
+- Media endpoints (M3U playlist, XMLTV guide, streams) remain accessible without authentication
+- **Important:** Change the default password before deploying to production!
 
 ### `epg.yaml`
 
