@@ -87,6 +87,15 @@ function rewriteHlsPlaylist(body, playlistUrl, req, source, name) {
   return rewritten.join('\n');
 }
 
+function resolveGuideNumberForLineup(channel) {
+  // HDHomeRun clients often match XMLTV by GuideNumber; use tvg_id when present
+  // so subchannels like 6.1/23.1 align with XMLTV channel ids.
+  if (channel?.hdhomerun && channel?.tvg_id) {
+    return channel.tvg_id;
+  }
+  return channel?.guideNumber || channel?.tvg_id || channel?.name;
+}
+
 export function setupLineupRoutes(app, config, usageHelpers = {}) {
   // Initialize lineup caches with TTL from config (default: 1 hour)
   const appConfig = loadConfig('app');
@@ -122,7 +131,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     const lineup = channels
       .filter(channel => channel && channel.name) // Filter out invalid channels
       .map(channel => ({
-        GuideNumber: channel.guideNumber || channel.tvg_id || channel.name,
+        GuideNumber: resolveGuideNumberForLineup(channel),
         GuideName: channel.name,
         URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.name)}`
       }));

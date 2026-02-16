@@ -48,6 +48,14 @@ describe('Lineup Route Integration', () => {
         source: 'Tunarr',
         logo: 'http://example.com/logo3.png',
         original_url: 'http://tunarr.example/stream/channels/channel-1?streamMode=hls'
+      },
+      {
+        name: 'WLNS-TV',
+        tvg_id: '6.1',
+        guideNumber: '6',
+        source: 'Antenna',
+        hdhomerun: { deviceID: '1234' },
+        original_url: 'http://antenna.example/auto/v6.1'
       }
     ];
 
@@ -98,6 +106,15 @@ describe('Lineup Route Integration', () => {
     expect(body).to.include('Test Channel Two');
     expect(body).to.include('tvg-id="test.1"');
     expect(body).to.include('tvg-id="test.2"');
+  });
+
+  it('uses tvg_id as GuideNumber for HDHomeRun channels in /lineup.json', async () => {
+    const response = await axios.get(`${baseUrl}/lineup.json`);
+    expect(response.status).to.equal(200);
+
+    const wlns = response.data.find(ch => ch.GuideName === 'WLNS-TV');
+    expect(wlns).to.exist;
+    expect(wlns.GuideNumber).to.equal('6.1');
   });
 
   it('rewrites HLS playlist URIs to proxy stream URLs', async () => {
