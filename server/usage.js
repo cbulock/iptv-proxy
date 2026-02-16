@@ -4,7 +4,8 @@ import { getDataPath } from '../libs/paths.js';
 
 const router = express.Router();
 const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, startedAt, lastSeen }
-const ACTIVE_IDLE_TTL_MS = 5 * 60 * 1000;
+// Short grace period to smooth HLS segment request gaps.
+const ACTIVE_IDLE_TTL_MS = 45 * 1000;
 let channelsCache = [];
 
 async function loadChannels() {
