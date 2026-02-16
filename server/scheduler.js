@@ -190,7 +190,9 @@ export function initDefaultJobs() {
 
 const schedulerRouter = express.Router();
 
-// Apply authentication to all /api/scheduler routes
+// Apply authentication to all routes in this router
+// Note: This router is mounted at /api/scheduler in index.js,
+// so router.use(requireAuth) without a path applies auth to all routes
 schedulerRouter.use(requireAuth);
 
 /**

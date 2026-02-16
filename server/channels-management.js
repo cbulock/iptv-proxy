@@ -11,7 +11,9 @@ import { requireAuth } from './auth.js';
 const router = express.Router();
 const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
 
-// Apply authentication to all /api/channels routes
+// Apply authentication to all routes in this router
+// Note: This router is mounted at /api/channels in index.js,
+// so router.use(requireAuth) without a path applies auth to all routes
 router.use(requireAuth);
 
 function isSafeChannelKey(key) {
