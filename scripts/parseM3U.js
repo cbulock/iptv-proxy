@@ -95,27 +95,26 @@ async function processSource(source, map) {
       }
     } else {
       // Standard M3U - stream processing for large files
-      let response;
-      try {
-        response = await axios.get(source.url, {
-          timeout: 30000,
-          maxContentLength: 50 * 1024 * 1024, // 50MB max
-          validateStatus: status => status === 200,
-        });
-      } catch (fetchErr) {
-        throw new Error(`Failed to fetch M3U: ${fetchErr.message}`);
-      }
-
-      if (!response.data || typeof response.data !== 'string') {
-        throw new Error('Invalid M3U data: expected text content');
-      }
-
       let data;
       if (source.url.startsWith('file://')) {
         const filePath = source.url.replace('file://', '');
         data = fs.readFileSync(filePath, 'utf8');
       } else {
-        const response = await axios.get(source.url);
+        let response;
+        try {
+          response = await axios.get(source.url, {
+            timeout: 30000,
+            maxContentLength: 50 * 1024 * 1024, // 50MB max
+            validateStatus: status => status === 200,
+          });
+        } catch (fetchErr) {
+          throw new Error(`Failed to fetch M3U: ${fetchErr.message}`);
+        }
+
+        if (!response.data || typeof response.data !== 'string') {
+          throw new Error('Invalid M3U data: expected text content');
+        }
+
         data = response.data;
       }
       const lines = data.split('\n');

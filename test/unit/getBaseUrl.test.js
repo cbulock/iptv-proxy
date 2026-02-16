@@ -242,14 +242,16 @@ describe('getBaseUrl', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle missing headers gracefully', () => {
+    it('should return empty string when host cannot be determined', () => {
       const req = {
         protocol: 'http',
         get: () => undefined,
+        hostname: undefined,
+        headers: {},
       };
 
       const baseUrl = getBaseUrl(req);
-      expect(baseUrl).to.equal('http://undefined');
+      expect(baseUrl).to.equal('');
     });
 
     it('should handle IPv4 addresses', () => {

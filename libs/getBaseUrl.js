@@ -11,7 +11,17 @@ export default function getBaseUrl(req) {
     req.get('X-Url-Scheme') ||
     (req.get('X-Forwarded-Ssl') === 'on' ? 'https' : req.protocol);
 
-  const host = req.get('X-Forwarded-Host') || req.get('host');
+  // Prefer proxy/forwarded headers, then fall back to Express hostname/headers
+  const host =
+    req.get('X-Forwarded-Host') ||
+    req.get('host') ||
+    req.hostname ||
+    (req.headers && req.headers.host);
+
+  // If we still cannot determine a host, return empty string so callers can handle it explicitly
+  if (!host) {
+    return '';
+  }
 
   return `${protocol}://${host}`;
 }

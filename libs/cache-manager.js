@@ -192,7 +192,7 @@ class Cache {
       entries.push({
         key,
         age: Math.floor(age / 1000), // age in seconds
-        ttlRemaining: ttlRemaining ? Math.floor(ttlRemaining / 1000) : null,
+        ttlRemaining: ttlRemaining === null ? null : Math.floor(ttlRemaining / 1000),
         expired: this.ttl > 0 && age > this.ttl,
       });
     }
