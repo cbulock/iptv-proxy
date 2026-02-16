@@ -251,10 +251,16 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     let usageKey;
     let usageInterval;
     const registerViewer = async () => {
-      if (upstreamOverride) return;
-      if (usageKey) return;
       const channelId = channel.guideNumber || channel.tvg_id || channel.name;
       const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+
+      if (upstreamOverride) {
+        usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId) });
+        touchUsage(usageKey);
+        return;
+      }
+
+      if (usageKey) return;
       usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId) });
       usageInterval = setInterval(() => touchUsage(usageKey), 10000);
       const cleanup = () => {
@@ -300,7 +306,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       response.data.pipe(res);
       console.info('[stream] %s/%s ready in %dms', source, name, Date.now() - startTime);
     } catch (err) {
-      if (usageKey) unregisterUsage(usageKey);
+      if (usageKey && !upstreamOverride) unregisterUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
       console.warn(
         '[stream] failed %s/%s: %s',

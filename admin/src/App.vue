@@ -568,7 +568,7 @@ async function loadUsage() {
         name: u.name || '',
         tvg_id: u.tvg_id || '',
         startedAt: u.startedAt ? new Date(u.startedAt).toLocaleString() : '',
-        lastSeenAt: u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : ''
+        lastSeenAt: (u.lastSeenAt || u.lastSeen) ? new Date(u.lastSeenAt || u.lastSeen).toLocaleString() : ''
       }))
       .sort((a, b) => (new Date(b.lastSeenAt).getTime() || 0) - (new Date(a.lastSeenAt).getTime() || 0));
   } catch (e) {

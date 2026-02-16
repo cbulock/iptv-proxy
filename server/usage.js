@@ -20,7 +20,14 @@ export async function registerUsage({ ip, channelId }) {
   if (!channelsCache.length) await loadChannels();
   const meta = findChannelMeta(channelId);
   const now = new Date().toISOString();
-  const key = `${ip}|${channelId}|${now}`; // unique-ish
+  const key = `${ip}|${channelId}`;
+  const existing = ACTIVE.get(key);
+  if (existing) {
+    existing.lastSeen = now;
+    if (!existing.name && meta.name) existing.name = meta.name;
+    if (!existing.tvg_id && meta.tvg_id) existing.tvg_id = meta.tvg_id;
+    return key;
+  }
   ACTIVE.set(key, { ip, channelId, ...meta, startedAt: now, lastSeen: now });
   return key;
 }
@@ -35,12 +42,16 @@ export function unregisterUsage(key) {
 }
 
 router.get('/api/usage/active', (req, res) => {
-  const list = Array.from(ACTIVE.values());
   // prune entries idle > 2 minutes
   const cutoff = Date.now() - 2 * 60 * 1000;
   for (const [k, v] of ACTIVE.entries()) {
     if (new Date(v.lastSeen).getTime() < cutoff) ACTIVE.delete(k);
   }
+  const list = Array.from(ACTIVE.values()).map(entry => ({
+    ...entry,
+    // keep both field names for backward compatibility
+    lastSeenAt: entry.lastSeen
+  }));
   res.json({ active: list, count: list.length });
 });
 
