@@ -7,7 +7,7 @@ describe('getBaseUrl', () => {
     it('should return base URL from protocol and host', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'host') return 'example.com';
           return undefined;
         },
@@ -20,7 +20,7 @@ describe('getBaseUrl', () => {
     it('should handle HTTPS protocol', () => {
       const req = {
         protocol: 'https',
-        get: (header) => {
+        get: header => {
           if (header === 'host') return 'example.com';
           return undefined;
         },
@@ -33,7 +33,7 @@ describe('getBaseUrl', () => {
     it('should include port in host', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'host') return 'example.com:8080';
           return undefined;
         },
@@ -48,7 +48,7 @@ describe('getBaseUrl', () => {
     it('should use X-Forwarded-Proto over req.protocol', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Proto') return 'https';
           if (header === 'host') return 'example.com';
           return undefined;
@@ -62,7 +62,7 @@ describe('getBaseUrl', () => {
     it('should handle X-Forwarded-Proto with http', () => {
       const req = {
         protocol: 'https',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Proto') return 'http';
           if (header === 'host') return 'example.com';
           return undefined;
@@ -78,7 +78,7 @@ describe('getBaseUrl', () => {
     it('should use X-Forwarded-Host over host header', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Host') return 'proxy.example.com';
           if (header === 'host') return 'internal.local';
           return undefined;
@@ -92,7 +92,7 @@ describe('getBaseUrl', () => {
     it('should handle X-Forwarded-Host with port', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Host') return 'proxy.example.com:443';
           if (header === 'host') return 'internal.local';
           return undefined;
@@ -108,7 +108,7 @@ describe('getBaseUrl', () => {
     it('should use both X-Forwarded-Proto and X-Forwarded-Host', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Proto') return 'https';
           if (header === 'X-Forwarded-Host') return 'proxy.example.com';
           if (header === 'host') return 'internal.local';
@@ -123,7 +123,7 @@ describe('getBaseUrl', () => {
     it('should reconstruct proper URL behind reverse proxy', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Proto') return 'https';
           if (header === 'X-Forwarded-Host') return 'public.example.com:8443';
           if (header === 'host') return 'localhost:3000';
@@ -140,7 +140,7 @@ describe('getBaseUrl', () => {
     it('should use X-Forwarded-Protocol as alternative to X-Forwarded-Proto', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Protocol') return 'https';
           if (header === 'host') return 'example.com';
           return undefined;
@@ -154,7 +154,7 @@ describe('getBaseUrl', () => {
     it('should use X-Url-Scheme as alternative to X-Forwarded-Proto', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Url-Scheme') return 'https';
           if (header === 'host') return 'example.com';
           return undefined;
@@ -168,7 +168,7 @@ describe('getBaseUrl', () => {
     it('should use X-Forwarded-Ssl to detect HTTPS', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Ssl') return 'on';
           if (header === 'host') return 'example.com';
           return undefined;
@@ -182,7 +182,7 @@ describe('getBaseUrl', () => {
     it('should not use HTTPS when X-Forwarded-Ssl is off', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Ssl') return 'off';
           if (header === 'host') return 'example.com';
           return undefined;
@@ -198,7 +198,7 @@ describe('getBaseUrl', () => {
     it('should prefer X-Forwarded-Proto over X-Forwarded-Protocol', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Proto') return 'https';
           if (header === 'X-Forwarded-Protocol') return 'http';
           if (header === 'host') return 'example.com';
@@ -213,7 +213,7 @@ describe('getBaseUrl', () => {
     it('should prefer X-Forwarded-Protocol over X-Url-Scheme', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Forwarded-Protocol') return 'https';
           if (header === 'X-Url-Scheme') return 'http';
           if (header === 'host') return 'example.com';
@@ -228,7 +228,7 @@ describe('getBaseUrl', () => {
     it('should prefer X-Url-Scheme over X-Forwarded-Ssl', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'X-Url-Scheme') return 'http';
           if (header === 'X-Forwarded-Ssl') return 'on';
           if (header === 'host') return 'example.com';
@@ -255,7 +255,7 @@ describe('getBaseUrl', () => {
     it('should handle IPv4 addresses', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'host') return '192.168.1.1:3000';
           return undefined;
         },
@@ -268,7 +268,7 @@ describe('getBaseUrl', () => {
     it('should handle IPv6 addresses', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'host') return '[::1]:3000';
           return undefined;
         },
@@ -281,7 +281,7 @@ describe('getBaseUrl', () => {
     it('should handle localhost', () => {
       const req = {
         protocol: 'http',
-        get: (header) => {
+        get: header => {
           if (header === 'host') return 'localhost:3000';
           return undefined;
         },

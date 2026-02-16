@@ -12,28 +12,30 @@ const CHANNEL_MAP_FILE = getConfigPath('channel-map.yaml');
 const conflictsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs for this endpoint
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 const suggestionsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs for this endpoint
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 const duplicatesLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs for this endpoint
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 router.get('/api/mapping/conflicts', conflictsLimiter, async (req, res) => {
   try {
     let channels = [];
-    try { channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8')); } catch {}
+    try {
+      channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
+    } catch {}
 
     const byName = new Map();
     for (const ch of Array.isArray(channels) ? channels : []) {
@@ -45,13 +47,20 @@ router.get('/api/mapping/conflicts', conflictsLimiter, async (req, res) => {
     }
 
     let mapping = {};
-    try { mapping = loadConfig('channelMap'); } catch {}
+    try {
+      mapping = loadConfig('channelMap');
+    } catch {}
 
     const conflicts = [];
     for (const [name, set] of byName.entries()) {
       const candidates = Array.from(set);
       if (candidates.length > 1) {
-        conflicts.push({ name, tvgCandidates: candidates, count: candidates.length, mapped: mapping?.[name]?.tvg_id || '' });
+        conflicts.push({
+          name,
+          tvgCandidates: candidates,
+          count: candidates.length,
+          mapped: mapping?.[name]?.tvg_id || '',
+        });
       }
     }
 
@@ -74,7 +83,7 @@ router.get('/api/mapping/duplicates', duplicatesLimiter, async (req, res) => {
     }
 
     const duplicates = detectDuplicates(channels);
-    
+
     // Note: totalDuplicateChannels sums all channels in duplicate groups.
     // A channel may appear in both byName and byTvgId if it has both types of duplicates.
     res.json({
@@ -84,8 +93,8 @@ router.get('/api/mapping/duplicates', duplicatesLimiter, async (req, res) => {
         duplicateNames: duplicates.byName.length,
         duplicateTvgIds: duplicates.byTvgId.length,
         totalDuplicateChannelsByName: duplicates.byName.reduce((sum, d) => sum + d.count, 0),
-        totalDuplicateChannelsByTvgId: duplicates.byTvgId.reduce((sum, d) => sum + d.count, 0)
-      }
+        totalDuplicateChannelsByTvgId: duplicates.byTvgId.reduce((sum, d) => sum + d.count, 0),
+      },
     });
   } catch (e) {
     res.status(500).json({ error: 'Failed to detect duplicates', detail: e.message });
@@ -118,13 +127,13 @@ router.get('/api/mapping/suggestions', suggestionsLimiter, async (req, res) => {
     // Generate suggestions
     const threshold = parseFloat(req.query.threshold) || 0.7;
     const maxSuggestions = parseInt(req.query.max) || 3;
-    
+
     const suggestions = generateSuggestions(unmapped, channels, { threshold, maxSuggestions });
-    
+
     res.json({
       suggestions,
       count: suggestions.length,
-      unmappedTotal: unmapped.length
+      unmappedTotal: unmapped.length,
     });
   } catch (e) {
     res.status(500).json({ error: 'Failed to generate suggestions', detail: e.message });

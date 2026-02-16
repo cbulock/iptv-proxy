@@ -8,22 +8,22 @@ const router = express.Router();
 const CHANNELS_FILE = './data/channels.json';
 
 // Configuration constants
-const MAX_ERROR_HISTORY = 50;  // Maximum number of errors to keep in history
-const RECENT_ERROR_LIMIT = 10;  // Number of recent errors to show in status
+const MAX_ERROR_HISTORY = 50; // Maximum number of errors to keep in history
+const RECENT_ERROR_LIMIT = 10; // Number of recent errors to show in status
 
 // Rate limiter for status endpoint
 const statusLimiter = RateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 30, // limit each IP to 30 requests per minute
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 // Track parsing errors and source status
 let sourceStatus = {
   lastUpdate: null,
   sources: {},
-  errors: []
+  errors: [],
 };
 
 /**
@@ -33,15 +33,15 @@ export function updateSourceStatus(sourceName, status, error = null) {
   sourceStatus.sources[sourceName] = {
     status, // 'success', 'error', 'pending'
     lastUpdate: new Date().toISOString(),
-    error: error || null
+    error: error || null,
   };
   sourceStatus.lastUpdate = new Date().toISOString();
-  
+
   if (error) {
     sourceStatus.errors.push({
       source: sourceName,
       error: error,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
     // Keep only last MAX_ERROR_HISTORY errors
     if (sourceStatus.errors.length > MAX_ERROR_HISTORY) {
@@ -57,7 +57,7 @@ export function resetSourceStatus() {
   sourceStatus = {
     lastUpdate: new Date().toISOString(),
     sources: {},
-    errors: []
+    errors: [],
   };
 }
 
@@ -70,29 +70,29 @@ router.get('/status', statusLimiter, async (req, res) => {
     const m3uConfig = loadConfig('m3u');
     const epgConfig = loadConfig('epg');
     const channelMapConfig = loadConfig('channelMap');
-    
+
     // Get current channels
     const channels = getChannels();
-    
+
     // Get file stats
     let channelsFileStats = null;
     try {
       const stats = await fs.stat(CHANNELS_FILE);
       channelsFileStats = {
         size: stats.size,
-        modified: stats.mtime.toISOString()
+        modified: stats.mtime.toISOString(),
       };
     } catch (err) {
       // File doesn't exist yet
     }
-    
+
     // Count channels by source
     const channelsBySource = {};
     for (const ch of channels) {
       const src = ch.source || 'unknown';
       channelsBySource[src] = (channelsBySource[src] || 0) + 1;
     }
-    
+
     // Count mapped vs unmapped channels
     const mapKeys = new Set(Object.keys(channelMapConfig || {}));
     let mappedCount = 0;
@@ -105,59 +105,58 @@ router.get('/status', statusLimiter, async (req, res) => {
         unmappedCount++;
       }
     }
-    
+
     // Build response
     const status = {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      
+
       channels: {
         total: channels.length,
         bySource: channelsBySource,
         mapped: mappedCount,
         unmapped: unmappedCount,
-        file: channelsFileStats
+        file: channelsFileStats,
       },
-      
+
       sources: {
         m3u: {
           count: m3uConfig.urls?.length || 0,
           configured: (m3uConfig.urls || []).map(s => ({
             name: s.name,
             type: s.type || 'standard',
-            url: s.url
+            url: s.url,
           })),
-          status: sourceStatus.sources
+          status: sourceStatus.sources,
         },
         epg: {
           count: epgConfig.urls?.length || 0,
           configured: (epgConfig.urls || []).map(s => ({
             name: s.name,
-            url: s.url
-          }))
-        }
+            url: s.url,
+          })),
+        },
       },
-      
+
       mappings: {
         total: Object.keys(channelMapConfig || {}).length,
         channelsCovered: mappedCount,
         channelsNotCovered: unmappedCount,
-        coveragePercent: channels.length > 0 
-          ? Math.round((mappedCount / channels.length) * 100) 
-          : 0
+        coveragePercent:
+          channels.length > 0 ? Math.round((mappedCount / channels.length) * 100) : 0,
       },
-      
+
       parsing: {
         lastUpdate: sourceStatus.lastUpdate,
-        recentErrors: sourceStatus.errors.slice(-RECENT_ERROR_LIMIT) // Last N errors
-      }
+        recentErrors: sourceStatus.errors.slice(-RECENT_ERROR_LIMIT), // Last N errors
+      },
     };
-    
+
     res.json(status);
   } catch (err) {
-    res.status(500).json({ 
-      error: 'Failed to generate status', 
-      detail: err.message 
+    res.status(500).json({
+      error: 'Failed to generate status',
+      detail: err.message,
     });
   }
 });

@@ -69,8 +69,8 @@ const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
 const adminLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 app.get(['/', '/admin', '/admin.html'], adminLimiter, (req, res) => {
@@ -149,7 +149,7 @@ app.listen(port, () => {
   const adminUrl = isAdminBuilt()
     ? `${base}/admin/`
     : `http://${config.host}:${adminDevPort}/admin/ (dev server - run 'npm run dev')`;
-  
+
   console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
   console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/lineup.m3u`));
   console.log(chalk.cyan(`  XMLTV Guide:`), chalk.yellow(`${base}/xmltv.xml`));

@@ -138,7 +138,7 @@ describe('Channel Matcher', () => {
       const matches = findMatches(channel, candidates, 0.1);
 
       // Should not include ABC Network with exact tvg_id match
-      const exactMatch = matches.find((m) => m.candidate.tvg_id === 'abc.net');
+      const exactMatch = matches.find(m => m.candidate.tvg_id === 'abc.net');
       expect(exactMatch).to.be.undefined;
     });
 
@@ -152,7 +152,7 @@ describe('Channel Matcher', () => {
       const matches = findMatches(channel, candidatesWithIds, 0.6);
 
       expect(matches.length).to.be.greaterThan(0);
-      const topMatch = matches.find((m) => m.candidate.tvg_id === 'abc.network.hd');
+      const topMatch = matches.find(m => m.candidate.tvg_id === 'abc.network.hd');
       expect(topMatch).to.exist;
     });
 

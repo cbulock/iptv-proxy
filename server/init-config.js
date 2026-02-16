@@ -30,7 +30,7 @@ urls: []
 #   number: "1.1"
 #   tvg_id: "channel.id"
 {}
-`
+`,
 };
 
 /**

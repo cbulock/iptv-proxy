@@ -9,7 +9,11 @@ const ACTIVE_IDLE_TTL_MS = 45 * 1000;
 let channelsCache = [];
 
 async function loadChannels() {
-  try { channelsCache = JSON.parse(await fs.readFile(getDataPath('channels.json'), 'utf8')) || []; } catch { channelsCache = []; }
+  try {
+    channelsCache = JSON.parse(await fs.readFile(getDataPath('channels.json'), 'utf8')) || [];
+  } catch {
+    channelsCache = [];
+  }
 }
 
 function findChannelMeta(channelId) {
@@ -61,7 +65,7 @@ router.get('/api/usage/active', (req, res) => {
   const list = Array.from(ACTIVE.values()).map(entry => ({
     ...entry,
     // keep both field names for backward compatibility
-    lastSeenAt: entry.lastSeen
+    lastSeenAt: entry.lastSeen,
   }));
   res.json({ active: list, count: list.length });
 });

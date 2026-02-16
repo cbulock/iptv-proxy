@@ -33,11 +33,11 @@ function wrapTask(job) {
       console.log(`[Scheduler] Skipping job (already running): ${job.name}`);
       return;
     }
-    
+
     const startTime = Date.now();
     job.isRunning = true;
     console.log(`[Scheduler] Starting job: ${job.name}`);
-    
+
     try {
       await job.task();
       const duration = Date.now() - startTime;
@@ -89,7 +89,7 @@ export function registerJob(name, schedule, task, runOnStart = false) {
     lastStatus: null,
     lastDuration: null,
     lastError: null,
-    isRunning: false
+    isRunning: false,
   });
 
   console.log(`[Scheduler] Registered job: ${name} (${schedule})`);
@@ -142,7 +142,7 @@ export function getJobStatus() {
     lastStatus: job.lastStatus,
     lastDuration: job.lastDuration,
     lastError: job.lastError,
-    isRunning: job.isRunning
+    isRunning: job.isRunning,
   }));
 }
 
@@ -167,12 +167,7 @@ export async function triggerJob(name) {
  */
 export function initDefaultJobs() {
   // Health check every 30 minutes, run on startup
-  registerJob(
-    'Channel Health Check',
-    '*/30 * * * *',
-    runHealthCheck,
-    true
-  );
+  registerJob('Channel Health Check', '*/30 * * * *', runHealthCheck, true);
 
   // EPG refresh every 6 hours, run on startup
   registerJob(
@@ -208,16 +203,21 @@ schedulerRouter.post('/jobs/:name/run', async (req, res) => {
       return res.status(404).json({ error: `Job not found: ${jobName}` });
     }
     if (job.isRunning) {
-      return res.status(409).json({ error: 'Job is already running', job: getJobStatus().find(j => j.name === jobName) });
+      return res
+        .status(409)
+        .json({
+          error: 'Job is already running',
+          job: getJobStatus().find(j => j.name === jobName),
+        });
     }
-    
+
     // Start the job in background
     wrapTask(job)().catch(() => {});
-    
-    res.json({ 
-      status: 'started', 
+
+    res.json({
+      status: 'started',
       message: `Job "${jobName}" started`,
-      job: getJobStatus().find(j => j.name === jobName)
+      job: getJobStatus().find(j => j.name === jobName),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -233,5 +233,5 @@ export default {
   getJobStatus,
   triggerJob,
   initDefaultJobs,
-  schedulerRouter
+  schedulerRouter,
 };

@@ -73,7 +73,7 @@ describe('Cache Manager', () => {
         expect(shortTTL.get('key1')).to.equal('value1');
 
         // Wait for expiration
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Should be expired
         expect(shortTTL.has('key1')).to.be.false;
@@ -83,7 +83,7 @@ describe('Cache Manager', () => {
       it('should not expire entries with TTL=0', async () => {
         cache.set('key1', 'value1');
 
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         expect(cache.has('key1')).to.be.true;
         expect(cache.get('key1')).to.equal('value1');
@@ -96,7 +96,7 @@ describe('Cache Manager', () => {
 
         expect(shortTTL.size()).to.equal(2);
 
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         expect(shortTTL.size()).to.equal(0);
       });
@@ -108,7 +108,7 @@ describe('Cache Manager', () => {
         // Change TTL to very short
         dynamicCache.setTTL(50);
 
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Should be expired with new TTL
         expect(dynamicCache.has('key1')).to.be.false;

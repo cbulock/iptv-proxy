@@ -28,6 +28,7 @@ All API endpoints now provide consistent error responses with appropriate HTTP s
 ### Example Error Responses
 
 **404 Not Found:**
+
 ```json
 {
   "error": "Not Found",
@@ -38,6 +39,7 @@ All API endpoints now provide consistent error responses with appropriate HTTP s
 ```
 
 **503 Service Unavailable:**
+
 ```json
 {
   "error": "EPG not loaded yet",
@@ -48,6 +50,7 @@ All API endpoints now provide consistent error responses with appropriate HTTP s
 ```
 
 **500 Internal Server Error:**
+
 ```json
 {
   "error": "Internal Server Error",
@@ -74,6 +77,7 @@ The following headers are honored for base URL generation:
 ### Example Configuration
 
 **Nginx:**
+
 ```nginx
 location / {
     proxy_pass http://localhost:34400;
@@ -85,6 +89,7 @@ location / {
 ```
 
 **Apache:**
+
 ```apache
 <Location />
     ProxyPass http://localhost:34400/
@@ -101,6 +106,7 @@ location / {
 Basic health check that returns 200 if the server is running.
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -113,6 +119,7 @@ Basic health check that returns 200 if the server is running.
 Liveness probe for Kubernetes or Docker health checks. Indicates if the server process is running.
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -126,6 +133,7 @@ Liveness probe for Kubernetes or Docker health checks. Indicates if the server p
 Readiness probe that checks if the server is ready to handle requests. Returns 200 if ready, 503 if not ready.
 
 **Response (Ready):**
+
 ```json
 {
   "timestamp": "2025-12-30T20:00:00.000Z",
@@ -146,6 +154,7 @@ Readiness probe that checks if the server is ready to handle requests. Returns 2
 ```
 
 **Response (Not Ready):**
+
 ```json
 {
   "timestamp": "2025-12-30T20:00:00.000Z",
@@ -173,6 +182,7 @@ Readiness probe that checks if the server is ready to handle requests. Returns 2
 Comprehensive system diagnostics endpoint that provides information about the current state of the IPTV proxy.
 
 **Response:**
+
 ```json
 {
   "timestamp": "2025-12-30T04:19:09.594Z",
@@ -238,6 +248,7 @@ Comprehensive system diagnostics endpoint that provides information about the cu
 Add or update a single channel mapping.
 
 **Request Body:**
+
 ```json
 {
   "key": "Channel Name",
@@ -251,6 +262,7 @@ Add or update a single channel mapping.
 ```
 
 **Response:**
+
 ```json
 {
   "status": "saved",
@@ -269,11 +281,13 @@ Add or update a single channel mapping.
 Remove a channel mapping by key. The key should be URL-encoded.
 
 **Example:**
+
 ```bash
 DELETE /api/mapping/Channel%20Name
 ```
 
 **Response:**
+
 ```json
 {
   "status": "deleted",
@@ -286,6 +300,7 @@ DELETE /api/mapping/Channel%20Name
 Add or update multiple channel mappings at once.
 
 **Request Body:**
+
 ```json
 {
   "mappings": {
@@ -304,6 +319,7 @@ Add or update multiple channel mappings at once.
 ```
 
 **Response:**
+
 ```json
 {
   "status": "saved",
@@ -318,10 +334,12 @@ Add or update multiple channel mappings at once.
 The M3U playlist endpoint now supports filtering by source or group.
 
 **Query Parameters:**
+
 - `source` - Filter channels by source name (e.g., `?source=TestSource`)
 - `group` - Filter channels by group-title (mapped to source name)
 
 **Examples:**
+
 ```bash
 # Get all channels from TestSource
 GET /lineup.m3u?source=TestSource
@@ -335,10 +353,12 @@ GET /lineup.m3u?group=TestSource
 The XMLTV EPG endpoint now supports filtering by source or specific channel IDs.
 
 **Query Parameters:**
+
 - `source` - Filter EPG data by source name (e.g., `?source=TestSource`)
 - `channels` - Comma-separated list of channel IDs to include (e.g., `?channels=test1,test2,demo1`)
 
 **Examples:**
+
 ```bash
 # Get EPG data only for TestSource channels
 GET /xmltv.xml?source=TestSource
@@ -382,6 +402,7 @@ The IPTV Proxy includes a sophisticated caching system to improve performance an
 Get statistics for all caches.
 
 **Response:**
+
 ```json
 {
   "caches": {
@@ -420,6 +441,7 @@ Get statistics for all caches.
 Clear all caches.
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -433,9 +455,11 @@ Clear all caches.
 Clear a specific cache by name.
 
 **URL Parameters:**
+
 - `name` - Cache name (e.g., `epg`, `m3u`, `lineup-json`)
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -449,17 +473,21 @@ Clear a specific cache by name.
 Update the TTL for a specific cache.
 
 **URL Parameters:**
+
 - `name` - Cache name
 
 **Request Body:**
+
 ```json
 {
   "ttl": 7200
 }
 ```
+
 Note: TTL is in seconds.
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -481,6 +509,7 @@ The Preview API allows you to test configuration changes before saving them.
 Preview merged M3U playlist with temporary configuration.
 
 **Request Body:**
+
 ```json
 {
   "m3uConfig": {
@@ -508,6 +537,7 @@ Returns an M3U playlist file with `Content-Type: application/x-mpegURL`.
 Preview merged channels as JSON with temporary configuration.
 
 **Request Body:**
+
 ```json
 {
   "m3uConfig": {
@@ -527,6 +557,7 @@ Preview merged channels as JSON with temporary configuration.
 ```
 
 **Response:**
+
 ```json
 {
   "channels": [
@@ -549,6 +580,7 @@ Preview merged channels as JSON with temporary configuration.
 Preview merged EPG with temporary configuration.
 
 **Request Body:**
+
 ```json
 {
   "epgConfig": {
@@ -577,6 +609,7 @@ Returns an XMLTV file with `Content-Type: application/xml`.
 Preview merged EPG as JSON with temporary configuration.
 
 **Request Body:**
+
 ```json
 {
   "epgConfig": {
@@ -598,6 +631,7 @@ Preview merged EPG as JSON with temporary configuration.
 ```
 
 **Response:**
+
 ```json
 {
   "channels": 50,
@@ -611,4 +645,3 @@ Preview merged EPG as JSON with temporary configuration.
   }
 }
 ```
-
