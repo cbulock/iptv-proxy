@@ -192,7 +192,7 @@
           </n-tab-pane>
           <n-tab-pane name="usage">
             <template #tab>
-              <n-badge :value="activeUsage.length" :show-zero="true" :max="99">
+              <n-badge :value="activeUsage.length" :show="activeUsage.length > 0" :max="99">
                 Usage
               </n-badge>
             </template>

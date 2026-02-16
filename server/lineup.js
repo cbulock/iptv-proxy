@@ -248,18 +248,15 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       return res.sendStatus(405);
     }
 
+    const channelId = channel.guideNumber || channel.tvg_id || channel.name;
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
     let usageKey;
     let usageInterval;
-    const registerViewer = async () => {
-      const channelId = channel.guideNumber || channel.tvg_id || channel.name;
-      const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
-
-      if (upstreamOverride) {
-        usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId) });
-        touchUsage(usageKey);
-        return;
-      }
-
+    const touchViewer = async () => {
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId) });
+      touchUsage(usageKey);
+    };
+    const registerPersistentViewer = async () => {
       if (usageKey) return;
       usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId) });
       usageInterval = setInterval(() => touchUsage(usageKey), 10000);
@@ -280,11 +277,11 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         timeout: 15000
       });
 
-      await registerViewer();
-
       const responseUrl = response.request?.res?.responseUrl || upstreamUrl;
       const contentType = response.headers?.['content-type'] || '';
       if (isLikelyHlsPlaylist(contentType, responseUrl)) {
+        // HLS playlist/key/segment requests are short-lived; keep session alive via touch + idle TTL.
+        await touchViewer();
         const playlistBody = await readStreamToUtf8(response.data);
         const rewrittenBody = rewriteHlsPlaylist(playlistBody, responseUrl, req, source, name);
         const headers = { ...response.headers };
@@ -295,6 +292,13 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         res.send(rewrittenBody);
         console.info('[stream] %s/%s playlist rewritten in %dms', source, name, Date.now() - startTime);
         return;
+      }
+
+      if (upstreamOverride) {
+        await touchViewer();
+      } else {
+        // Non-HLS primary streaming response: unregister immediately on disconnect.
+        await registerPersistentViewer();
       }
 
       response.data.on('error', err => {
