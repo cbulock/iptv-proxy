@@ -53,10 +53,7 @@ export function unregisterUsage(key) {
   ACTIVE.delete(key);
 }
 
-// Apply authentication to usage admin endpoints
-router.use('/api/usage', requireAuth);
-
-router.get('/api/usage/active', (req, res) => {
+router.get('/api/usage/active', requireAuth, (req, res) => {
   // prune entries idle beyond grace window
   const cutoff = Date.now() - ACTIVE_IDLE_TTL_MS;
   for (const [k, v] of ACTIVE.entries()) {

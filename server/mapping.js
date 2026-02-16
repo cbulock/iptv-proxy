@@ -31,10 +31,7 @@ const duplicatesLimiter = rateLimit({
   keyGenerator: (req) => req.ip || 'unknown',
 });
 
-// Apply authentication to all /api/mapping routes
-router.use('/api/mapping', requireAuth);
-
-router.get('/api/mapping/conflicts', conflictsLimiter, async (req, res) => {
+router.get('/api/mapping/conflicts', requireAuth, conflictsLimiter, async (req, res) => {
   try {
     let channels = [];
     try { channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8')); } catch {}
@@ -68,7 +65,7 @@ router.get('/api/mapping/conflicts', conflictsLimiter, async (req, res) => {
 });
 
 // New endpoint: detect duplicate channels
-router.get('/api/mapping/duplicates', duplicatesLimiter, async (req, res) => {
+router.get('/api/mapping/duplicates', requireAuth, duplicatesLimiter, async (req, res) => {
   try {
     let channels = [];
     try {
@@ -97,7 +94,7 @@ router.get('/api/mapping/duplicates', duplicatesLimiter, async (req, res) => {
 });
 
 // New endpoint: auto-suggest mappings for unmapped channels
-router.get('/api/mapping/suggestions', suggestionsLimiter, async (req, res) => {
+router.get('/api/mapping/suggestions', requireAuth, suggestionsLimiter, async (req, res) => {
   try {
     let channels = [];
     try {

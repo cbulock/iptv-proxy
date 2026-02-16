@@ -59,7 +59,8 @@ export function requireAuth(req, res, next) {
   // Decode Basic Auth credentials
   const base64Credentials = authHeader.split(' ')[1];
   const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
-  const [username, password] = credentials.split(':');
+  const [username, ...passwordParts] = credentials.split(':');
+  const password = passwordParts.join(':'); // Handle passwords containing colons
 
   // Verify credentials
   if (!verifyCredentials(username, password)) {
@@ -107,7 +108,8 @@ export function requireAuthHTML(req, res, next) {
   // Decode Basic Auth credentials
   const base64Credentials = authHeader.split(' ')[1];
   const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
-  const [username, password] = credentials.split(':');
+  const [username, ...passwordParts] = credentials.split(':');
+  const password = passwordParts.join(':'); // Handle passwords containing colons
 
   // Verify credentials
   if (!verifyCredentials(username, password)) {

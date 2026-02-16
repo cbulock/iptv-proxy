@@ -10,9 +10,6 @@ import { requireAuth } from './auth.js';
 
 const router = express.Router();
 
-// Apply authentication to all /api/cache routes
-router.use('/api/cache', requireAuth);
-
 // Rate limiter for cache management endpoints
 const cacheLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -22,7 +19,7 @@ const cacheLimiter = RateLimit({
 /**
  * Get cache statistics
  */
-router.get('/api/cache/stats', cacheLimiter, asyncHandler(async (req, res) => {
+router.get('/api/cache/stats', requireAuth, cacheLimiter, asyncHandler(async (req, res) => {
   const stats = cacheManager.getStats();
   res.json({
     caches: stats,
@@ -33,7 +30,7 @@ router.get('/api/cache/stats', cacheLimiter, asyncHandler(async (req, res) => {
 /**
  * Clear all caches
  */
-router.post('/api/cache/clear', cacheLimiter, asyncHandler(async (req, res) => {
+router.post('/api/cache/clear', requireAuth, cacheLimiter, asyncHandler(async (req, res) => {
   cacheManager.clearAll();
   res.json({
     status: 'success',
@@ -45,7 +42,7 @@ router.post('/api/cache/clear', cacheLimiter, asyncHandler(async (req, res) => {
 /**
  * Clear specific cache
  */
-router.post('/api/cache/clear/:name', cacheLimiter, asyncHandler(async (req, res) => {
+router.post('/api/cache/clear/:name', requireAuth, cacheLimiter, asyncHandler(async (req, res) => {
   const { name } = req.params;
   const cache = cacheManager.getCache(name);
   
@@ -64,7 +61,7 @@ router.post('/api/cache/clear/:name', cacheLimiter, asyncHandler(async (req, res
 /**
  * Update cache TTL
  */
-router.put('/api/cache/ttl/:name', cacheLimiter, asyncHandler(async (req, res) => {
+router.put('/api/cache/ttl/:name', requireAuth, cacheLimiter, asyncHandler(async (req, res) => {
   const { name } = req.params;
   const { ttl } = req.body;
   
