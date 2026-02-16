@@ -33,38 +33,29 @@ const port = 34400;
 
 app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
-// Use absolute path for static assets to avoid CWD issues
-const publicDir = path.resolve('./public');
-app.use(express.static(publicDir));
-// Optionally serve node_modules in development to allow ESM imports without a bundler
-if (process.env.NODE_ENV === 'development') {
-  app.use('/node_modules', express.static(path.resolve('./node_modules')));
-}
-// Load and validate config
+
+// Load and validate config first (needed for auth check)
 const configs = loadAllConfigs();
 
-// Try to load vite config, fallback to default if not available
+const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
+
+// Admin UI setup (before static middleware to control access)
+const publicDir = path.resolve('./public');
+const builtAdminDir = path.join(publicDir, 'admin');
+const builtAdminIndexPath = path.join(builtAdminDir, 'index.html');
+const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
+
+// Try to load vite config for dev server info
 let adminDevPort = 5173;
 try {
   const viteConfig = await import('./admin/vite.config.js');
   adminDevPort = viteConfig.default?.server?.port || 5173;
 } catch (err) {
-  // Vite not installed or config not available, use default
   console.log(chalk.gray('Note: Vite config not loaded (using default port 5173)'));
   if (process.env.DEBUG) {
     console.log(chalk.gray(`  Reason: ${err.message}`));
   }
 }
-
-const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
-
-// Set up source status tracking for parseM3U
-setStatusCallback(updateSourceStatus);
-
-// Admin UI: serve built Vite output if present, otherwise show error
-const builtAdminDir = path.join(publicDir, 'admin');
-const builtAdminIndexPath = path.join(builtAdminDir, 'index.html');
-const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
 
 // Rate limiter for admin interface access
 const adminLimiter = RateLimit({
@@ -74,6 +65,10 @@ const adminLimiter = RateLimit({
   keyGenerator: (req) => req.ip || 'unknown',
 });
 
+// Serve admin assets (JS, CSS, etc.) with authentication
+app.use('/admin', adminLimiter, requireAuthHTML, express.static(builtAdminDir));
+
+// Serve admin HTML pages with authentication
 app.get(['/', '/admin', '/admin.html'], adminLimiter, requireAuthHTML, (req, res) => {
   if (isAdminBuilt()) {
     res.sendFile(builtAdminIndexPath);
@@ -108,6 +103,22 @@ npm run build</pre>
     `);
   }
 });
+
+// Serve other static files (not admin)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/admin')) {
+    return next();
+  }
+  express.static(publicDir)(req, res, next);
+});
+
+// Optionally serve node_modules in development to allow ESM imports without a bundler
+if (process.env.NODE_ENV === 'development') {
+  app.use('/node_modules', express.static(path.resolve('./node_modules')));
+}
+
+// Set up source status tracking for parseM3U
+setStatusCallback(updateSourceStatus);
 
 // Parse channels from M3U sources before server setup
 resetSourceStatus();
