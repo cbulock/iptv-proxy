@@ -23,6 +23,7 @@ import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './serve
 import { initChannelsCache, invalidateCache, onChannelsUpdate } from './libs/channels-cache.js';
 import getBaseUrl from './libs/getBaseUrl.js';
 import { notFoundHandler, errorHandler } from './server/error-handler.js';
+import { requireAuthHTML } from './server/auth.js';
 
 // Ensure config files exist before anything else
 initConfig();
@@ -73,7 +74,7 @@ const adminLimiter = RateLimit({
   keyGenerator: (req) => req.ip || 'unknown',
 });
 
-app.get(['/', '/admin', '/admin.html'], adminLimiter, (req, res) => {
+app.get(['/', '/admin', '/admin.html'], adminLimiter, requireAuthHTML, (req, res) => {
   if (isAdminBuilt()) {
     res.sendFile(builtAdminIndexPath);
   } else {

@@ -6,8 +6,12 @@ import express from 'express';
 import RateLimit from 'express-rate-limit';
 import cacheManager from '../libs/cache-manager.js';
 import { asyncHandler, AppError } from './error-handler.js';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
+
+// Apply authentication to all /api/cache routes
+router.use('/api/cache', requireAuth);
 
 // Rate limiter for cache management endpoints
 const cacheLimiter = RateLimit({

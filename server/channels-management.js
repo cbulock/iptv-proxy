@@ -6,9 +6,13 @@ import { getConfigPath } from '../libs/paths.js';
 import { parseAll } from '../scripts/parseM3U.js';
 import { invalidateCache } from '../libs/channels-cache.js';
 import rateLimit from 'express-rate-limit';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
+
+// Apply authentication to all /api/channels routes
+router.use(requireAuth);
 
 function isSafeChannelKey(key) {
   return (

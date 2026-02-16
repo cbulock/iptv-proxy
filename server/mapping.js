@@ -4,6 +4,7 @@ import { loadConfig } from '../libs/config-loader.js';
 import { getConfigPath, getDataPath } from '../libs/paths.js';
 import { generateSuggestions, detectDuplicates } from '../libs/channel-matcher.js';
 import rateLimit from 'express-rate-limit';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 const CHANNELS_FILE = getDataPath('channels.json');
@@ -29,6 +30,9 @@ const duplicatesLimiter = rateLimit({
   skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
   keyGenerator: (req) => req.ip || 'unknown',
 });
+
+// Apply authentication to all /api/mapping routes
+router.use('/api/mapping', requireAuth);
 
 router.get('/api/mapping/conflicts', conflictsLimiter, async (req, res) => {
   try {

@@ -1,6 +1,7 @@
 import express from 'express';
 import fs from 'fs/promises';
 import { getDataPath } from '../libs/paths.js';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, startedAt, lastSeen }
@@ -51,6 +52,9 @@ export function touchUsage(key) {
 export function unregisterUsage(key) {
   ACTIVE.delete(key);
 }
+
+// Apply authentication to usage admin endpoints
+router.use('/api/usage', requireAuth);
 
 router.get('/api/usage/active', (req, res) => {
   // prune entries idle beyond grace window

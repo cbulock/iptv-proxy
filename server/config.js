@@ -9,6 +9,7 @@ import fsPromises from 'fs/promises';
 import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 import { invalidateCache, getChannels } from '../libs/channels-cache.js';
 import { getConfigPath } from '../libs/paths.js';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 
@@ -61,6 +62,9 @@ function loadAPP() {
 function loadChannelMap() {
   return loadConfig('channelMap');
 }
+
+// Apply authentication to all /api/config routes
+router.use('/api/config', requireAuth);
 
 router.get('/api/config/m3u', (req, res) => {
   try {
@@ -191,6 +195,9 @@ router.put('/api/config/channel-map', configWriteLimiter, (req, res) => {
     });
   }
 });
+
+// Apply authentication to reload endpoints
+router.use('/api/reload', requireAuth);
 
 router.post('/api/reload/channels', async (req, res) => {
   try {

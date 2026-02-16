@@ -17,6 +17,27 @@
 # - Subdirectory: base_url: "https://example.com/iptv"
 
 # ============================================================================
+# Admin Authentication Configuration
+# ============================================================================
+
+# Optional: Enable authentication for the admin UI and API endpoints
+# If not configured, the admin interface is accessible without authentication
+# IMPORTANT: Change the default password before deploying to production!
+
+# admin_auth:
+#   username: "admin"
+#   password: "changeme"
+
+# Examples:
+# - Enable authentication:
+#   admin_auth:
+#     username: "admin"
+#     password: "your-secure-password-here"
+#
+# - Disable authentication (default):
+#   Leave commented or remove the admin_auth section
+
+# ============================================================================
 # Cache Configuration
 # ============================================================================
 

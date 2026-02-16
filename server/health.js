@@ -6,6 +6,7 @@ import { getDataPath } from '../libs/paths.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler } from './error-handler.js';
 import rateLimit from 'express-rate-limit';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 const STATUS_FILE = getDataPath('lineup_status.json');
@@ -94,6 +95,9 @@ router.get('/health/ready', healthLimiter, asyncHandler(async (req, res) => {
   const statusCode = checks.ready ? 200 : 503;
   res.status(statusCode).json(checks);
 }));
+
+// Apply authentication to channel health admin endpoints
+router.use('/api/channel-health', requireAuth);
 
 router.get('/api/channel-health', channelHealthLimiter, async (req, res) => {
   try {
