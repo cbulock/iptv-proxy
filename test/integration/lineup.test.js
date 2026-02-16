@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import express from 'express';
 import fs from 'fs/promises';
 import axios from 'axios';
+import path from 'path';
 import { getDataPath } from '../../libs/paths.js';
 import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
 import { setupLineupRoutes } from '../../server/lineup.js';
@@ -16,6 +17,8 @@ describe('Lineup Route Integration', () => {
   let baseUrl = '';
 
   before(async () => {
+    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
+
     try {
       originalChannels = await fs.readFile(channelsFile, 'utf8');
       hadOriginalChannelsFile = true;
