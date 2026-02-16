@@ -131,17 +131,6 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         // Log but continue processing other channels
         console.warn(`[lineup.m3u] Skipping invalid channel: ${channelErr.message}`);
       }
-      if (tvgId) tvgIdMap.set(tvgId, true);
-
-      const tvgName = channel.name || '';
-      const tvgLogo = channel.logo
-        ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
-        : '';
-      const groupTitle = channel.group || channel.source || '';
-      const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
-
-      output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}",${tvgName}\n`;
-      output += `${streamUrl}\n`;
     }
     
     // Cache the result
