@@ -1,4 +1,3 @@
-import fs from 'fs';
 import axios from 'axios';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
@@ -18,6 +17,74 @@ function invalidateCaches() {
   if (m3uCache) m3uCache.clear();
   if (jsonCache) jsonCache.clear();
   lastChannelsUpdate = Date.now();
+}
+
+function isLikelyHlsPlaylist(contentType = '', upstreamUrl = '') {
+  const normalizedContentType = String(contentType).toLowerCase();
+  if (
+    normalizedContentType.includes('application/vnd.apple.mpegurl') ||
+    normalizedContentType.includes('application/x-mpegurl') ||
+    normalizedContentType.includes('audio/mpegurl') ||
+    normalizedContentType.includes('audio/x-mpegurl')
+  ) {
+    return true;
+  }
+
+  try {
+    const url = new URL(upstreamUrl);
+    if (url.pathname.toLowerCase().endsWith('.m3u8')) return true;
+    if (String(url.searchParams.get('streamMode') || '').toLowerCase() === 'hls') return true;
+  } catch (_err) {
+    return false;
+  }
+
+  return false;
+}
+
+async function readStreamToUtf8(stream) {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function rewriteUriToProxy(uri, playlistUrl, req, source, name) {
+  const trimmed = String(uri || '').trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith('#')) return trimmed;
+  if (/^(data|blob):/i.test(trimmed)) return trimmed;
+
+  let resolvedUrl;
+  try {
+    resolvedUrl = new URL(trimmed, playlistUrl).toString();
+  } catch (_err) {
+    return trimmed;
+  }
+
+  const baseUrl = getBaseUrl(req);
+  const sourcePart = encodeURIComponent(source || 'unknown');
+  const namePart = encodeURIComponent(name || 'unknown');
+  return `${baseUrl}/stream/${sourcePart}/${namePart}?upstream=${encodeURIComponent(resolvedUrl)}`;
+}
+
+function rewriteHlsPlaylist(body, playlistUrl, req, source, name) {
+  const lines = String(body || '').split('\n');
+  const rewritten = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+
+    if (trimmed.startsWith('#')) {
+      return line.replace(/URI="([^"]+)"/g, (_match, uri) => {
+        const rewrittenUri = rewriteUriToProxy(uri, playlistUrl, req, source, name);
+        return `URI="${rewrittenUri}"`;
+      });
+    }
+
+    return rewriteUriToProxy(trimmed, playlistUrl, req, source, name);
+  });
+
+  return rewritten.join('\n');
 }
 
 export function setupLineupRoutes(app, config, usageHelpers = {}) {
@@ -142,6 +209,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
   app.all('/stream/:source/:name', async (req, res) => {
     const { source, name } = req.params;
+    const upstreamOverride = req.query.upstream ? String(req.query.upstream) : null;
     const channels = loadChannels();
 
     const channel = channels.find(
@@ -150,12 +218,13 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     if (!channel) return res.status(404).send('Channel not found');
 
+    const upstreamUrl = upstreamOverride || channel.original_url;
     const startTime = Date.now();
-    console.info('[stream] %s/%s -> %s', source, name, channel.original_url);
+    console.info('[stream] %s/%s -> %s', source, name, upstreamUrl);
 
     if (req.method === 'HEAD') {
       try {
-        const response = await axios.head(channel.original_url, { timeout: 5000 });
+        const response = await axios.head(upstreamUrl, { timeout: 5000 });
         res.set(response.headers);
         res.status(response.status || 200).end();
         console.info('[stream] %s/%s head ok in %dms', source, name, Date.now() - startTime);
@@ -182,6 +251,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     let usageKey;
     let usageInterval;
     const registerViewer = async () => {
+      if (upstreamOverride) return;
       if (usageKey) return;
       const channelId = channel.guideNumber || channel.tvg_id || channel.name;
       const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
@@ -199,12 +269,27 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     };
 
     try {
-      const response = await axios.get(channel.original_url, {
+      const response = await axios.get(upstreamUrl, {
         responseType: 'stream',
         timeout: 15000
       });
 
       await registerViewer();
+
+      const responseUrl = response.request?.res?.responseUrl || upstreamUrl;
+      const contentType = response.headers?.['content-type'] || '';
+      if (isLikelyHlsPlaylist(contentType, responseUrl)) {
+        const playlistBody = await readStreamToUtf8(response.data);
+        const rewrittenBody = rewriteHlsPlaylist(playlistBody, responseUrl, req, source, name);
+        const headers = { ...response.headers };
+        delete headers['content-length'];
+        delete headers['transfer-encoding'];
+        res.set(headers);
+        res.set('content-type', 'application/x-mpegURL');
+        res.send(rewrittenBody);
+        console.info('[stream] %s/%s playlist rewritten in %dms', source, name, Date.now() - startTime);
+        return;
+      }
 
       response.data.on('error', err => {
         console.warn('[stream] upstream error %s/%s: %s', source, name, err.message);
