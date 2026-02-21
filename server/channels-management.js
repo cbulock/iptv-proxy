@@ -11,9 +11,16 @@ import { requireAuth } from './auth.js';
 const router = express.Router();
 const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
 
-// Apply authentication to all routes in this router
+// Rate limiter for all authenticated channel management routes
+const channelsAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minute window
+  max: 300, // limit each IP to 300 requests per windowMs for this router
+});
+
+// Apply rate limiting and authentication to all routes in this router
 // Note: This router is mounted at /api/channels in index.js,
-// so router.use(requireAuth) without a path applies auth to all routes
+// so router.use(...) without a path applies to all routes
+router.use(channelsAuthLimiter);
 router.use(requireAuth);
 
 function isSafeChannelKey(key) {
