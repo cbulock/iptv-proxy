@@ -6,6 +6,7 @@ import { getDataPath } from '../libs/paths.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler } from './error-handler.js';
 import rateLimit from 'express-rate-limit';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 const STATUS_FILE = getDataPath('lineup_status.json');
@@ -95,7 +96,7 @@ router.get('/health/ready', healthLimiter, asyncHandler(async (req, res) => {
   res.status(statusCode).json(checks);
 }));
 
-router.get('/api/channel-health', channelHealthLimiter, async (req, res) => {
+router.get('/api/channel-health', requireAuth, channelHealthLimiter, async (req, res) => {
   try {
     let raw = {};
     try { raw = JSON.parse(await fs.readFile(STATUS_FILE, 'utf8')); } catch {}
@@ -109,7 +110,7 @@ router.get('/api/channel-health', channelHealthLimiter, async (req, res) => {
   }
 });
 
-router.post('/api/channel-health/run', channelHealthLimiter, async (req, res) => {
+router.post('/api/channel-health/run', requireAuth, channelHealthLimiter, async (req, res) => {
   try {
     const statusMap = await runHealthCheck();
     // After run we can re-read the file to pull details

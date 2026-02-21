@@ -49,7 +49,55 @@ By default, the server runs on `http://localhost:34400` and serves:
 
 ## Configuration
 
-All configuration is done in `epg.yaml`, `m3u.yaml`, and `channel-map.yaml`.
+All configuration is done in `epg.yaml`, `m3u.yaml`, `channel-map.yaml`, and `app.yaml`.
+
+### `app.yaml`
+
+Configure application-level settings including authentication, base URL, and caching.
+
+```yaml
+# Admin Authentication (optional)
+# Enable to protect the admin UI and API endpoints
+# Password MUST be a bcrypt hash - generate with: node scripts/hash-password.js your-password
+admin_auth:
+  username: "admin"
+  password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"  # bcrypt hash
+
+# Base URL (optional)
+# Set when running behind a reverse proxy
+# base_url: "https://iptv.example.com"
+
+# Cache Configuration (optional)
+# cache:
+#   epg_ttl: 21600  # EPG cache TTL in seconds (default: 6 hours)
+#   m3u_ttl: 3600   # M3U cache TTL in seconds (default: 1 hour)
+```
+
+**Authentication:**
+- When `admin_auth` is configured, the admin UI and all management API endpoints require HTTP Basic Authentication
+- Protects endpoints: `/`, `/admin`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
+- Media endpoints (M3U playlist, XMLTV guide, streams) remain accessible without authentication
+- **Important:** Passwords must be bcrypt hashed for security
+
+**Password Hashing:**
+- Generate a bcrypt hash using the included utility script:
+  ```bash
+  node scripts/hash-password.js your-password
+  ```
+- Copy the generated hash into your `app.yaml`:
+  ```yaml
+  admin_auth:
+    username: "admin"
+    password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"
+  ```
+- Plaintext passwords are **not supported** - they will be rejected with an error message
+
+**Security Best Practices:**
+- Treat `app.yaml` as sensitive and **never commit credentials to version control**
+- Restrict file permissions on `app.yaml` (e.g., `chmod 600 config/app.yaml`) so only the service user can read it
+- For production deployments, consider loading credentials from environment variables or a secrets manager
+- Always use HTTPS when accessing the admin UI remotely to protect credentials in transit
+- Add `config/app.yaml` to your `.gitignore` if it contains real credentials
 
 ### `epg.yaml`
 

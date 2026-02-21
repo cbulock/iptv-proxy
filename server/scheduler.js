@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import express from 'express';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
 import { refreshEPG } from './epg.js';
+import { requireAuth } from './auth.js';
 
 // Constants for external URLs used in error messages
 const CRON_VALIDATOR_URL = 'https://crontab.guru/';
@@ -188,6 +189,11 @@ export function initDefaultJobs() {
 // ============================================================
 
 const schedulerRouter = express.Router();
+
+// Apply authentication to all routes in this router
+// Note: This router is mounted at /api/scheduler in index.js,
+// so router.use(requireAuth) without a path applies auth to all routes
+schedulerRouter.use(requireAuth);
 
 /**
  * GET /api/scheduler/jobs - Get all scheduled jobs and their status

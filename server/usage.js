@@ -1,6 +1,7 @@
 import express from 'express';
 import fs from 'fs/promises';
 import { getDataPath } from '../libs/paths.js';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, startedAt, lastSeen }
@@ -52,7 +53,7 @@ export function unregisterUsage(key) {
   ACTIVE.delete(key);
 }
 
-router.get('/api/usage/active', (req, res) => {
+router.get('/api/usage/active', requireAuth, (req, res) => {
   // prune entries idle beyond grace window
   const cutoff = Date.now() - ACTIVE_IDLE_TTL_MS;
   for (const [k, v] of ACTIVE.entries()) {

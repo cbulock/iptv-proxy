@@ -6,9 +6,22 @@ import { getConfigPath } from '../libs/paths.js';
 import { parseAll } from '../scripts/parseM3U.js';
 import { invalidateCache } from '../libs/channels-cache.js';
 import rateLimit from 'express-rate-limit';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
+
+// Rate limiter for all authenticated channel management routes
+const channelsAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minute window
+  max: 300, // limit each IP to 300 requests per windowMs for this router
+});
+
+// Apply rate limiting and authentication to all routes in this router
+// Note: This router is mounted at /api/channels in index.js,
+// so router.use(...) without a path applies to all routes
+router.use(channelsAuthLimiter);
+router.use(requireAuth);
 
 function isSafeChannelKey(key) {
   return (

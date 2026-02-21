@@ -9,6 +9,7 @@ import fsPromises from 'fs/promises';
 import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 import { invalidateCache, getChannels } from '../libs/channels-cache.js';
 import { getConfigPath } from '../libs/paths.js';
+import { requireAuth } from './auth.js';
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ function loadChannelMap() {
   return loadConfig('channelMap');
 }
 
-router.get('/api/config/m3u', (req, res) => {
+router.get('/api/config/m3u', requireAuth, (req, res) => {
   try {
     res.json(loadM3U());
   } catch (e) {
@@ -74,7 +75,7 @@ router.get('/api/config/m3u', (req, res) => {
   }
 });
 
-router.get('/api/config/epg', (req, res) => {
+router.get('/api/config/epg', requireAuth, (req, res) => {
   try {
     res.json(loadEPG());
   } catch (e) {
@@ -86,7 +87,7 @@ router.get('/api/config/epg', (req, res) => {
   }
 });
 
-router.get('/api/config/app', (req, res) => {
+router.get('/api/config/app', requireAuth, (req, res) => {
   try {
     res.json(loadAPP());
   } catch (e) {
@@ -98,7 +99,7 @@ router.get('/api/config/app', (req, res) => {
   }
 });
 
-router.get('/api/config/channel-map', (req, res) => {
+router.get('/api/config/channel-map', requireAuth, (req, res) => {
   try {
     res.json(loadChannelMap());
   } catch (e) {
@@ -110,7 +111,7 @@ router.get('/api/config/channel-map', (req, res) => {
   }
 });
 
-router.put('/api/config/m3u', configWriteLimiter, (req, res) => {
+router.put('/api/config/m3u', requireAuth, configWriteLimiter, (req, res) => {
   const incoming = req.body;
   const validation = validateConfigData('m3u', incoming);
   if (!validation.valid) return res.status(400).json({ 
@@ -131,7 +132,7 @@ router.put('/api/config/m3u', configWriteLimiter, (req, res) => {
   }
 });
 
-router.put('/api/config/epg', configWriteLimiter, (req, res) => {
+router.put('/api/config/epg', requireAuth, configWriteLimiter, (req, res) => {
   const incoming = req.body;
   const validation = validateConfigData('epg', incoming);
   if (!validation.valid) return res.status(400).json({ 
@@ -152,7 +153,7 @@ router.put('/api/config/epg', configWriteLimiter, (req, res) => {
   }
 });
 
-router.put('/api/config/app', configWriteLimiter, (req, res) => {
+router.put('/api/config/app', requireAuth, configWriteLimiter, (req, res) => {
   const incoming = req.body;
   const validation = validateConfigData('app', incoming);
   if (!validation.valid) return res.status(400).json({ 
@@ -173,7 +174,7 @@ router.put('/api/config/app', configWriteLimiter, (req, res) => {
   }
 });
 
-router.put('/api/config/channel-map', configWriteLimiter, (req, res) => {
+router.put('/api/config/channel-map', requireAuth, configWriteLimiter, (req, res) => {
   const incoming = req.body || {};
   const validation = validateConfigData('channelMap', incoming);
   if (!validation.valid) return res.status(400).json({ 
@@ -192,7 +193,7 @@ router.put('/api/config/channel-map', configWriteLimiter, (req, res) => {
   }
 });
 
-router.post('/api/reload/channels', async (req, res) => {
+router.post('/api/reload/channels', requireAuth, async (req, res) => {
   try {
     const count = await parseAll();
     await invalidateCache();
@@ -206,7 +207,7 @@ router.post('/api/reload/channels', async (req, res) => {
   }
 });
 
-router.post('/api/reload/epg', async (req, res) => {
+router.post('/api/reload/epg', requireAuth, async (req, res) => {
   try {
     await refreshEPG();
     res.json({ status: 'reloaded' });
@@ -220,7 +221,7 @@ router.post('/api/reload/epg', async (req, res) => {
 });
 
 // Get raw M3U tvg_ids from all sources (before mapping is applied)
-router.get('/api/mapping/m3u-tvg-ids', readLimiter, async (req, res) => {
+router.get('/api/mapping/m3u-tvg-ids', requireAuth, readLimiter, async (req, res) => {
   try {
     const m3u = loadM3U();
     const allTvgIds = [];
@@ -304,7 +305,7 @@ router.get('/api/mapping/m3u-tvg-ids', readLimiter, async (req, res) => {
 });
 
 // Get available EPG channels (from all configured EPG sources)
-router.get('/api/mapping/epg-channels', readLimiter, async (req, res) => {
+router.get('/api/mapping/epg-channels', requireAuth, readLimiter, async (req, res) => {
   try {
     const epg = loadEPG();
     const epgChannels = [];
@@ -330,7 +331,7 @@ router.get('/api/mapping/epg-channels', readLimiter, async (req, res) => {
 
 // Get raw M3U channel IDs (before mapping is applied)
 // This shows the tvg_ids that come directly from the M3U sources
-router.get('/api/mapping/m3u-channels', readLimiter, async (req, res) => {
+router.get('/api/mapping/m3u-channels', requireAuth, readLimiter, async (req, res) => {
   try {
     const m3u = loadM3U();
     const m3uChannels = [];
@@ -352,7 +353,7 @@ router.get('/api/mapping/m3u-channels', readLimiter, async (req, res) => {
 });
 
 // Helper data endpoints for mapping UI
-router.get('/api/mapping/candidates', async (req, res) => {
+router.get('/api/mapping/candidates', requireAuth, async (req, res) => {
   try {
     // Get M3U sources for reference
     const m3u = loadM3U();
@@ -484,7 +485,7 @@ router.get('/api/mapping/candidates', async (req, res) => {
   }
 });
 
-router.get('/api/mapping/unmapped', async (req, res) => {
+router.get('/api/mapping/unmapped', requireAuth, async (req, res) => {
   try {
     const map = loadChannelMap();
     const mapKeys = new Set(Object.keys(map || {}));
@@ -509,7 +510,7 @@ router.get('/api/mapping/unmapped', async (req, res) => {
 
 // Dynamic mapping management endpoints
 
-router.post('/api/mapping', writeLimiter, async (req, res) => {
+router.post('/api/mapping', requireAuth, writeLimiter, async (req, res) => {
   try {
     const { key, mapping } = req.body;
     if (!key || typeof key !== 'string') {
@@ -548,7 +549,7 @@ router.post('/api/mapping', writeLimiter, async (req, res) => {
   }
 });
 
-router.delete('/api/mapping/:key', writeLimiter, async (req, res) => {
+router.delete('/api/mapping/:key', requireAuth, writeLimiter, async (req, res) => {
   try {
     const key = decodeURIComponent(req.params.key);
     if (!key) {
@@ -586,7 +587,7 @@ router.delete('/api/mapping/:key', writeLimiter, async (req, res) => {
   }
 });
 
-router.post('/api/mapping/bulk', writeLimiter, async (req, res) => {
+router.post('/api/mapping/bulk', requireAuth, writeLimiter, async (req, res) => {
   try {
     const { mappings } = req.body;
     if (!mappings || typeof mappings !== 'object') {
