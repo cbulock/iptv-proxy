@@ -116,6 +116,11 @@ router.post('/api/auth/setup', authLimiter, (req, res) => {
  * Update the admin password. Requires current authentication.
  */
 router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
+  // Auth must be configured before a password change can be made
+  if (!isAuthEnabled()) {
+    return res.status(409).json({ error: 'No authentication is configured. Use POST /api/auth/setup to set credentials first.' });
+  }
+
   const { currentPassword, newPassword } = req.body || {};
 
   if (!currentPassword || typeof currentPassword !== 'string') {
@@ -137,10 +142,6 @@ router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
   try {
     const appConfig = loadConfig('app') || {};
     const authSection = appConfig.admin_auth || {};
-
-    if (!authSection.username) {
-      return res.status(500).json({ error: 'No authentication configuration found' });
-    }
 
     // Verify current password before allowing the change
     if (!verifyCredentials(authSection.username, currentPassword)) {
