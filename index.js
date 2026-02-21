@@ -24,6 +24,7 @@ import { initChannelsCache, invalidateCache, onChannelsUpdate } from './libs/cha
 import getBaseUrl from './libs/getBaseUrl.js';
 import { notFoundHandler, errorHandler } from './server/error-handler.js';
 import { requireAuthHTML } from './server/auth.js';
+import authRoutesRouter from './server/auth-routes.js';
 
 // Ensure config files exist before anything else
 initConfig();
@@ -133,6 +134,7 @@ await initChannelsCache();
 onChannelsUpdate(invalidateLineupCaches);
 
 // Register routes
+app.use(authRoutesRouter);
 app.use('/channels', channelsRoute);
 app.use(configRoute);
 app.use(mappingRouter);

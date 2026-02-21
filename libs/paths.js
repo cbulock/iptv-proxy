@@ -16,7 +16,9 @@ export const DATA_DIR = process.env.DATA_PATH || join(PROJECT_ROOT, 'data');
 
 // Helper function to get config file path
 export function getConfigPath(filename) {
-  return join(CONFIG_DIR, filename);
+  // Read CONFIG_PATH at call time to allow test isolation via process.env.CONFIG_PATH
+  const dir = process.env.CONFIG_PATH || join(PROJECT_ROOT, 'config');
+  return join(dir, filename);
 }
 
 // Helper function to get data file path
