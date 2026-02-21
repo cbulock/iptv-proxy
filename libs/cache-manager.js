@@ -86,7 +86,7 @@ class Cache {
     if (this.ttl > 0) {
       const timestamp = this.timestamps.get(key);
       const age = Date.now() - timestamp;
-      
+
       if (age > this.ttl) {
         // Expired - remove from cache
         this.delete(key);
@@ -113,7 +113,7 @@ class Cache {
     if (this.ttl > 0) {
       const timestamp = this.timestamps.get(key);
       const age = Date.now() - timestamp;
-      
+
       if (age > this.ttl) {
         this.delete(key);
         return false;
@@ -164,7 +164,7 @@ class Cache {
   getStats() {
     const size = this.size();
     const total = this.hits + this.misses;
-    const hitRate = total > 0 ? (this.hits / total * 100).toFixed(2) : 0;
+    const hitRate = total > 0 ? ((this.hits / total) * 100).toFixed(2) : 0;
 
     return {
       name: this.name,
@@ -173,7 +173,7 @@ class Cache {
       hits: this.hits,
       misses: this.misses,
       hitRate: `${hitRate}%`,
-      entries: this.getEntries()
+      entries: this.getEntries(),
     };
   }
 
@@ -184,19 +184,19 @@ class Cache {
   getEntries() {
     const entries = [];
     const now = Date.now();
-    
+
     for (const [key, timestamp] of this.timestamps.entries()) {
       const age = now - timestamp;
       const ttlRemaining = this.ttl > 0 ? Math.max(0, this.ttl - age) : null;
-      
+
       entries.push({
         key,
         age: Math.floor(age / 1000), // age in seconds
-        ttlRemaining: ttlRemaining ? Math.floor(ttlRemaining / 1000) : null,
-        expired: this.ttl > 0 && age > this.ttl
+        ttlRemaining: ttlRemaining === null ? null : Math.floor(ttlRemaining / 1000),
+        expired: this.ttl > 0 && age > this.ttl,
       });
     }
-    
+
     return entries;
   }
 
