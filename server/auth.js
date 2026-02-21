@@ -1,5 +1,4 @@
 import { loadConfig } from '../libs/config-loader.js';
-import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -37,34 +36,8 @@ export function isAuthEnabled() {
 }
 
 /**
- * Timing-safe string comparison to prevent timing attacks
- */
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') {
-    return false;
-  }
-  
-  // Convert strings to buffers for constant-time comparison
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  
-  // If lengths differ, pad the shorter one to prevent length-based timing attacks
-  if (bufA.length !== bufB.length) {
-    // Use a dummy comparison to maintain constant time
-    crypto.timingSafeEqual(
-      Buffer.alloc(Math.max(bufA.length, bufB.length)),
-      Buffer.alloc(Math.max(bufA.length, bufB.length))
-    );
-    return false;
-  }
-  
-  return crypto.timingSafeEqual(bufA, bufB);
-}
-
-/**
  * Verify credentials against configured admin auth
- * Supports both plaintext passwords (legacy) and bcrypt hashed passwords
- * Uses timing-safe comparison to prevent timing attacks for plaintext passwords
+ * Only supports bcrypt hashed passwords for security
  */
 export function verifyCredentials(username, password) {
   const authConfig = getAuthConfig();
@@ -72,19 +45,19 @@ export function verifyCredentials(username, password) {
     return false;
   }
   
-  // Check username with timing-safe comparison
-  const usernameMatch = timingSafeEqual(authConfig.username, username);
-  
-  // Check if the stored password is a bcrypt hash
-  if (isBcryptHash(authConfig.password)) {
-    // Use bcrypt comparison for hashed passwords
-    const passwordMatch = bcrypt.compareSync(password, authConfig.password);
-    return usernameMatch && passwordMatch;
-  } else {
-    // Legacy: Use timing-safe comparison for plaintext passwords
-    const passwordMatch = timingSafeEqual(authConfig.password, password);
-    return usernameMatch && passwordMatch;
+  // Verify the stored password is a bcrypt hash
+  if (!isBcryptHash(authConfig.password)) {
+    console.error('Authentication error: Password in app.yaml must be a bcrypt hash. Use: node scripts/hash-password.js your-password');
+    return false;
   }
+  
+  // Check username match (case-sensitive)
+  if (authConfig.username !== username) {
+    return false;
+  }
+  
+  // Use bcrypt comparison for hashed passwords
+  return bcrypt.compareSync(password, authConfig.password);
 }
 
 /**

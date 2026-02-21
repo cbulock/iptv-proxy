@@ -58,9 +58,10 @@ Configure application-level settings including authentication, base URL, and cac
 ```yaml
 # Admin Authentication (optional)
 # Enable to protect the admin UI and API endpoints
+# Password MUST be a bcrypt hash - generate with: node scripts/hash-password.js your-password
 admin_auth:
   username: "admin"
-  password: "your-secure-password"  # Can be plaintext or bcrypt hash
+  password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"  # bcrypt hash
 
 # Base URL (optional)
 # Set when running behind a reverse proxy
@@ -76,10 +77,9 @@ admin_auth:
 - When `admin_auth` is configured, the admin UI and all management API endpoints require HTTP Basic Authentication
 - Protects endpoints: `/`, `/admin`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
 - Media endpoints (M3U playlist, XMLTV guide, streams) remain accessible without authentication
-- **Important:** Change the default password before deploying to production, and always use a strong, unique password.
+- **Important:** Passwords must be bcrypt hashed for security
 
-**Password Hashing (Recommended):**
-- For better security, use bcrypt-hashed passwords instead of plaintext passwords
+**Password Hashing:**
 - Generate a bcrypt hash using the included utility script:
   ```bash
   node scripts/hash-password.js your-password
@@ -90,12 +90,10 @@ admin_auth:
     username: "admin"
     password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"
   ```
-- The system automatically detects bcrypt hashes and uses secure comparison
-- Legacy plaintext passwords are still supported for backward compatibility
+- Plaintext passwords are **not supported** - they will be rejected with an error message
 
 **Security Best Practices:**
-- **Prefer bcrypt hashed passwords** over plaintext passwords for production deployments
-- Even with hashed passwords, treat `app.yaml` as sensitive and **never commit credentials to version control**
+- Treat `app.yaml` as sensitive and **never commit credentials to version control**
 - Restrict file permissions on `app.yaml` (e.g., `chmod 600 config/app.yaml`) so only the service user can read it
 - For production deployments, consider loading credentials from environment variables or a secrets manager
 - Always use HTTPS when accessing the admin UI remotely to protect credentials in transit

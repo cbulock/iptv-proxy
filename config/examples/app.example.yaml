@@ -22,30 +22,27 @@
 
 # Optional: Enable authentication for the admin UI and API endpoints
 # If not configured, the admin interface is accessible without authentication
-# IMPORTANT: Change the default password before deploying to production!
+# IMPORTANT: Passwords MUST be bcrypt hashes - plaintext passwords are not supported!
 
 # admin_auth:
 #   username: "admin"
-#   password: "changeme"  # Use plaintext (not recommended) or bcrypt hash
+#   password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"  # bcrypt hash
 
-# Examples:
-# - Enable authentication with plaintext password (legacy, not recommended):
-#   admin_auth:
-#     username: "admin"
-#     password: "your-secure-password-here"
+# How to generate a bcrypt hash:
+#   node scripts/hash-password.js your-password
 #
-# - Enable authentication with bcrypt hashed password (recommended):
-#   Generate hash: node scripts/hash-password.js your-password
+# Example configuration:
 #   admin_auth:
 #     username: "admin"
 #     password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"
 #
-# - Disable authentication (default):
+# To disable authentication (default):
 #   Leave commented or remove the admin_auth section
 #
 # Security Notes:
-# - Bcrypt hashed passwords are automatically detected and more secure
-# - Even with hashed passwords, protect app.yaml with file permissions (chmod 600)
+# - Only bcrypt hashed passwords are accepted for security
+# - Plaintext passwords will be rejected with an error message
+# - Protect app.yaml with file permissions (chmod 600)
 # - Never commit real credentials to version control
 
 # ============================================================================
