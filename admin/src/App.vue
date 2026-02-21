@@ -741,8 +741,16 @@ async function checkAuthStatus() {
     const j = await r.json();
     state.authConfigured = !!j.configured;
     state.showSetupModal = !j.configured;
-  } catch (_) {
-    // If status check fails, assume auth may be configured; don't force modal
+  } catch (e) {
+    // If status check fails, assume auth may be configured; don't force modal,
+    // but surface an error so the user/admin knows something went wrong.
+    state.authConfigured = true;
+    state.showSetupModal = false;
+    if (e && e.message) {
+      message.error(e.message);
+    } else {
+      message.error('Failed to check authentication status.');
+    }
   }
 }
 
