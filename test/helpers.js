@@ -21,10 +21,7 @@ export async function loadFixture(filename) {
 /**
  * Create a mock M3U source configuration
  */
-export function createMockM3USource(
-  name = 'TestSource',
-  url = 'http://test.example.com/playlist.m3u'
-) {
+export function createMockM3USource(name = 'TestSource', url = 'http://test.example.com/playlist.m3u') {
   return {
     name,
     url,
@@ -68,14 +65,14 @@ export function createMockMapping(channelName, overrides = {}) {
  */
 export function generateM3UPlaylist(channels = []) {
   let m3u = '#EXTM3U\n';
-
+  
   for (const channel of channels) {
     const tvgId = channel.tvg_id ? `tvg-id="${channel.tvg_id}" ` : '';
     const tvgLogo = channel.logo ? `tvg-logo="${channel.logo}" ` : '';
     m3u += `#EXTINF:-1 ${tvgId}${tvgLogo}${channel.group ? `group-title="${channel.group}" ` : ''},${channel.name}\n`;
     m3u += `${channel.url}\n`;
   }
-
+  
   return m3u;
 }
 
@@ -84,7 +81,7 @@ export function generateM3UPlaylist(channels = []) {
  */
 export function generateXMLTV(channels = [], programmes = []) {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n';
-
+  
   for (const channel of channels) {
     xml += `  <channel id="${channel.id}">\n`;
     xml += `    <display-name>${channel.name}</display-name>\n`;
@@ -93,7 +90,7 @@ export function generateXMLTV(channels = [], programmes = []) {
     }
     xml += `  </channel>\n`;
   }
-
+  
   for (const programme of programmes) {
     xml += `  <programme channel="${programme.channel}" start="${programme.start}" stop="${programme.stop}">\n`;
     xml += `    <title>${programme.title}</title>\n`;
@@ -102,7 +99,7 @@ export function generateXMLTV(channels = [], programmes = []) {
     }
     xml += `  </programme>\n`;
   }
-
+  
   xml += '</tv>\n';
   return xml;
 }

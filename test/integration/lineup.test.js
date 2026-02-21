@@ -33,21 +33,21 @@ describe('Lineup Route Integration', () => {
         tvg_id: 'test.1',
         source: 'TestSource',
         logo: 'http://example.com/logo1.png',
-        original_url: 'http://example.com/stream1',
+        original_url: 'http://example.com/stream1'
       },
       {
         name: 'Test Channel Two',
         tvg_id: 'test.2',
         source: 'TestSource',
         logo: 'http://example.com/logo2.png',
-        original_url: 'http://example.com/stream2',
+        original_url: 'http://example.com/stream2'
       },
       {
         name: 'HLS Channel',
         tvg_id: 'hls.1',
         source: 'Tunarr',
         logo: 'http://example.com/logo3.png',
-        original_url: 'http://tunarr.example/stream/channels/channel-1?streamMode=hls',
+        original_url: 'http://tunarr.example/stream/channels/channel-1?streamMode=hls'
       },
       {
         name: 'WLNS-TV',
@@ -55,8 +55,8 @@ describe('Lineup Route Integration', () => {
         guideNumber: '6',
         source: 'Antenna',
         hdhomerun: { deviceID: '1234' },
-        original_url: 'http://antenna.example/auto/v6.1',
-      },
+        original_url: 'http://antenna.example/auto/v6.1'
+      }
     ];
 
     await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');

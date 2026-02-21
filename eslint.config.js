@@ -16,9 +16,9 @@ export default [
     rules: {
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'no-console': 'off',
-      quotes: ['warn', 'single', { avoidEscape: true }],
-      semi: ['warn', 'always'],
-      indent: ['warn', 2, { SwitchCase: 1 }],
+      'quotes': ['warn', 'single', { avoidEscape: true }],
+      'semi': ['warn', 'always'],
+      'indent': ['warn', 2, { SwitchCase: 1 }],
       'no-var': 'error',
       'prefer-const': 'error',
     },

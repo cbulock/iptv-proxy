@@ -27,7 +27,7 @@ describe('M3U Parser Integration', () => {
   describe('M3U Playlist Parsing', () => {
     it('should parse valid M3U playlist correctly', async () => {
       const m3uContent = await loadFixture('valid-playlist.m3u');
-
+      
       // Validate the fixture content structure
       expect(m3uContent).to.include('#EXTM3U');
       expect(m3uContent).to.include('Channel One');
@@ -38,7 +38,7 @@ describe('M3U Parser Integration', () => {
 
     it('should handle malformed M3U playlist gracefully', async () => {
       const m3uContent = await loadFixture('malformed-playlist.m3u');
-
+      
       // Validate that fixture contains expected malformed content
       expect(m3uContent).to.include('#EXTM3U');
       expect(m3uContent).to.include('Channel Without URL');
@@ -46,14 +46,13 @@ describe('M3U Parser Integration', () => {
     });
 
     it('should extract channel metadata from EXTINF line', () => {
-      const line =
-        '#EXTINF:-1 tvg-id="test.1" tvg-logo="http://example.com/logo.png" group-title="News",Test Channel';
-
+      const line = '#EXTINF:-1 tvg-id="test.1" tvg-logo="http://example.com/logo.png" group-title="News",Test Channel';
+      
       const nameMatch = line.match(/,(.*)$/);
       const tvgIdMatch = line.match(/tvg-id="(.*?)"/);
       const tvgLogoMatch = line.match(/tvg-logo="(.*?)"/);
       const groupMatch = line.match(/group-title="(.*?)"/);
-
+      
       expect(nameMatch[1]).to.equal('Test Channel');
       expect(tvgIdMatch[1]).to.equal('test.1');
       expect(tvgLogoMatch[1]).to.equal('http://example.com/logo.png');
@@ -62,11 +61,11 @@ describe('M3U Parser Integration', () => {
 
     it('should handle EXTINF line without optional attributes', () => {
       const line = '#EXTINF:-1,Simple Channel';
-
+      
       const nameMatch = line.match(/,(.*)$/);
       const tvgIdMatch = line.match(/tvg-id="(.*?)"/);
       const tvgLogoMatch = line.match(/tvg-logo="(.*?)"/);
-
+      
       expect(nameMatch[1]).to.equal('Simple Channel');
       expect(tvgIdMatch).to.be.null;
       expect(tvgLogoMatch).to.be.null;
@@ -158,24 +157,28 @@ describe('M3U Parser Integration', () => {
         },
       ]);
 
-      nock('http://test.example.com').get('/playlist.m3u').reply(200, mockPlaylist, {
-        'Content-Type': 'application/x-mpegurl',
-      });
+      nock('http://test.example.com')
+        .get('/playlist.m3u')
+        .reply(200, mockPlaylist, {
+          'Content-Type': 'application/x-mpegurl',
+        });
 
       // This validates that our nock setup works
       const axios = (await import('axios')).default;
       const response = await axios.get('http://test.example.com/playlist.m3u');
-
+      
       expect(response.status).to.equal(200);
       expect(response.data).to.include('#EXTM3U');
       expect(response.data).to.include('Mock Channel');
     });
 
     it('should handle 404 response from M3U source', async () => {
-      nock('http://test.example.com').get('/missing.m3u').reply(404, 'Not Found');
+      nock('http://test.example.com')
+        .get('/missing.m3u')
+        .reply(404, 'Not Found');
 
       const axios = (await import('axios')).default;
-
+      
       try {
         await axios.get('http://test.example.com/missing.m3u');
         expect.fail('Should have thrown an error');
@@ -185,10 +188,13 @@ describe('M3U Parser Integration', () => {
     });
 
     it('should handle timeout errors', async () => {
-      nock('http://test.example.com').get('/slow.m3u').delayConnection(1000).reply(200, '#EXTM3U');
+      nock('http://test.example.com')
+        .get('/slow.m3u')
+        .delayConnection(1000)
+        .reply(200, '#EXTM3U');
 
       const axios = (await import('axios')).default;
-
+      
       try {
         await axios.get('http://test.example.com/slow.m3u', { timeout: 100 });
         expect.fail('Should have thrown a timeout error');

@@ -20,12 +20,12 @@ export class AppError extends Error {
 export function notFoundHandler(req, res, next) {
   const message = `Route not found: ${req.method} ${req.originalUrl}`;
   console.warn(chalk.yellow(`[404] ${message}`));
-
+  
   res.status(404).json({
     error: 'Not Found',
     message: 'The requested resource was not found',
     path: req.originalUrl,
-    method: req.method,
+    method: req.method
   });
 }
 
@@ -71,7 +71,7 @@ export function errorHandler(err, req, res, next) {
     error: statusCode >= 500 ? 'Internal Server Error' : message,
     message: statusCode >= 500 ? 'An unexpected error occurred' : message,
     path: req.originalUrl,
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString()
   };
 
   // Include details in non-production or for client errors

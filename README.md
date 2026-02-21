@@ -57,10 +57,10 @@ Define all EPG sources here.
 
 ```yaml
 urls:
-  - name: 'ErsatzTV'
-    url: 'https://ersatztv.local/iptv/xmltv.xml'
-  - name: 'HDHomeRun'
-    url: 'file://./data/epg.xml'
+  - name: "ErsatzTV"
+    url: "https://ersatztv.local/iptv/xmltv.xml"
+  - name: "HDHomeRun"
+    url: "file://./data/epg.xml"
 ```
 
 ### `M3U.yaml`
@@ -69,11 +69,11 @@ Define all M3U, M3U8, and HDHR sources here.
 
 ```yaml
 urls:
-  - name: 'ErsatzTV'
-    url: 'https://ersatztv.local/iptv/channels.m3u'
-  - name: 'HDHomeRun'
-    type: 'hdhomerun'
-    url: 'http://antenna.local'
+  - name: "ErsatzTV"
+    url: "https://ersatztv.local/iptv/channels.m3u"
+  - name: "HDHomeRun"
+    type: "hdhomerun"
+    url: "http://antenna.local"
 ```
 
 ### `channel-map.yaml`
@@ -81,22 +81,21 @@ urls:
 Use this file to normalize channel metadata. You can define mapping by either channel `name` or `tvg_id`.
 
 ```yaml
-'The Simpsons':
-  number: '104'
-  tvg_id: 'C3.147.ersatztv.org'
-  group: 'Entertainment'
-'Evening Comedy':
-  number: '120'
-  tvg_id: 'C20.194.ersatztv.org'
-  name: 'Comedy Channel'
-'FOX 47':
-  number: '47'
-  tvg_id: '47.1'
-  logo: 'http://example.com/logo.png'
+"The Simpsons":
+  number: "104"
+  tvg_id: "C3.147.ersatztv.org"
+  group: "Entertainment"
+"Evening Comedy":
+  number: "120"
+  tvg_id: "C20.194.ersatztv.org"
+  name: "Comedy Channel"
+"FOX 47":
+  number: "47"
+  tvg_id: "47.1"
+  logo: "http://example.com/logo.png"
 ```
 
 **Available mapping fields:**
-
 - `name` - Override the display name
 - `number` - Set the guide/channel number
 - `tvg_id` - Set or override the tvg-id
@@ -184,14 +183,14 @@ server {
     location / {
         proxy_pass http://localhost:34400;
         proxy_http_version 1.1;
-
+        
         # Forward client information
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
-
+        
         # WebSocket support (for admin UI)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -205,20 +204,20 @@ For HTTPS with Let's Encrypt:
 server {
     listen 443 ssl http2;
     server_name iptv.example.com;
-
+    
     ssl_certificate /etc/letsencrypt/live/iptv.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/iptv.example.com/privkey.pem;
-
+    
     location / {
         proxy_pass http://localhost:34400;
         proxy_http_version 1.1;
-
+        
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-Host $host;
-
+        
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
@@ -253,11 +252,11 @@ services:
     volumes:
       - ./config:/config
     labels:
-      - 'traefik.enable=true'
-      - 'traefik.http.routers.iptv.rule=Host(`iptv.example.com`)'
-      - 'traefik.http.routers.iptv.entrypoints=websecure'
-      - 'traefik.http.routers.iptv.tls.certresolver=letsencrypt'
-      - 'traefik.http.services.iptv.loadbalancer.server.port=34400'
+      - "traefik.enable=true"
+      - "traefik.http.routers.iptv.rule=Host(`iptv.example.com`)"
+      - "traefik.http.routers.iptv.entrypoints=websecure"
+      - "traefik.http.routers.iptv.tls.certresolver=letsencrypt"
+      - "traefik.http.services.iptv.loadbalancer.server.port=34400"
 ```
 
 ### Docker Compose Setup
@@ -273,7 +272,7 @@ services:
     container_name: iptv-proxy
     restart: unless-stopped
     ports:
-      - '34400:34400'
+      - "34400:34400"
     volumes:
       - ./config:/config
       - ./data:/data
@@ -282,7 +281,7 @@ services:
       # Optional: Set explicit base URL if auto-detection doesn't work
       # - BASE_URL=https://iptv.example.com
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:34400/health']
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:34400/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -330,7 +329,7 @@ Add cache settings to your `app.yaml`:
 cache:
   # EPG cache TTL in seconds (default: 21600 = 6 hours)
   epg_ttl: 21600
-
+  
   # M3U cache TTL in seconds (default: 3600 = 1 hour)
   m3u_ttl: 3600
 ```
@@ -345,19 +344,16 @@ Setting TTL to `0` disables automatic expiration (cache persists until manually 
 - `PUT /api/cache/ttl/:name` - Update TTL for specific cache
 
 **Example: View cache statistics**
-
 ```bash
 curl http://localhost:34400/api/cache/stats
 ```
 
 **Example: Clear EPG cache**
-
 ```bash
 curl -X POST http://localhost:34400/api/cache/clear/epg
 ```
 
 **Example: Update M3U cache TTL to 2 hours**
-
 ```bash
 curl -X PUT http://localhost:34400/api/cache/ttl/m3u \
   -H "Content-Type: application/json" \
@@ -452,7 +448,6 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** M3U playlist is empty or channels are missing.
 
 **Solutions:**
-
 1. Check that your M3U sources are accessible:
    ```bash
    curl -I http://your-source/playlist.m3u
@@ -467,7 +462,6 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** Program guide is empty in your media player.
 
 **Solutions:**
-
 1. Verify channel IDs match between M3U and XMLTV:
    - M3U channels need `tvg-id` attribute
    - XMLTV must have `<channel id="...">` matching the tvg-id
@@ -481,7 +475,6 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** HDHomeRun tuner doesn't show up in channel list.
 
 **Solutions:**
-
 1. Verify the device is on your network: `ping hdhomerun-device.local`
 2. Test the discover endpoint: `curl http://device-ip/discover.json`
 3. Ensure `type: "hdhomerun"` is set in m3u.yaml
@@ -493,10 +486,9 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** Generated M3U contains wrong server addresses.
 
 **Solutions:**
-
 1. Set explicit `base_url` in `app.yaml`:
    ```yaml
-   base_url: 'https://iptv.example.com'
+   base_url: "https://iptv.example.com"
    ```
 2. Ensure reverse proxy forwards headers correctly:
    - X-Forwarded-Proto
@@ -510,7 +502,6 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** Updated config files but changes aren't visible.
 
 **Solutions:**
-
 1. Reload channels: `POST http://localhost:34400/api/reload/channels`
 2. Reload EPG: `POST http://localhost:34400/api/reload/epg`
 3. Or restart the server: `docker restart iptv-proxy`
@@ -522,10 +513,9 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** Source requires authentication and returns 401/403 errors.
 
 **Solutions:**
-
 1. URL-encode credentials in the source URL:
    ```yaml
-   url: 'https://username:password@provider.com/playlist.m3u'
+   url: "https://username:password@provider.com/playlist.m3u"
    ```
 2. For complex authentication, consider using a local proxy
 3. Check if the service requires API keys or tokens (may need code modification)
@@ -539,7 +529,6 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** Server consumes too much RAM.
 
 **Solutions:**
-
 1. Large EPG files can use significant memory - consider:
    - Filtering to only needed channels
    - Using smaller, source-specific EPG files
@@ -553,7 +542,6 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** Admin interface shows "Not Available" message.
 
 **Solutions:**
-
 1. Build the admin UI:
    ```bash
    npm run admin:build
@@ -570,7 +558,6 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Problem:** EPG doesn't auto-refresh or scheduled tasks don't execute.
 
 **Solutions:**
-
 1. Check cron expression syntax in `app.yaml`
 2. Verify scheduler is running: check `/api/scheduler/jobs` endpoint
 3. Review server logs for scheduler errors
@@ -612,7 +599,6 @@ If you're still experiencing issues:
 The server provides several API endpoints for configuration and management. See [API.md](API.md) for complete documentation.
 
 **Key Endpoints:**
-
 - `GET /lineup.m3u` - M3U playlist
 - `GET /xmltv.xml` - EPG data
 - `GET /status` - System diagnostics

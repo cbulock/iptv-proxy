@@ -9,87 +9,76 @@ const YAML_VALIDATOR_URL = 'https://www.yamllint.com/';
 
 // Define schemas for each config file
 const m3uSchema = Joi.object({
-  urls: Joi.array()
-    .items(
-      Joi.object({
-        name: Joi.string().required().messages({
-          'any.required': 'Each M3U source must have a "name"',
-          'string.empty': 'M3U source "name" cannot be empty',
-        }),
-        url: Joi.string().required().messages({
-          'any.required': 'Each M3U source must have a "url"',
-          'string.empty': 'M3U source "url" cannot be empty',
-        }),
-        type: Joi.string().valid('m3u', 'hdhomerun').lowercase().default('m3u').messages({
-          'any.only': 'M3U source "type" must be either "m3u" or "hdhomerun"',
-        }),
+  urls: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required().messages({
+        'any.required': 'Each M3U source must have a "name"',
+        'string.empty': 'M3U source "name" cannot be empty'
+      }),
+      url: Joi.string().required().messages({
+        'any.required': 'Each M3U source must have a "url"',
+        'string.empty': 'M3U source "url" cannot be empty'
+      }),
+      type: Joi.string().valid('m3u', 'hdhomerun').lowercase().default('m3u').messages({
+        'any.only': 'M3U source "type" must be either "m3u" or "hdhomerun"'
       })
-    )
-    .default([]),
+    })
+  ).default([])
 }).default({ urls: [] });
 
 const epgSchema = Joi.object({
-  urls: Joi.array()
-    .items(
-      Joi.object({
-        name: Joi.string().required().messages({
-          'any.required': 'Each EPG source must have a "name"',
-          'string.empty': 'EPG source "name" cannot be empty',
-        }),
-        url: Joi.string().required().messages({
-          'any.required': 'Each EPG source must have a "url"',
-          'string.empty': 'EPG source "url" cannot be empty',
-        }),
+  urls: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required().messages({
+        'any.required': 'Each EPG source must have a "name"',
+        'string.empty': 'EPG source "name" cannot be empty'
+      }),
+      url: Joi.string().required().messages({
+        'any.required': 'Each EPG source must have a "url"',
+        'string.empty': 'EPG source "url" cannot be empty'
       })
-    )
-    .default([]),
+    })
+  ).default([])
 }).default({ urls: [] });
 
 const appSchema = Joi.object({
   base_url: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
-    'string.uri': 'app.yaml "base_url" must be a valid URL',
+    'string.uri': 'app.yaml "base_url" must be a valid URL'
   }),
   cache: Joi.object({
     epg_ttl: Joi.number().integer().min(0).optional().messages({
       'number.base': 'cache.epg_ttl must be a number',
       'number.integer': 'cache.epg_ttl must be an integer',
-      'number.min': 'cache.epg_ttl must be at least 0',
+      'number.min': 'cache.epg_ttl must be at least 0'
     }),
     m3u_ttl: Joi.number().integer().min(0).optional().messages({
       'number.base': 'cache.m3u_ttl must be a number',
       'number.integer': 'cache.m3u_ttl must be an integer',
-      'number.min': 'cache.m3u_ttl must be at least 0',
-    }),
-  }).optional(),
-})
-  .unknown(true)
-  .default({});
-
-const channelMapSchema = Joi.object()
-  .pattern(
-    Joi.string(),
-    Joi.object({
-      name: Joi.string().optional(),
-      number: Joi.string().optional(),
-      tvg_id: Joi.string().optional(),
-      logo: Joi.string().optional(),
-      url: Joi.string().optional(),
-      group: Joi.string().optional(),
+      'number.min': 'cache.m3u_ttl must be at least 0'
     })
-      .or('name', 'number', 'tvg_id', 'logo', 'url', 'group')
-      .messages({
-        'object.missing':
-          'Each channel mapping must have at least one property (name, number, tvg_id, logo, url, or group)',
-      })
-  )
-  .default({});
+  }).optional()
+}).unknown(true).default({});
+
+const channelMapSchema = Joi.object().pattern(
+  Joi.string(),
+  Joi.object({
+    name: Joi.string().optional(),
+    number: Joi.string().optional(),
+    tvg_id: Joi.string().optional(),
+    logo: Joi.string().optional(),
+    url: Joi.string().optional(),
+    group: Joi.string().optional()
+  }).or('name', 'number', 'tvg_id', 'logo', 'url', 'group').messages({
+    'object.missing': 'Each channel mapping must have at least one property (name, number, tvg_id, logo, url, or group)'
+  })
+).default({});
 
 // Default configurations
 const defaultConfigs = {
   m3u: { urls: [] },
   epg: { urls: [] },
   app: {},
-  channelMap: {},
+  channelMap: {}
 };
 
 /**
@@ -112,7 +101,7 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
     // Read and parse YAML
     const content = fs.readFileSync(path, 'utf8');
     let parsed;
-
+    
     try {
       parsed = yaml.parse(content);
     } catch (parseError) {
@@ -130,7 +119,7 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
     // Validate with Joi schema
     const { error, value } = schema.validate(parsed, {
       abortEarly: false,
-      stripUnknown: false,
+      stripUnknown: false
     });
 
     if (error) {
@@ -148,6 +137,7 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
 
     console.log(chalk.green(`✓ Loaded and validated ${name} from ${path}`));
     return value;
+
   } catch (err) {
     console.error(chalk.red(`❌ Unexpected error loading ${path}:`));
     console.error(chalk.red(`   ${err.message}`));
@@ -203,26 +193,26 @@ export function loadConfig(configType) {
       path: getConfigPath('m3u.yaml'),
       schema: m3uSchema,
       default: defaultConfigs.m3u,
-      name: 'M3U config',
+      name: 'M3U config'
     },
     epg: {
       path: getConfigPath('epg.yaml'),
       schema: epgSchema,
       default: defaultConfigs.epg,
-      name: 'EPG config',
+      name: 'EPG config'
     },
     app: {
       path: getConfigPath('app.yaml'),
       schema: appSchema,
       default: defaultConfigs.app,
-      name: 'App config',
+      name: 'App config'
     },
     channelMap: {
       path: getConfigPath('channel-map.yaml'),
       schema: channelMapSchema,
       default: defaultConfigs.channelMap,
-      name: 'Channel map',
-    },
+      name: 'Channel map'
+    }
   };
 
   const config = configs[configType];
@@ -244,7 +234,7 @@ export function validateConfigData(configType, data) {
     m3u: m3uSchema,
     epg: epgSchema,
     app: appSchema,
-    channelMap: channelMapSchema,
+    channelMap: channelMapSchema
   };
 
   const schema = schemas[configType];
@@ -254,7 +244,7 @@ export function validateConfigData(configType, data) {
 
   const { error, value } = schema.validate(data, {
     abortEarly: false,
-    stripUnknown: false,
+    stripUnknown: false
   });
 
   if (error) {

@@ -28,12 +28,10 @@ This project merges IPTV sources (M3U and EPG/XMLTV) into a single unified outpu
 - `server/` or root contains HTTP-serving logic
 
 ✅ Copilot should:
-
 - Ensure config files are loaded in a fail-safe way with clear error messages
 - Help maintain consistent structure in output files (`EXTINF`, channel names, `tvg-*` attributes, etc.)
 
 ❌ Copilot should avoid:
-
 - Over-engineering small scripts with unnecessary classes
 - Adding frontend-related suggestions unless prompted
 
@@ -55,7 +53,6 @@ This project merges IPTV sources (M3U and EPG/XMLTV) into a single unified outpu
   - Match `channel id="..."` with `tvg-id` or guide number
 
 Copilot should help identify:
-
 - Missing mappings
 - Potential channel duplication
 - Mismatched or malformed tags in the output XML
