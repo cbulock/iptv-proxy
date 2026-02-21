@@ -44,8 +44,8 @@ router.post('/api/auth/setup', authLimiter, (req, res) => {
     return res.status(400).json({ error: 'Username is required' });
   }
 
-  if (!password || typeof password !== 'string' || password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (!password || typeof password !== 'string' || password.length < 8 || password.length > 128) {
+    return res.status(400).json({ error: 'Password must be between 8 and 128 characters' });
   }
 
   try {
