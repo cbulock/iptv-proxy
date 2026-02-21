@@ -1,5 +1,23 @@
 <template>
   <n-config-provider :theme="darkTheme">
+    <!-- Auth setup modal: shown when no credentials are configured -->
+    <n-modal :show="showSetupModal" :mask-closable="false" :closable="false" preset="card" title="Set Up Admin Authentication" style="max-width:460px;">
+      <p style="opacity:.8;margin-top:0;">No administrator credentials are configured. Set a username and password to secure the admin interface.</p>
+      <n-form label-placement="left" label-width="140">
+        <n-form-item label="Username">
+          <n-input v-model:value="setupForm.username" placeholder="admin" :disabled="savingSetup" />
+        </n-form-item>
+        <n-form-item label="Password">
+          <n-input v-model:value="setupForm.password" type="password" show-password-on="click" placeholder="Min. 8 characters" :disabled="savingSetup" />
+        </n-form-item>
+        <n-form-item label="Confirm Password">
+          <n-input v-model:value="setupForm.confirm" type="password" show-password-on="click" placeholder="Repeat password" :disabled="savingSetup" />
+        </n-form-item>
+      </n-form>
+      <div v-if="setupError" style="color:#d9534f;margin-bottom:.75rem;">{{ setupError }}</div>
+      <n-button type="primary" :loading="savingSetup" @click="submitSetup" block>{{ savingSetup ? 'Saving...' : 'Save Credentials' }}</n-button>
+    </n-modal>
+
     <n-layout>
       <n-layout-header bordered style="padding:1rem;display:flex;align-items:center;gap:1rem;">
         <h1 style="margin:0;font-size:1.2rem;">IPTV Proxy Admin</h1>
@@ -16,6 +34,25 @@
               </n-space>
             </n-form>
             <div class="foot">Editing <code>config/app.yaml</code>. Used for absolute URL generation behind proxies.</div>
+
+            <!-- Security / Change Password section (shown when auth is configured) -->
+            <div v-if="authConfigured" style="margin-top:2rem;">
+              <h3 style="margin-bottom:.75rem;">Security</h3>
+              <n-form label-placement="left" label-width="160" style="max-width:520px;">
+                <n-form-item label="Current Password">
+                  <n-input v-model:value="passwordForm.current" type="password" show-password-on="click" placeholder="Enter current password" :disabled="savingPassword" />
+                </n-form-item>
+                <n-form-item label="New Password">
+                  <n-input v-model:value="passwordForm.newPass" type="password" show-password-on="click" placeholder="Min. 8 characters" :disabled="savingPassword" />
+                </n-form-item>
+                <n-form-item label="Confirm New Password">
+                  <n-input v-model:value="passwordForm.confirm" type="password" show-password-on="click" placeholder="Repeat new password" :disabled="savingPassword" />
+                </n-form-item>
+                <n-form-item>
+                  <n-button type="primary" :loading="savingPassword" @click="changePassword">{{ savingPassword ? 'Saving...' : 'Change Password' }}</n-button>
+                </n-form-item>
+              </n-form>
+            </div>
           </n-tab-pane>
 
           <n-tab-pane name="channels" tab="Channels">
@@ -233,12 +270,19 @@
 
 <script setup>
 import { reactive, toRefs, h, watch, computed } from 'vue';
-import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, createDiscreteApi } from 'naive-ui';
+import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, createDiscreteApi } from 'naive-ui';
 const { message } = createDiscreteApi(['message']);
 
 const state = reactive({
   tab: 'app',
   app: { base_url: '' },
+  authConfigured: false,
+  showSetupModal: false,
+  setupForm: { username: 'admin', password: '', confirm: '' },
+  setupError: '',
+  savingSetup: false,
+  passwordForm: { current: '', newPass: '', confirm: '' },
+  savingPassword: false,
   channelSources: [],
   epgSources: [],
   mapping: {},
@@ -691,7 +735,68 @@ function applySuggestion(channel, suggestion) {
   }
 }
 
+async function checkAuthStatus() {
+  try {
+    const r = await fetch('/api/auth/status');
+    const j = await r.json();
+    state.authConfigured = !!j.configured;
+    state.showSetupModal = !j.configured;
+  } catch (_) {
+    // If status check fails, assume auth may be configured; don't force modal
+  }
+}
+
+async function submitSetup() {
+  state.setupError = '';
+  const { username, password, confirm } = state.setupForm;
+  if (!username.trim()) { state.setupError = 'Username is required.'; return; }
+  if (password.length < 8) { state.setupError = 'Password must be at least 8 characters.'; return; }
+  if (password !== confirm) { state.setupError = 'Passwords do not match.'; return; }
+  try {
+    state.savingSetup = true;
+    const r = await fetch('/api/auth/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username.trim(), password }),
+    });
+    const j = await r.json();
+    if (!r.ok) { state.setupError = j.error || 'Setup failed.'; return; }
+    state.showSetupModal = false;
+    state.authConfigured = true;
+    state.setupForm = { username: 'admin', password: '', confirm: '' };
+    message.success('Credentials saved. Refresh the page to log in with your new credentials.');
+  } catch (e) {
+    state.setupError = e.message || 'Setup failed.';
+  } finally {
+    state.savingSetup = false;
+  }
+}
+
+async function changePassword() {
+  const { current, newPass, confirm } = state.passwordForm;
+  if (!current) { message.error('Current password is required.'); return; }
+  if (newPass.length < 8) { message.error('New password must be at least 8 characters.'); return; }
+  if (newPass !== confirm) { message.error('New passwords do not match.'); return; }
+  try {
+    state.savingPassword = true;
+    const r = await fetch('/api/auth/password', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: current, newPassword: newPass }),
+    });
+    const j = await r.json();
+    if (!r.ok) { message.error(j.error || 'Password update failed.'); return; }
+    state.passwordForm = { current: '', newPass: '', confirm: '' };
+    message.success('Password updated successfully.');
+  } catch (e) {
+    message.error(e.message || 'Password update failed.');
+  } finally {
+    state.savingPassword = false;
+  }
+}
+
 // Initial loads
+checkAuthStatus();
 loadChannels();
 loadEPG();
 loadApp();
@@ -707,7 +812,7 @@ watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
+const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, passwordForm, savingPassword, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,

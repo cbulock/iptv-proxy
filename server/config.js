@@ -161,7 +161,16 @@ router.put('/api/config/app', requireAuth, configWriteLimiter, (req, res) => {
     fix: 'The base_url field must be a valid URL if provided. See config/examples/app.example.yaml for examples and scheduler configuration.'
   });
   try {
-    const yamlText = yaml.stringify(validation.value || {});
+    const updated = validation.value || {};
+    // Preserve admin_auth from existing config so saving app settings
+    // does not erase credentials that were set separately.
+    try {
+      const existing = loadAPP() || {};
+      if (existing.admin_auth && !updated.admin_auth) {
+        updated.admin_auth = existing.admin_auth;
+      }
+    } catch (_) { /* ignore read errors */ }
+    const yamlText = yaml.stringify(updated);
     fs.writeFileSync(APP_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {
