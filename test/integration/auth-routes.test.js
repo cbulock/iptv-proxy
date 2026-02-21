@@ -3,18 +3,20 @@ import { expect } from 'chai';
 import express from 'express';
 import axios from 'axios';
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
-import { getConfigPath } from '../../libs/paths.js';
-import authRouter from '../../server/auth-routes.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests for /api/auth/* endpoints.
-// We save/restore config/app.yaml so the real config is never permanently
-// altered by the test run.
+//
+// We point process.env.CONFIG_PATH at a temporary directory before the
+// handlers run so the real config/app.yaml is never touched — even if the
+// test process is killed mid-run.  The static authRouter import is fine
+// because auth-routes.js now computes getConfigPath('app.yaml') at call
+// time (not at module load time), so it picks up CONFIG_PATH dynamically.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const APP_YAML_PATH = getConfigPath('app.yaml');
-const EMPTY_CONFIG = '{}\n';
+import authRouter from '../../server/auth-routes.js';
 
 /** Build a Basic Auth header value for the given credentials. */
 const basicAuthHeader = (user, pass) => ({
@@ -44,18 +46,15 @@ async function stopServer(server) {
 describe('Auth Routes Integration', () => {
   let server;
   let baseUrl;
-  let originalAppYaml;
-  let hadOriginalAppYaml;
+  let tmpDir;
+  let originalConfigPath;
 
   before(async () => {
-    // Save original app.yaml so we can restore it after the suite
-    try {
-      originalAppYaml = await fs.readFile(APP_YAML_PATH, 'utf8');
-      hadOriginalAppYaml = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-      hadOriginalAppYaml = false;
-    }
+    // Point CONFIG_PATH at a throwaway temp directory.
+    // Handlers call getConfigPath() at runtime, so they pick this up.
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-auth-test-'));
+    originalConfigPath = process.env.CONFIG_PATH;
+    process.env.CONFIG_PATH = tmpDir;
 
     const app = buildApp();
     ({ server, baseUrl } = await startServer(app));
@@ -63,18 +62,19 @@ describe('Auth Routes Integration', () => {
 
   after(async () => {
     await stopServer(server);
-    // Restore original app.yaml
-    if (hadOriginalAppYaml) {
-      await fs.writeFile(APP_YAML_PATH, originalAppYaml, 'utf8');
+    // Restore the original CONFIG_PATH (may be undefined)
+    if (originalConfigPath === undefined) {
+      delete process.env.CONFIG_PATH;
     } else {
-      await fs.rm(APP_YAML_PATH, { force: true });
+      process.env.CONFIG_PATH = originalConfigPath;
     }
+    // Clean up temp directory
+    await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
   // Reset app.yaml to empty before each test so each test starts unconfigured
   beforeEach(async () => {
-    await fs.mkdir(path.dirname(APP_YAML_PATH), { recursive: true });
-    await fs.writeFile(APP_YAML_PATH, EMPTY_CONFIG, 'utf8');
+    await fs.writeFile(path.join(tmpDir, 'app.yaml'), '{}\n', 'utf8');
   });
 
   // ── GET /api/auth/status ───────────────────────────────────────────────────
@@ -103,7 +103,7 @@ describe('Auth Routes Integration', () => {
       expect(res.data).to.deep.equal({ status: 'configured' });
 
       // Verify the file was written with a hashed password
-      const content = await fs.readFile(APP_YAML_PATH, 'utf8');
+      const content = await fs.readFile(path.join(tmpDir, 'app.yaml'), 'utf8');
       expect(content).to.include('admin_auth');
       expect(content).to.include('admin');
       expect(content).to.include('$2'); // bcrypt prefix

@@ -8,7 +8,25 @@ import { getConfigPath } from '../libs/paths.js';
 
 const router = express.Router();
 
-const APP_PATH = getConfigPath('app.yaml');
+/**
+ * Returns true if the IP is a loopback or RFC-1918 private address.
+ * Used to restrict the unauthenticated /api/auth/setup endpoint so that
+ * only operators on the local network can claim a first-run instance.
+ */
+function isPrivateOrLoopback(ip) {
+  if (!ip) return false;
+  // Strip IPv6-mapped-IPv4 prefix so the rest of the checks work uniformly
+  const addr = ip.replace(/^::ffff:/, '');
+  if (addr === '127.0.0.1' || addr === '::1') return true;
+  // IPv4 RFC 1918 private ranges
+  if (/^10\./.test(addr)) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(addr)) return true;
+  if (/^192\.168\./.test(addr)) return true;
+  // IPv6 Unique Local Addresses (fc00::/7) and link-local (fe80::/10)
+  if (/^f[cd][0-9a-f]{2}:/i.test(addr)) return true;
+  if (/^fe[89ab][0-9a-f]:/i.test(addr)) return true;
+  return false;
+}
 
 // Rate limiter for auth endpoints (more restrictive to limit brute force)
 const authLimiter = RateLimit({
@@ -45,6 +63,11 @@ router.get('/api/auth/status', authLimiter, (req, res) => {
  * Set up initial admin credentials. Only allowed when auth is NOT yet configured.
  */
 router.post('/api/auth/setup', authLimiter, (req, res) => {
+  // Restrict setup to loopback and private-network clients only
+  if (!isPrivateOrLoopback(req.ip)) {
+    return res.status(403).json({ error: 'Setup can only be performed from a local or private network.' });
+  }
+
   if (isAuthEnabled()) {
     return res
       .status(403)
@@ -101,7 +124,7 @@ router.post('/api/auth/setup', authLimiter, (req, res) => {
       password: hashedPassword,
     };
 
-    fs.writeFileSync(APP_PATH, yaml.stringify(appConfig), 'utf8');
+    fs.writeFileSync(getConfigPath('app.yaml'), yaml.stringify(appConfig), 'utf8');
     res.json({ status: 'configured' });
   } catch (e) {
     console.error('Error setting up auth:', e);
@@ -153,7 +176,7 @@ router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
       password: hashPassword(newPassword),
     };
 
-    fs.writeFileSync(APP_PATH, yaml.stringify(appConfig), 'utf8');
+    fs.writeFileSync(getConfigPath('app.yaml'), yaml.stringify(appConfig), 'utf8');
     res.json({ status: 'updated' });
   } catch (e) {
     console.error('Error updating password:', e);
