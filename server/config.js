@@ -155,6 +155,14 @@ router.put('/api/config/epg', requireAuth, configWriteLimiter, (req, res) => {
 
 router.put('/api/config/app', requireAuth, configWriteLimiter, (req, res) => {
   const incoming = req.body;
+  // Reject requests that try to set admin_auth via this endpoint; credentials
+  // must be managed exclusively through /api/auth/setup and /api/auth/password.
+  if (incoming && incoming.admin_auth !== undefined) {
+    return res.status(400).json({
+      error: 'admin_auth cannot be set via this endpoint',
+      fix: 'Use POST /api/auth/setup or PUT /api/auth/password to manage admin credentials.'
+    });
+  }
   const validation = validateConfigData('app', incoming);
   if (!validation.valid) return res.status(400).json({ 
     error: validation.error,
@@ -162,11 +170,11 @@ router.put('/api/config/app', requireAuth, configWriteLimiter, (req, res) => {
   });
   try {
     const updated = validation.value || {};
-    // Preserve admin_auth from existing config so saving app settings
+    // Always preserve admin_auth from existing config so saving app settings
     // does not erase credentials that were set separately.
     try {
       const existing = loadAPP() || {};
-      if (existing.admin_auth && !updated.admin_auth) {
+      if (existing.admin_auth) {
         updated.admin_auth = existing.admin_auth;
       }
     } catch (_) { /* ignore read errors */ }

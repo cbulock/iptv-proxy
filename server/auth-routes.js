@@ -19,6 +19,19 @@ const authLimiter = RateLimit({
   message: { error: 'Too many authentication requests, please try again later.' },
 });
 
+// Simple in-memory write lock to prevent concurrent credential writes
+let writeLock = false;
+
+function acquireLock() {
+  if (writeLock) return false;
+  writeLock = true;
+  return true;
+}
+
+function releaseLock() {
+  writeLock = false;
+}
+
 /**
  * GET /api/auth/status
  * Public endpoint — returns whether admin authentication is configured.
@@ -39,16 +52,40 @@ router.post('/api/auth/setup', authLimiter, (req, res) => {
   }
 
   const { username, password } = req.body || {};
+  const trimmedUsername = typeof username === 'string' ? username.trim() : '';
 
-  if (!username || typeof username !== 'string' || username.trim().length === 0) {
+  if (!trimmedUsername) {
     return res.status(400).json({ error: 'Username is required' });
   }
 
-  if (!password || typeof password !== 'string' || password.length < 8 || password.length > 128) {
-    return res.status(400).json({ error: 'Password must be between 8 and 128 characters' });
+  if (trimmedUsername.length > 50) {
+    return res.status(400).json({ error: 'Username must be 50 characters or fewer' });
+  }
+
+  if (!/^[a-zA-Z0-9_\-.@]+$/.test(trimmedUsername)) {
+    return res.status(400).json({ error: 'Username may only contain letters, numbers, underscores, hyphens, dots, and @ signs' });
+  }
+
+  if (!password || typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  if (password.length > 128) {
+    return res.status(400).json({ error: 'Password must be 128 characters or fewer' });
+  }
+
+  if (!acquireLock()) {
+    return res.status(409).json({ error: 'Another credential operation is in progress. Please try again.' });
   }
 
   try {
+    // Re-check after acquiring lock in case another request completed setup first
+    if (isAuthEnabled()) {
+      return res
+        .status(403)
+        .json({ error: 'Authentication is already configured. Use the password update endpoint to change credentials.' });
+    }
+
     const hashedPassword = hashPassword(password);
 
     // Read and merge with existing app config to preserve other settings
@@ -60,7 +97,7 @@ router.post('/api/auth/setup', authLimiter, (req, res) => {
     }
 
     appConfig.admin_auth = {
-      username: username.trim(),
+      username: trimmedUsername,
       password: hashedPassword,
     };
 
@@ -68,7 +105,9 @@ router.post('/api/auth/setup', authLimiter, (req, res) => {
     res.json({ status: 'configured' });
   } catch (e) {
     console.error('Error setting up auth:', e);
-    res.status(500).json({ error: 'Failed to save credentials', detail: e.message });
+    res.status(500).json({ error: 'Failed to save credentials' });
+  } finally {
+    releaseLock();
   }
 });
 
@@ -85,6 +124,14 @@ router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
 
   if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
     return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  }
+
+  if (newPassword.length > 128) {
+    return res.status(400).json({ error: 'New password must be 128 characters or fewer' });
+  }
+
+  if (!acquireLock()) {
+    return res.status(409).json({ error: 'Another credential operation is in progress. Please try again.' });
   }
 
   try {
@@ -109,7 +156,9 @@ router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
     res.json({ status: 'updated' });
   } catch (e) {
     console.error('Error updating password:', e);
-    res.status(500).json({ error: 'Failed to update password', detail: e.message });
+    res.status(500).json({ error: 'Failed to update password' });
+  } finally {
+    releaseLock();
   }
 });
 

@@ -761,10 +761,9 @@ async function submitSetup() {
     });
     const j = await r.json();
     if (!r.ok) { state.setupError = j.error || 'Setup failed.'; return; }
-    state.showSetupModal = false;
-    state.authConfigured = true;
     state.setupForm = { username: 'admin', password: '', confirm: '' };
-    message.success('Credentials saved. Refresh the page to log in with your new credentials.');
+    // Reload so the browser picks up the new auth requirement immediately.
+    window.location.reload();
   } catch (e) {
     state.setupError = e.message || 'Setup failed.';
   } finally {
