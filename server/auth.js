@@ -1,4 +1,5 @@
 import { loadConfig } from '../libs/config-loader.js';
+import crypto from 'crypto';
 
 /**
  * Load admin authentication configuration
@@ -27,14 +28,76 @@ export function isAuthEnabled() {
 }
 
 /**
+ * Timing-safe string comparison to prevent timing attacks
+ */
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') {
+    return false;
+  }
+  
+  // Convert strings to buffers for constant-time comparison
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  
+  // If lengths differ, pad the shorter one to prevent length-based timing attacks
+  if (bufA.length !== bufB.length) {
+    // Use a dummy comparison to maintain constant time
+    crypto.timingSafeEqual(
+      Buffer.alloc(Math.max(bufA.length, bufB.length)),
+      Buffer.alloc(Math.max(bufA.length, bufB.length))
+    );
+    return false;
+  }
+  
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+/**
  * Verify credentials against configured admin auth
+ * Uses timing-safe comparison to prevent timing attacks
  */
 export function verifyCredentials(username, password) {
   const authConfig = getAuthConfig();
   if (!authConfig) {
     return false;
   }
-  return authConfig.username === username && authConfig.password === password;
+  
+  // Use timing-safe comparison for both username and password
+  const usernameMatch = timingSafeEqual(authConfig.username, username);
+  const passwordMatch = timingSafeEqual(authConfig.password, password);
+  
+  return usernameMatch && passwordMatch;
+}
+
+/**
+ * Common authentication logic
+ * Returns an object with { authenticated: boolean, username?: string, error?: string }
+ */
+function authenticateRequest(req) {
+  // If auth is not enabled, allow access
+  if (!isAuthEnabled()) {
+    return { authenticated: true };
+  }
+
+  // Check for Authorization header
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    return { authenticated: false, error: 'missing_auth' };
+  }
+
+  // Decode Basic Auth credentials
+  const base64Credentials = authHeader.split(' ')[1];
+  const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+  const [username, ...passwordParts] = credentials.split(':');
+  const password = passwordParts.join(':'); // Handle passwords containing colons
+
+  // Verify credentials
+  if (!verifyCredentials(username, password)) {
+    return { authenticated: false, error: 'invalid_credentials' };
+  }
+
+  return { authenticated: true, username };
 }
 
 /**
@@ -42,33 +105,13 @@ export function verifyCredentials(username, password) {
  * Checks for Basic Auth header
  */
 export function requireAuth(req, res, next) {
-  // If auth is not enabled, allow access
-  if (!isAuthEnabled()) {
-    return next();
-  }
-
-  // Check for Authorization header
-  const authHeader = req.headers.authorization;
+  const authResult = authenticateRequest(req);
   
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    // No auth header, request authentication
+  if (!authResult.authenticated) {
     res.setHeader('WWW-Authenticate', 'Basic realm="IPTV Proxy Admin"');
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  // Decode Basic Auth credentials
-  const base64Credentials = authHeader.split(' ')[1];
-  const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
-  const [username, ...passwordParts] = credentials.split(':');
-  const password = passwordParts.join(':'); // Handle passwords containing colons
-
-  // Verify credentials
-  if (!verifyCredentials(username, password)) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="IPTV Proxy Admin"');
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  // Authentication successful
   next();
 }
 
@@ -76,62 +119,35 @@ export function requireAuth(req, res, next) {
  * Middleware specifically for admin UI pages (serves HTML on auth failure)
  */
 export function requireAuthHTML(req, res, next) {
-  // If auth is not enabled, allow access
-  if (!isAuthEnabled()) {
-    return next();
-  }
-
-  // Check for Authorization header
-  const authHeader = req.headers.authorization;
+  const authResult = authenticateRequest(req);
   
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    // No auth header, request authentication
+  if (!authResult.authenticated) {
     res.setHeader('WWW-Authenticate', 'Basic realm="IPTV Proxy Admin"');
+    
+    const errorTitle = authResult.error === 'invalid_credentials' 
+      ? 'Authentication Failed' 
+      : 'Authentication Required';
+    const errorMessage = authResult.error === 'invalid_credentials'
+      ? 'Invalid credentials. Please try again.'
+      : 'Please enter your credentials to access the admin interface.';
+    
     return res.status(401).send(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Authentication Required</title>
+          <title>${errorTitle}</title>
           <style>
             body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
             h1 { color: #e74c3c; }
           </style>
         </head>
         <body>
-          <h1>Authentication Required</h1>
-          <p>Please enter your credentials to access the admin interface.</p>
+          <h1>${errorTitle}</h1>
+          <p>${errorMessage}</p>
         </body>
       </html>
     `);
   }
 
-  // Decode Basic Auth credentials
-  const base64Credentials = authHeader.split(' ')[1];
-  const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
-  const [username, ...passwordParts] = credentials.split(':');
-  const password = passwordParts.join(':'); // Handle passwords containing colons
-
-  // Verify credentials
-  if (!verifyCredentials(username, password)) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="IPTV Proxy Admin"');
-    return res.status(401).send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Authentication Failed</title>
-          <style>
-            body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-            h1 { color: #e74c3c; }
-          </style>
-        </head>
-        <body>
-          <h1>Authentication Failed</h1>
-          <p>Invalid credentials. Please try again.</p>
-        </body>
-      </html>
-    `);
-  }
-
-  // Authentication successful
   next();
 }

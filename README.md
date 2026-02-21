@@ -76,7 +76,14 @@ admin_auth:
 - When `admin_auth` is configured, the admin UI and all management API endpoints require HTTP Basic Authentication
 - Protects endpoints: `/`, `/admin`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
 - Media endpoints (M3U playlist, XMLTV guide, streams) remain accessible without authentication
-- **Important:** Change the default password before deploying to production!
+- **Important:** Change the default password before deploying to production, and always use a strong, unique password.
+
+**Security Best Practices:**
+- The `admin_auth.password` value in `app.yaml` is stored in **plain text**. Treat this file as sensitive and **never commit real credentials to version control**.
+- Restrict file permissions on `app.yaml` (e.g., `chmod 600 config/app.yaml`) so only the service user can read it.
+- For production deployments, consider loading credentials from environment variables or a secrets manager rather than storing them in the config file.
+- Always use HTTPS when accessing the admin UI remotely to protect credentials in transit.
+- Add `config/app.yaml` to your `.gitignore` if it contains real credentials.
 
 ### `epg.yaml`
 

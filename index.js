@@ -105,11 +105,13 @@ npm run build</pre>
 });
 
 // Serve other static files (not admin)
+// Create static middleware once for efficiency
+const publicStatic = express.static(publicDir);
 app.use((req, res, next) => {
   if (req.path.startsWith('/admin')) {
     return next();
   }
-  express.static(publicDir)(req, res, next);
+  publicStatic(req, res, next);
 });
 
 // Optionally serve node_modules in development to allow ESM imports without a bundler
