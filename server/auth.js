@@ -1,5 +1,6 @@
 import { loadConfig } from '../libs/config-loader.js';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 
 /**
  * Load admin authentication configuration
@@ -18,6 +19,14 @@ function getAuthConfig() {
     // Config file doesn't exist or is invalid - authentication is disabled
   }
   return null;
+}
+
+/**
+ * Check if a password string is a bcrypt hash
+ */
+function isBcryptHash(password) {
+  // Bcrypt hashes start with $2a$, $2b$, or $2y$ followed by cost factor
+  return /^\$2[aby]\$\d{2}\$/.test(password);
 }
 
 /**
@@ -54,7 +63,8 @@ function timingSafeEqual(a, b) {
 
 /**
  * Verify credentials against configured admin auth
- * Uses timing-safe comparison to prevent timing attacks
+ * Supports both plaintext passwords (legacy) and bcrypt hashed passwords
+ * Uses timing-safe comparison to prevent timing attacks for plaintext passwords
  */
 export function verifyCredentials(username, password) {
   const authConfig = getAuthConfig();
@@ -62,11 +72,29 @@ export function verifyCredentials(username, password) {
     return false;
   }
   
-  // Use timing-safe comparison for both username and password
+  // Check username with timing-safe comparison
   const usernameMatch = timingSafeEqual(authConfig.username, username);
-  const passwordMatch = timingSafeEqual(authConfig.password, password);
   
-  return usernameMatch && passwordMatch;
+  // Check if the stored password is a bcrypt hash
+  if (isBcryptHash(authConfig.password)) {
+    // Use bcrypt comparison for hashed passwords
+    const passwordMatch = bcrypt.compareSync(password, authConfig.password);
+    return usernameMatch && passwordMatch;
+  } else {
+    // Legacy: Use timing-safe comparison for plaintext passwords
+    const passwordMatch = timingSafeEqual(authConfig.password, password);
+    return usernameMatch && passwordMatch;
+  }
+}
+
+/**
+ * Hash a plaintext password using bcrypt
+ * @param {string} password - The plaintext password to hash
+ * @returns {string} The bcrypt hash
+ */
+export function hashPassword(password) {
+  const saltRounds = 10;
+  return bcrypt.hashSync(password, saltRounds);
 }
 
 /**

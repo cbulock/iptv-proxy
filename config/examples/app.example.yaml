@@ -26,16 +26,27 @@
 
 # admin_auth:
 #   username: "admin"
-#   password: "changeme"
+#   password: "changeme"  # Use plaintext (not recommended) or bcrypt hash
 
 # Examples:
-# - Enable authentication:
+# - Enable authentication with plaintext password (legacy, not recommended):
 #   admin_auth:
 #     username: "admin"
 #     password: "your-secure-password-here"
 #
+# - Enable authentication with bcrypt hashed password (recommended):
+#   Generate hash: node scripts/hash-password.js your-password
+#   admin_auth:
+#     username: "admin"
+#     password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"
+#
 # - Disable authentication (default):
 #   Leave commented or remove the admin_auth section
+#
+# Security Notes:
+# - Bcrypt hashed passwords are automatically detected and more secure
+# - Even with hashed passwords, protect app.yaml with file permissions (chmod 600)
+# - Never commit real credentials to version control
 
 # ============================================================================
 # Cache Configuration

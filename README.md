@@ -60,7 +60,7 @@ Configure application-level settings including authentication, base URL, and cac
 # Enable to protect the admin UI and API endpoints
 admin_auth:
   username: "admin"
-  password: "your-secure-password"
+  password: "your-secure-password"  # Can be plaintext or bcrypt hash
 
 # Base URL (optional)
 # Set when running behind a reverse proxy
@@ -78,12 +78,28 @@ admin_auth:
 - Media endpoints (M3U playlist, XMLTV guide, streams) remain accessible without authentication
 - **Important:** Change the default password before deploying to production, and always use a strong, unique password.
 
+**Password Hashing (Recommended):**
+- For better security, use bcrypt-hashed passwords instead of plaintext passwords
+- Generate a bcrypt hash using the included utility script:
+  ```bash
+  node scripts/hash-password.js your-password
+  ```
+- Copy the generated hash into your `app.yaml`:
+  ```yaml
+  admin_auth:
+    username: "admin"
+    password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"
+  ```
+- The system automatically detects bcrypt hashes and uses secure comparison
+- Legacy plaintext passwords are still supported for backward compatibility
+
 **Security Best Practices:**
-- The `admin_auth.password` value in `app.yaml` is stored in **plain text**. Treat this file as sensitive and **never commit real credentials to version control**.
-- Restrict file permissions on `app.yaml` (e.g., `chmod 600 config/app.yaml`) so only the service user can read it.
-- For production deployments, consider loading credentials from environment variables or a secrets manager rather than storing them in the config file.
-- Always use HTTPS when accessing the admin UI remotely to protect credentials in transit.
-- Add `config/app.yaml` to your `.gitignore` if it contains real credentials.
+- **Prefer bcrypt hashed passwords** over plaintext passwords for production deployments
+- Even with hashed passwords, treat `app.yaml` as sensitive and **never commit credentials to version control**
+- Restrict file permissions on `app.yaml` (e.g., `chmod 600 config/app.yaml`) so only the service user can read it
+- For production deployments, consider loading credentials from environment variables or a secrets manager
+- Always use HTTPS when accessing the admin UI remotely to protect credentials in transit
+- Add `config/app.yaml` to your `.gitignore` if it contains real credentials
 
 ### `epg.yaml`
 
