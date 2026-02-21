@@ -1,5 +1,6 @@
-import { describe, it, beforeEach } from 'mocha';
+import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
+import sinon from 'sinon';
 import cacheManager, { CacheManager, Cache } from '../../libs/cache-manager.js';
 
 describe('Cache Manager', () => {
@@ -64,7 +65,17 @@ describe('Cache Manager', () => {
     });
 
     describe('TTL Expiration', () => {
-      it('should expire entries after TTL', async () => {
+      let clock;
+
+      beforeEach(() => {
+        clock = sinon.useFakeTimers();
+      });
+
+      afterEach(() => {
+        clock.restore();
+      });
+
+      it('should expire entries after TTL', () => {
         const shortTTL = new Cache('short-ttl', 50); // 50ms TTL
         shortTTL.set('key1', 'value1');
 
@@ -72,43 +83,46 @@ describe('Cache Manager', () => {
         expect(shortTTL.has('key1')).to.be.true;
         expect(shortTTL.get('key1')).to.equal('value1');
 
-        // Wait for expiration
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Advance time past TTL
+        clock.tick(100);
 
         // Should be expired
         expect(shortTTL.has('key1')).to.be.false;
         expect(shortTTL.get('key1')).to.be.undefined;
       });
 
-      it('should not expire entries with TTL=0', async () => {
+      it('should not expire entries with TTL=0', () => {
         cache.set('key1', 'value1');
 
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Advance time
+        clock.tick(100);
 
         expect(cache.has('key1')).to.be.true;
         expect(cache.get('key1')).to.equal('value1');
       });
 
-      it('should remove expired entries from size count', async () => {
+      it('should remove expired entries from size count', () => {
         const shortTTL = new Cache('short-ttl', 50);
         shortTTL.set('key1', 'value1');
         shortTTL.set('key2', 'value2');
 
         expect(shortTTL.size()).to.equal(2);
 
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Advance time past TTL
+        clock.tick(100);
 
         expect(shortTTL.size()).to.equal(0);
       });
 
-      it('should update TTL dynamically', async () => {
+      it('should update TTL dynamically', () => {
         const dynamicCache = new Cache('dynamic', 1000);
         dynamicCache.set('key1', 'value1');
 
         // Change TTL to very short
         dynamicCache.setTTL(50);
 
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Advance time past new TTL
+        clock.tick(100);
 
         // Should be expired with new TTL
         expect(dynamicCache.has('key1')).to.be.false;
