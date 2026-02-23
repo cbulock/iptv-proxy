@@ -3,10 +3,12 @@ import fs from 'fs';
 import chalk from 'chalk';
 import path from 'path';
 import crypto from 'crypto';
+import yaml from 'yaml';
 import session from 'express-session';
 import RateLimit from 'express-rate-limit';
 import { initConfig } from './server/init-config.js';
 import { loadAllConfigs } from './libs/config-loader.js';
+import { getConfigPath } from './libs/paths.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes, invalidateLineupCaches } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
@@ -42,21 +44,32 @@ const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
 app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
 
-// Session middleware — secret is read from config or generated fresh each run
+// Session middleware — secret is read from config or generated and saved on first run
 const sessionSecret = (() => {
   try {
     const appCfg = configs.app || {};
     if (typeof appCfg.session_secret === 'string' && appCfg.session_secret.length >= 32) {
       return appCfg.session_secret;
     }
-  } catch (_) { /* ignore: start with default */ }
-  const randomSecret = crypto.randomBytes(32).toString('hex');
-  console.warn(
-    '[Auth] No session_secret configured in app.yaml (minimum 32 chars). ' +
-    'Using a random secret — all sessions will be invalidated on restart. ' +
-    'Set "session_secret" in app.yaml for persistent sessions.'
-  );
-  return randomSecret;
+  } catch (_) { /* ignore: fall through to generate */ }
+
+  // Generate a new secret and persist it so sessions survive restarts
+  const newSecret = crypto.randomBytes(32).toString('hex');
+  try {
+    const appYamlPath = getConfigPath('app.yaml');
+    const existing = fs.existsSync(appYamlPath)
+      ? (yaml.parse(fs.readFileSync(appYamlPath, 'utf8')) || {})
+      : {};
+    existing.session_secret = newSecret;
+    fs.writeFileSync(appYamlPath, yaml.stringify(existing), 'utf8');
+    console.log(chalk.cyan('[Auth] Generated and saved session_secret to app.yaml for persistent sessions.'));
+  } catch (saveErr) {
+    console.warn(
+      '[Auth] Could not save session_secret to app.yaml — sessions will be invalidated on restart.',
+      saveErr.message
+    );
+  }
+  return newSecret;
 })();
 
 // NOTE: The default MemoryStore is used for sessions.

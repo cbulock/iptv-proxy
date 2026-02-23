@@ -72,7 +72,8 @@ export function hashPassword(password) {
 
 /**
  * Middleware to check if user is authenticated via session.
- * Returns 401 JSON when the session is missing or auth is not configured.
+ * When authentication is enabled, returns 401 JSON if the session is not authenticated.
+ * When authentication is disabled, always allows access.
  */
 export function requireAuth(req, res, next) {
   // If auth is not enabled, allow access

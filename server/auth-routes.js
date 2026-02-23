@@ -122,6 +122,8 @@ router.post('/api/auth/logout', (req, res) => {
       console.error('Session destroy error:', err);
       return res.status(500).json({ error: 'Logout failed' });
     }
+    // Clear the session cookie so the client does not keep a stale session ID
+    res.clearCookie('connect.sid');
     res.json({ status: 'logged_out' });
   });
 });

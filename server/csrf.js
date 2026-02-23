@@ -36,9 +36,18 @@ export function csrfMiddleware(req, res, next) {
   if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
   if (!req.path.startsWith('/api/')) return next();
 
-  // If the session has no CSRF token, auth is either disabled or the user is not
-  // logged in. In either case, skip CSRF validation (requireAuth will handle auth).
-  if (!req.session?.csrfToken) return next();
+  // Auth is disabled — no CSRF enforcement needed
+  if (!req.session) return next();
+
+  // If the session is authenticated but has no CSRF token, reject the request.
+  // This prevents bypassing CSRF checks via old/partial sessions.
+  if (req.session.authenticated && !req.session.csrfToken) {
+    return res.status(403).json({ error: 'CSRF token missing from session; please log in again' });
+  }
+
+  // If the session is not authenticated (no csrfToken because no login), skip —
+  // requireAuth will return 401 first for protected routes.
+  if (!req.session.csrfToken) return next();
 
   const token = req.headers['x-csrf-token'];
   if (!token || token !== req.session.csrfToken) {

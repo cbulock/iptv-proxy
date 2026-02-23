@@ -391,9 +391,9 @@ async function loadEPG() {
 async function loadMapping() {
   try {
   const [mapRes, candRes, unmappedRes] = await Promise.all([
-      fetch('/api/config/channel-map'),
-      fetch('/api/mapping/candidates'),
-      fetch('/api/mapping/unmapped')
+      apiFetch('/api/config/channel-map'),
+      apiFetch('/api/mapping/candidates'),
+      apiFetch('/api/mapping/unmapped')
     ]);
     const map = await mapRes.json();
     const candidates = await candRes.json();

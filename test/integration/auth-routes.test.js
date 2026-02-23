@@ -20,6 +20,7 @@ const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === 'true';
 // ─────────────────────────────────────────────────────────────────────────────
 
 import authRouter from '../../server/auth-routes.js';
+import { csrfMiddleware } from '../../server/csrf.js';
 
 function buildApp() {
   const app = express();
@@ -32,6 +33,7 @@ function buildApp() {
       cookie: { secure: SESSION_COOKIE_SECURE }, // can be enabled via env for HTTPS
     })
   );
+  app.use(csrfMiddleware);
   app.use(authRouter);
   return app;
 }
@@ -50,8 +52,7 @@ async function stopServer(server) {
 }
 
 /**
- * Log in via POST /api/auth/login and return the session cookie string,
- * ready to be used in subsequent requests.
+ * Log in via POST /api/auth/login and return the session cookie string and CSRF token.
  */
 async function loginAndGetCookie(baseUrl, username, password) {
   const res = await axios.post(
@@ -63,11 +64,17 @@ async function loginAndGetCookie(baseUrl, username, password) {
   const setCookie = res.headers['set-cookie'];
   if (!setCookie || !setCookie.length) throw new Error('No session cookie returned from login');
   // Return only the cookie name=value pair (first part before semicolon)
-  return setCookie[0].split(';')[0];
+  return {
+    cookie: setCookie[0].split(';')[0],
+    csrfToken: res.data.csrfToken || '',
+  };
 }
 
-/** Build Cookie header object from a cookie string. */
-const cookieHeader = (cookie) => ({ Cookie: cookie });
+/** Build Cookie + CSRF header object from a login result. */
+const cookieHeader = ({ cookie, csrfToken }) => ({
+  Cookie: cookie,
+  ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+});
 
 describe('Auth Routes Integration', () => {
   let server;
