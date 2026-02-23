@@ -20,8 +20,7 @@ import cacheRouter from './server/cache.js';
 import { parseAll, setStatusCallback } from './scripts/parseM3U.js';
 import { updateSourceStatus, resetSourceStatus } from './server/status.js';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
-import { initChannelsCache, invalidateCache, onChannelsUpdate } from './libs/channels-cache.js';
-import getBaseUrl from './libs/getBaseUrl.js';
+import { initChannelsCache, onChannelsUpdate } from './libs/channels-cache.js';
 import { notFoundHandler, errorHandler } from './server/error-handler.js';
 import { requireAuthHTML } from './server/auth.js';
 import authRoutesRouter from './server/auth-routes.js';
@@ -45,6 +44,25 @@ const publicDir = path.resolve('./public');
 const builtAdminDir = path.join(publicDir, 'admin');
 const builtAdminIndexPath = path.join(builtAdminDir, 'index.html');
 const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
+const builtAdminAssetsDir = path.join(builtAdminDir, 'assets');
+const builtAdminStatic = express.static(builtAdminDir, { index: false });
+const publicStaticForAdmin = express.static(publicDir, { index: false });
+
+/**
+ * Resolve a hashed Vite entry asset (e.g. index-abc123.js) in public/admin/assets.
+ * Returns null when no matching asset is found.
+ * @param {'js' | 'css'} ext
+ * @returns {string | null}
+ */
+function resolveHashedAdminEntry(ext) {
+  if (!fs.existsSync(builtAdminAssetsDir)) {
+    return null;
+  }
+
+  const assetNames = fs.readdirSync(builtAdminAssetsDir);
+  const match = assetNames.find((name) => name.startsWith('index-') && name.endsWith(`.${ext}`));
+  return match ? path.join(builtAdminAssetsDir, match) : null;
+}
 
 // Try to load vite config for dev server info
 let adminDevPort = 5173;
@@ -66,11 +84,40 @@ const adminLimiter = RateLimit({
   keyGenerator: (req) => req.ip || 'unknown',
 });
 
-// Serve admin assets (JS, CSS, etc.) with authentication
-app.use('/admin', adminLimiter, requireAuthHTML, express.static(builtAdminDir));
+// Serve all /admin assets with authentication.
+// Order: built admin files -> shared public files -> hashed entry fallback.
+app.use('/admin', adminLimiter, requireAuthHTML, (req, res, next) => {
+  builtAdminStatic(req, res, (err) => {
+    if (err) {
+      return next(err);
+    }
+
+    publicStaticForAdmin(req, res, (fallbackErr) => {
+      if (fallbackErr) {
+        return next(fallbackErr);
+      }
+
+      if (req.path === '/assets/index.js') {
+        const filePath = resolveHashedAdminEntry('js');
+        if (filePath) {
+          return res.sendFile(filePath);
+        }
+      }
+
+      if (req.path === '/assets/index.css') {
+        const filePath = resolveHashedAdminEntry('css');
+        if (filePath) {
+          return res.sendFile(filePath);
+        }
+      }
+
+      return next();
+    });
+  });
+});
 
 // Serve admin HTML pages with authentication
-app.get(['/', '/admin', '/admin.html'], adminLimiter, requireAuthHTML, (req, res) => {
+app.get(['/admin', '/admin.html'], adminLimiter, requireAuthHTML, (req, res) => {
   if (isAdminBuilt()) {
     res.sendFile(builtAdminIndexPath);
   } else {
