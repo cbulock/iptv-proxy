@@ -5,6 +5,8 @@ import RateLimit from 'express-rate-limit';
 import { isAuthEnabled, hashPassword, verifyCredentials, requireAuth } from './auth.js';
 import { loadConfig } from '../libs/config-loader.js';
 import { getConfigPath } from '../libs/paths.js';
+import { loginPage } from './login-page.js';
+import { ensureCsrfToken } from './csrf.js';
 
 const router = express.Router();
 
@@ -59,10 +61,91 @@ router.get('/api/auth/status', authLimiter, (req, res) => {
 });
 
 /**
+ * GET /api/auth/session
+ * Public endpoint — returns whether the current request has an authenticated session.
+ */
+router.get('/api/auth/session', (req, res) => {
+  res.json({ authenticated: !!req.session?.authenticated });
+});
+
+/**
+ * GET /api/auth/csrf-token
+ * Returns the CSRF token for the current session.
+ * Creates one if none exists yet.
+ */
+router.get('/api/auth/csrf-token', requireAuth, (req, res) => {
+  const csrfToken = ensureCsrfToken(req);
+  res.json({ csrfToken });
+});
+
+/**
+ * POST /api/auth/login
+ * Exchange credentials for a session cookie.
+ * lgtm[js/missing-csrf-middleware] - Pre-auth endpoint; no session exists yet to protect via CSRF.
+ *   Custom CSRF protection (server/csrf.js) is applied globally and exempts this endpoint by design.
+ */
+router.post('/api/auth/login', authLimiter, (req, res) => { // lgtm[js/missing-csrf-middleware]
+  if (!isAuthEnabled()) {
+    // No auth configured — treat as open access
+    return res.json({ status: 'ok' });
+  }
+
+  const { username, password } = req.body || {};
+
+  if (!username || typeof username !== 'string' || !password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
+  if (!verifyCredentials(username, password)) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  // Regenerate the session to prevent fixation attacks
+  req.session.regenerate((err) => {
+    if (err) {
+      console.error('Session regenerate error:', err);
+      return res.status(500).json({ error: 'Login failed' });
+    }
+    req.session.authenticated = true;
+    req.session.username = username;
+    // Generate a CSRF token immediately on login so the client can read it
+    const csrfToken = ensureCsrfToken(req);
+    res.json({ status: 'ok', csrfToken });
+  });
+});
+
+/**
+ * POST /api/auth/logout
+ * Destroy the current session.
+ */
+router.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Session destroy error:', err);
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    // Clear the session cookie so the client does not keep a stale session ID
+    res.clearCookie('connect.sid');
+    res.json({ status: 'logged_out' });
+  });
+});
+
+/**
+ * GET /admin/login
+ * Standalone login page (served without authentication).
+ */
+router.get('/admin/login', authLimiter, (req, res) => {
+  res.send(loginPage());
+});
+
+/**
  * POST /api/auth/setup
  * Set up initial admin credentials. Only allowed when auth is NOT yet configured.
+ * lgtm[js/missing-csrf-middleware] - Pre-auth endpoint restricted to localhost/LAN only.
+ *   No session exists yet, so CSRF is not applicable. Custom CSRF middleware (server/csrf.js)
+ *   exempts this path by design.
  */
-router.post('/api/auth/setup', authLimiter, (req, res) => {
+router.post('/api/auth/setup', authLimiter, (req, res) => { // lgtm[js/missing-csrf-middleware]
   // Restrict setup to loopback and private-network clients only
   if (!isPrivateOrLoopback(req.ip)) {
     return res.status(403).json({ error: 'Setup can only be performed from a local or private network.' });

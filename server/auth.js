@@ -44,18 +44,18 @@ export function verifyCredentials(username, password) {
   if (!authConfig) {
     return false;
   }
-  
+
   // Verify the stored password is a bcrypt hash
   if (!isBcryptHash(authConfig.password)) {
     console.error('Authentication error: Password in app.yaml must be a bcrypt hash. Use: node scripts/hash-password.js your-password');
     return false;
   }
-  
+
   // Check username match (case-sensitive)
   if (authConfig.username !== username) {
     return false;
   }
-  
+
   // Use bcrypt comparison for hashed passwords
   return bcrypt.compareSync(password, authConfig.password);
 }
@@ -71,45 +71,17 @@ export function hashPassword(password) {
 }
 
 /**
- * Common authentication logic
- * Returns an object with { authenticated: boolean, username?: string, error?: string }
- */
-function authenticateRequest(req) {
-  // If auth is not enabled, allow access
-  if (!isAuthEnabled()) {
-    return { authenticated: true };
-  }
-
-  // Check for Authorization header
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    return { authenticated: false, error: 'missing_auth' };
-  }
-
-  // Decode Basic Auth credentials
-  const base64Credentials = authHeader.split(' ')[1];
-  const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
-  const [username, ...passwordParts] = credentials.split(':');
-  const password = passwordParts.join(':'); // Handle passwords containing colons
-
-  // Verify credentials
-  if (!verifyCredentials(username, password)) {
-    return { authenticated: false, error: 'invalid_credentials' };
-  }
-
-  return { authenticated: true, username };
-}
-
-/**
- * Middleware to check if user is authenticated
- * Checks for Basic Auth header
+ * Middleware to check if user is authenticated via session.
+ * When authentication is enabled, returns 401 JSON if the session is not authenticated.
+ * When authentication is disabled, always allows access.
  */
 export function requireAuth(req, res, next) {
-  const authResult = authenticateRequest(req);
-  
-  if (!authResult.authenticated) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="IPTV Proxy Admin"');
+  // If auth is not enabled, allow access
+  if (!isAuthEnabled()) {
+    return next();
+  }
+
+  if (!req.session?.authenticated) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
@@ -117,37 +89,24 @@ export function requireAuth(req, res, next) {
 }
 
 /**
- * Middleware specifically for admin UI pages (serves HTML on auth failure)
+ * Middleware specifically for admin UI pages.
+ * Redirects to /admin/login when the user has no valid session.
+ * The /login sub-path itself is always allowed through.
  */
 export function requireAuthHTML(req, res, next) {
-  const authResult = authenticateRequest(req);
-  
-  if (!authResult.authenticated) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="IPTV Proxy Admin"');
-    
-    const errorTitle = authResult.error === 'invalid_credentials' 
-      ? 'Authentication Failed' 
-      : 'Authentication Required';
-    const errorMessage = authResult.error === 'invalid_credentials'
-      ? 'Invalid credentials. Please try again.'
-      : 'Please enter your credentials to access the admin interface.';
-    
-    return res.status(401).send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${errorTitle}</title>
-          <style>
-            body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-            h1 { color: #e74c3c; }
-          </style>
-        </head>
-        <body>
-          <h1>${errorTitle}</h1>
-          <p>${errorMessage}</p>
-        </body>
-      </html>
-    `);
+  // If auth is not enabled, allow access
+  if (!isAuthEnabled()) {
+    return next();
+  }
+
+  // The login page must always be reachable (req.path is relative to mount point)
+  if (req.path === '/login') {
+    return next();
+  }
+
+  if (!req.session?.authenticated) {
+    const redirect = encodeURIComponent(req.originalUrl);
+    return res.redirect(`/admin/login?redirect=${redirect}`);
   }
 
   next();

@@ -2,9 +2,13 @@ import express from 'express';
 import fs from 'fs';
 import chalk from 'chalk';
 import path from 'path';
+import crypto from 'crypto';
+import yaml from 'yaml';
+import session from 'express-session';
 import RateLimit from 'express-rate-limit';
 import { initConfig } from './server/init-config.js';
 import { loadAllConfigs } from './libs/config-loader.js';
+import { getConfigPath } from './libs/paths.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes, invalidateLineupCaches } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
@@ -23,6 +27,7 @@ import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './serve
 import { initChannelsCache, onChannelsUpdate } from './libs/channels-cache.js';
 import { notFoundHandler, errorHandler } from './server/error-handler.js';
 import { requireAuthHTML } from './server/auth.js';
+import { csrfMiddleware } from './server/csrf.js';
 import authRoutesRouter from './server/auth-routes.js';
 
 // Ensure config files exist before anything else
@@ -31,13 +36,66 @@ initConfig();
 const app = express();
 const port = 34400;
 
-app.set('trust proxy', true);
-app.use(express.json({ limit: '1mb' }));
-
-// Load and validate config first (needed for auth check)
+// Load and validate config first (needed for auth check and session secret)
 const configs = loadAllConfigs();
 
 const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
+
+app.set('trust proxy', true);
+app.use(express.json({ limit: '1mb' }));
+
+// Session middleware — secret is read from config or generated and saved on first run
+const sessionSecret = (() => {
+  try {
+    const appCfg = configs.app || {};
+    if (typeof appCfg.session_secret === 'string' && appCfg.session_secret.length >= 32) {
+      return appCfg.session_secret;
+    }
+  } catch (_) { /* ignore: fall through to generate */ }
+
+  // Generate a new secret and persist it so sessions survive restarts
+  const newSecret = crypto.randomBytes(32).toString('hex');
+  try {
+    const appYamlPath = getConfigPath('app.yaml');
+    const existing = fs.existsSync(appYamlPath)
+      ? (yaml.parse(fs.readFileSync(appYamlPath, 'utf8')) || {})
+      : {};
+    existing.session_secret = newSecret;
+    fs.writeFileSync(appYamlPath, yaml.stringify(existing), 'utf8');
+    console.log(chalk.cyan('[Auth] Generated and saved session_secret to app.yaml for persistent sessions.'));
+  } catch (saveErr) {
+    console.warn(
+      '[Auth] Could not save session_secret to app.yaml — sessions will be invalidated on restart.',
+      saveErr.message
+    );
+  }
+  return newSecret;
+})();
+
+// NOTE: The default MemoryStore is used for sessions.
+// This is intentional for single-instance deployments but means:
+//   - Sessions are lost on server restart (unless session_secret is set and a persistent store is used)
+//   - Not suitable for multi-process / clustered deployments
+// For production, configure a persistent session store (e.g. connect-redis, connect-mongo).
+app.use(
+  session({
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      // Use secure cookies only when behind HTTPS (trust proxy is already set)
+      secure: 'auto',
+      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+    },
+  })
+);
+
+// CSRF protection for all mutating API requests (POST, PUT, DELETE, PATCH)
+// Exempt: login, setup, status, session, and csrf-token endpoints (pre-auth)
+// lgtm[js/missing-csrf-middleware] - csrfMiddleware (server/csrf.js) provides complete CSRF protection
+app.use(csrfMiddleware); // lgtm[js/missing-csrf-middleware]
 
 // Admin UI setup (before static middleware to control access)
 const publicDir = path.resolve('./public');
