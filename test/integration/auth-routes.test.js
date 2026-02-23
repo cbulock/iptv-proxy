@@ -6,6 +6,7 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { csrf } from 'lusca';
 
 const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === 'true';
 
@@ -32,6 +33,7 @@ function buildApp() {
       cookie: { secure: SESSION_COOKIE_SECURE }, // can be enabled via env for HTTPS
     })
   );
+  app.use(csrf());
   app.use(authRouter);
   return app;
 }
