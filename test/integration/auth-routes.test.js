@@ -7,6 +7,8 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
+const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === 'true';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests for /api/auth/* endpoints.
 //
@@ -27,7 +29,7 @@ function buildApp() {
       secret: 'test-secret-for-auth-routes',
       resave: false,
       saveUninitialized: false,
-      cookie: { secure: false }, // HTTP is fine in test environments
+      cookie: { secure: SESSION_COOKIE_SECURE }, // can be enabled via env for HTTPS
     })
   );
   app.use(authRouter);
