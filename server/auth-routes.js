@@ -81,8 +81,10 @@ router.get('/api/auth/csrf-token', requireAuth, (req, res) => {
 /**
  * POST /api/auth/login
  * Exchange credentials for a session cookie.
+ * lgtm[js/missing-csrf-middleware] - Pre-auth endpoint; no session exists yet to protect via CSRF.
+ *   Custom CSRF protection (server/csrf.js) is applied globally and exempts this endpoint by design.
  */
-router.post('/api/auth/login', authLimiter, (req, res) => {
+router.post('/api/auth/login', authLimiter, (req, res) => { // lgtm[js/missing-csrf-middleware]
   if (!isAuthEnabled()) {
     // No auth configured — treat as open access
     return res.json({ status: 'ok' });
@@ -139,8 +141,11 @@ router.get('/admin/login', authLimiter, (req, res) => {
 /**
  * POST /api/auth/setup
  * Set up initial admin credentials. Only allowed when auth is NOT yet configured.
+ * lgtm[js/missing-csrf-middleware] - Pre-auth endpoint restricted to localhost/LAN only.
+ *   No session exists yet, so CSRF is not applicable. Custom CSRF middleware (server/csrf.js)
+ *   exempts this path by design.
  */
-router.post('/api/auth/setup', authLimiter, (req, res) => {
+router.post('/api/auth/setup', authLimiter, (req, res) => { // lgtm[js/missing-csrf-middleware]
   // Restrict setup to loopback and private-network clients only
   if (!isPrivateOrLoopback(req.ip)) {
     return res.status(403).json({ error: 'Setup can only be performed from a local or private network.' });

@@ -33,7 +33,8 @@ function buildApp() {
       cookie: { secure: SESSION_COOKIE_SECURE }, // can be enabled via env for HTTPS
     })
   );
-  app.use(csrfMiddleware);
+  // lgtm[js/missing-csrf-middleware] - csrfMiddleware (server/csrf.js) provides CSRF protection
+  app.use(csrfMiddleware); // lgtm[js/missing-csrf-middleware]
   app.use(authRouter);
   return app;
 }

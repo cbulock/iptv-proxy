@@ -94,7 +94,8 @@ app.use(
 
 // CSRF protection for all mutating API requests (POST, PUT, DELETE, PATCH)
 // Exempt: login, setup, status, session, and csrf-token endpoints (pre-auth)
-app.use(csrfMiddleware);
+// lgtm[js/missing-csrf-middleware] - csrfMiddleware (server/csrf.js) provides complete CSRF protection
+app.use(csrfMiddleware); // lgtm[js/missing-csrf-middleware]
 
 // Admin UI setup (before static middleware to control access)
 const publicDir = path.resolve('./public');
