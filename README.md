@@ -63,6 +63,11 @@ admin_auth:
   username: "admin"
   password: "$2a$10$XxXxXxXxXxXxXxXxXxXxXuXxXxXxXxXxXxXxXxXxXxXxXxXxXx"  # bcrypt hash
 
+# Session Secret (recommended for production)
+# Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Without this, all users are logged out on every server restart
+session_secret: "change-me-to-a-random-32-char-or-longer-string"
+
 # Base URL (optional)
 # Set when running behind a reverse proxy
 # base_url: "https://iptv.example.com"
@@ -74,10 +79,23 @@ admin_auth:
 ```
 
 **Authentication:**
-- When `admin_auth` is configured, the admin UI and all management API endpoints require HTTP Basic Authentication
+- When `admin_auth` is configured, the admin UI and all management API endpoints require session-based authentication
+- Access the admin UI at `/admin` — you will be redirected to the login page if not authenticated
 - Protects endpoints: `/`, `/admin`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
 - Media endpoints (M3U playlist, XMLTV guide, streams) remain accessible without authentication
 - **Important:** Passwords must be bcrypt hashed for security
+
+**Session Secret:**
+- Configure a persistent session secret so that existing sessions survive server restarts:
+  ```yaml
+  session_secret: "your-secret-here-minimum-32-characters-long"
+  ```
+- If omitted, a random secret is generated on startup (all users are logged out on every restart) and a warning is logged
+- Generate a secure secret with:
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+- Minimum length is 32 characters. Shorter values are ignored and a random secret is used instead
 
 **Password Hashing:**
 - Generate a bcrypt hash using the included utility script:

@@ -6,6 +6,7 @@ import { isAuthEnabled, hashPassword, verifyCredentials, requireAuth } from './a
 import { loadConfig } from '../libs/config-loader.js';
 import { getConfigPath } from '../libs/paths.js';
 import { loginPage } from './login-page.js';
+import { ensureCsrfToken } from './csrf.js';
 
 const router = express.Router();
 
@@ -68,6 +69,16 @@ router.get('/api/auth/session', (req, res) => {
 });
 
 /**
+ * GET /api/auth/csrf-token
+ * Returns the CSRF token for the current session.
+ * Creates one if none exists yet.
+ */
+router.get('/api/auth/csrf-token', requireAuth, (req, res) => {
+  const csrfToken = ensureCsrfToken(req);
+  res.json({ csrfToken });
+});
+
+/**
  * POST /api/auth/login
  * Exchange credentials for a session cookie.
  */
@@ -95,7 +106,9 @@ router.post('/api/auth/login', authLimiter, (req, res) => {
     }
     req.session.authenticated = true;
     req.session.username = username;
-    res.json({ status: 'ok' });
+    // Generate a CSRF token immediately on login so the client can read it
+    const csrfToken = ensureCsrfToken(req);
+    res.json({ status: 'ok', csrfToken });
   });
 });
 

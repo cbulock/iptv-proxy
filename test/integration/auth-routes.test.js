@@ -6,7 +6,6 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import { csrf } from 'lusca';
 
 const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === 'true';
 
@@ -33,7 +32,6 @@ function buildApp() {
       cookie: { secure: SESSION_COOKIE_SECURE }, // can be enabled via env for HTTPS
     })
   );
-  app.use(csrf());
   app.use(authRouter);
   return app;
 }
@@ -150,7 +148,8 @@ describe('Auth Routes Integration', () => {
     it('returns 200 and a session cookie with valid credentials', async () => {
       const res = await axios.post(`${baseUrl}/api/auth/login`, { username: 'admin', password: 'password123' });
       expect(res.status).to.equal(200);
-      expect(res.data).to.deep.equal({ status: 'ok' });
+      expect(res.data.status).to.equal('ok');
+      expect(res.data).to.have.property('csrfToken').that.is.a('string');
       expect(res.headers['set-cookie']).to.be.an('array').with.length.greaterThan(0);
     });
 
@@ -170,6 +169,12 @@ describe('Auth Routes Integration', () => {
       } catch (err) {
         expect(err.response.status).to.equal(400);
       }
+    });
+
+    it('returns csrfToken in the login response', async () => {
+      const res = await axios.post(`${baseUrl}/api/auth/login`, { username: 'admin', password: 'password123' });
+      expect(res.status).to.equal(200);
+      expect(res.data).to.have.property('csrfToken').that.is.a('string').with.length.greaterThan(0);
     });
   });
 
@@ -192,6 +197,36 @@ describe('Auth Routes Integration', () => {
       // The old session cookie should no longer be authenticated
       const after = await axios.get(`${baseUrl}/api/auth/session`, { headers: cookieHeader(cookie) });
       expect(after.data.authenticated).to.equal(false);
+    });
+  });
+
+  // ── GET /api/auth/csrf-token ───────────────────────────────────────────────
+
+  describe('GET /api/auth/csrf-token', () => {
+    it('returns 401 when not authenticated', async () => {
+      await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      try {
+        await axios.get(`${baseUrl}/api/auth/csrf-token`);
+        expect.fail('Expected 401');
+      } catch (err) {
+        expect(err.response.status).to.equal(401);
+      }
+    });
+
+    it('returns a csrfToken when authenticated', async () => {
+      await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      const cookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+      const res = await axios.get(`${baseUrl}/api/auth/csrf-token`, { headers: cookieHeader(cookie) });
+      expect(res.status).to.equal(200);
+      expect(res.data).to.have.property('csrfToken').that.is.a('string').with.length.greaterThan(0);
+    });
+
+    it('returns the same token on repeated calls', async () => {
+      await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      const cookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+      const r1 = await axios.get(`${baseUrl}/api/auth/csrf-token`, { headers: cookieHeader(cookie) });
+      const r2 = await axios.get(`${baseUrl}/api/auth/csrf-token`, { headers: cookieHeader(cookie) });
+      expect(r1.data.csrfToken).to.equal(r2.data.csrfToken);
     });
   });
 

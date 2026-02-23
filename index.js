@@ -25,6 +25,7 @@ import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './serve
 import { initChannelsCache, onChannelsUpdate } from './libs/channels-cache.js';
 import { notFoundHandler, errorHandler } from './server/error-handler.js';
 import { requireAuthHTML } from './server/auth.js';
+import { csrfMiddleware } from './server/csrf.js';
 import authRoutesRouter from './server/auth-routes.js';
 
 // Ensure config files exist before anything else
@@ -49,14 +50,20 @@ const sessionSecret = (() => {
       return appCfg.session_secret;
     }
   } catch (_) { /* ignore: start with default */ }
-  return crypto.randomBytes(32).toString('hex');
   const randomSecret = crypto.randomBytes(32).toString('hex');
   console.warn(
-    'Session secret not configured: using a random secret for this process. ' +
-      'Sessions will be invalidated on every restart. Configure "session_secret" in app.yaml for production use.'
+    '[Auth] No session_secret configured in app.yaml (minimum 32 chars). ' +
+    'Using a random secret — all sessions will be invalidated on restart. ' +
+    'Set "session_secret" in app.yaml for persistent sessions.'
   );
   return randomSecret;
+})();
 
+// NOTE: The default MemoryStore is used for sessions.
+// This is intentional for single-instance deployments but means:
+//   - Sessions are lost on server restart (unless session_secret is set and a persistent store is used)
+//   - Not suitable for multi-process / clustered deployments
+// For production, configure a persistent session store (e.g. connect-redis, connect-mongo).
 app.use(
   session({
     secret: sessionSecret,
@@ -71,6 +78,10 @@ app.use(
     },
   })
 );
+
+// CSRF protection for all mutating API requests (POST, PUT, DELETE, PATCH)
+// Exempt: login, setup, status, session, and csrf-token endpoints (pre-auth)
+app.use(csrfMiddleware);
 
 // Admin UI setup (before static middleware to control access)
 const publicDir = path.resolve('./public');

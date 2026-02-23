@@ -89,18 +89,21 @@ export function loginPage() {
           }
           const params = new URLSearchParams(window.location.search);
           const redirect = params.get('redirect') || '/admin';
-          const isValidRedirect =
-            redirect.startsWith('/') &&
-            !redirect.startsWith('//') &&
-            !redirect.includes('://');
-          window.location.href = isValidRedirect ? redirect : '/admin';
+          // Validate redirect to prevent open redirect attacks (must be same-origin relative path)
+          const safeRedirect =
+            redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.includes('://')
+              ? redirect
+              : '/admin';
+          window.location.href = safeRedirect;
         } catch (e) {
           errorEl.textContent = e.message || 'Login failed';
         } finally {
           btn.disabled = false;
         }
       }
-      document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !btn.disabled) login(); });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !document.getElementById('submit').disabled) login();
+      });
     </script>
   </body>
 </html>`;

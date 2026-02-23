@@ -274,6 +274,35 @@ import { reactive, toRefs, h, watch, computed } from 'vue';
 import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, createDiscreteApi } from 'naive-ui';
 const { message } = createDiscreteApi(['message']);
 
+// CSRF token for mutating API requests — fetched after login
+let _csrfToken = '';
+
+/**
+ * Wrapper around fetch that automatically includes the CSRF token header
+ * on mutating requests (POST, PUT, DELETE, PATCH).
+ */
+function apiFetch(url, opts = {}) {
+  const method = (opts.method || 'GET').toUpperCase();
+  const mutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+  return fetch(url, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      ...(mutating && _csrfToken ? { 'X-CSRF-Token': _csrfToken } : {}),
+    },
+  });
+}
+
+async function fetchCsrfToken() {
+  try {
+    const r = await apiFetch('/api/auth/csrf-token');
+    if (r.ok) {
+      const j = await r.json();
+      _csrfToken = j.csrfToken || '';
+    }
+  } catch (_) { /* non-fatal: CSRF token may not be needed when auth is off */ }
+}
+
 const state = reactive({
   tab: 'app',
   app: { base_url: '' },
@@ -324,7 +353,7 @@ function setStatus(msg, ok = true) {
 
 async function loadChannels() {
   try {
-    const r = await fetch("/api/config/m3u");
+    const r = await apiFetch("/api/config/m3u");
     const cfg = await r.json();
     state.channelSources.splice(
       0,
@@ -345,7 +374,7 @@ async function loadChannels() {
 
 async function loadEPG() {
   try {
-    const r = await fetch('/api/config/epg');
+    const r = await apiFetch('/api/config/epg');
     const cfg = await r.json();
     state.epgSources.splice(0, state.epgSources.length, ...(cfg.urls && Array.isArray(cfg.urls) ? cfg.urls : []));
     state.epgSources.forEach((s, i) => {
@@ -386,7 +415,7 @@ async function loadMapping() {
 async function refreshUnmapped() {
   try {
     const url = state.unmappedSource ? `/api/mapping/unmapped?source=${encodeURIComponent(state.unmappedSource)}` : '/api/mapping/unmapped';
-    const r = await fetch(url);
+    const r = await apiFetch(url);
     const j = await r.json();
     const list = Array.isArray(j?.suggestions) ? j.suggestions : [];
     const existing = new Set(state.mappingRows.map(r => r.name));
@@ -418,7 +447,7 @@ async function refreshUnmapped() {
 
 async function loadApp() {
   try {
-    const r = await fetch('/api/config/app');
+    const r = await apiFetch('/api/config/app');
     const cfg = await r.json();
     state.app = { base_url: cfg.base_url || '' };
   } catch (e) {
@@ -434,7 +463,7 @@ async function saveChannels() {
       .filter((u) => u.name && u.url)
       .map(u => ({ name: u.name, url: u.url, type: u.type ? String(u.type).toLowerCase() : 'm3u' }));
     const body = { urls: cleaned };
-    const r = await fetch("/api/config/m3u", {
+    const r = await apiFetch("/api/config/m3u", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -457,7 +486,7 @@ async function reloadChannels() {
   try {
     state.reloadingChannels = true;
     setStatus("Reloading channels...");
-    const r = await fetch("/api/reload/channels", { method: "POST" });
+    const r = await apiFetch("/api/reload/channels", { method: "POST" });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "Reload failed");
     setStatus(`Reloaded ${j.channels} channels.`);
@@ -476,7 +505,7 @@ async function saveEPG() {
     state.savingEPG = true;
     const cleaned = state.epgSources.filter(u => u.name && u.url).map(u => ({ name: u.name, url: u.url }));
     const body = { urls: cleaned };
-    const r = await fetch('/api/config/epg', {
+    const r = await apiFetch('/api/config/epg', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     });
     const j = await r.json();
@@ -497,7 +526,7 @@ async function reloadEPG() {
   try {
     state.reloadingEPG = true;
     setStatus('Reloading EPG...');
-    const r = await fetch('/api/reload/epg', { method: 'POST' });
+    const r = await apiFetch('/api/reload/epg', { method: 'POST' });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Reload EPG failed');
     setStatus('EPG reloaded.');
@@ -515,7 +544,7 @@ async function saveApp() {
   try {
     state.savingApp = true;
     const body = { base_url: state.app.base_url || '' };
-    const r = await fetch('/api/config/app', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const r = await apiFetch('/api/config/app', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Save app failed');
     setStatus('App settings saved.');
@@ -537,7 +566,7 @@ async function saveMapping() {
       if (!row.name) continue;
       obj[row.name] = { number: String(row.number || ''), tvg_id: String(row.tvg_id || '') };
     }
-    const r = await fetch('/api/config/channel-map', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
+    const r = await apiFetch('/api/config/channel-map', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Save mapping failed');
     setStatus('Mapping saved. Reload channels to apply.');
@@ -576,7 +605,7 @@ function quickAddMapping(s) {
 async function loadHealth() {
   try {
     state.loadingHealth = true;
-    const r = await fetch('/api/channel-health');
+    const r = await apiFetch('/api/channel-health');
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to load health');
     state.health = { summary: j.summary || {}, details: j.details || [], meta: j.meta || null };
@@ -591,7 +620,7 @@ async function runHealth() {
   try {
     state.runningHealth = true;
     setStatus('Running health check...');
-    const r = await fetch('/api/channel-health/run', { method: 'POST' });
+    const r = await apiFetch('/api/channel-health/run', { method: 'POST' });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Health run failed');
     state.health = { summary: j.summary || {}, details: j.details || [], meta: j.meta || null };
@@ -606,7 +635,7 @@ async function runHealth() {
 async function loadUsage() {
   try {
     state.loadingUsage = true;
-    const r = await fetch('/api/usage/active');
+    const r = await apiFetch('/api/usage/active');
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to load usage');
     const list = Array.isArray(j?.active) ? j.active : [];
@@ -632,7 +661,7 @@ async function loadUsage() {
 async function loadTasks() {
   try {
     state.loadingTasks = true;
-    const r = await fetch('/api/scheduler/jobs');
+    const r = await apiFetch('/api/scheduler/jobs');
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to load tasks');
     state.tasks = Array.isArray(j?.jobs) ? j.jobs : [];
@@ -647,7 +676,7 @@ async function runTask(taskName) {
   try {
     state.runningTask = taskName;
     setStatus(`Running task: ${taskName}...`);
-    const r = await fetch(`/api/scheduler/jobs/${encodeURIComponent(taskName)}/run`, { method: 'POST' });
+    const r = await apiFetch(`/api/scheduler/jobs/${encodeURIComponent(taskName)}/run`, { method: 'POST' });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to start task');
     setStatus(`Task "${taskName}" started`);
@@ -655,7 +684,7 @@ async function runTask(taskName) {
     // Poll until task completes
     const pollInterval = setInterval(async () => {
       try {
-        const pr = await fetch('/api/scheduler/jobs');
+        const pr = await apiFetch('/api/scheduler/jobs');
         const pj = await pr.json();
         if (pr.ok && Array.isArray(pj?.jobs)) {
           state.tasks = pj.jobs;
@@ -683,7 +712,7 @@ async function runTask(taskName) {
 async function loadDuplicates() {
   try {
     state.loadingDuplicates = true;
-    const r = await fetch('/api/mapping/duplicates');
+    const r = await apiFetch('/api/mapping/duplicates');
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to load duplicates');
     state.duplicates = j;
@@ -698,7 +727,7 @@ async function loadDuplicates() {
 async function loadSuggestions() {
   try {
     state.loadingSuggestions = true;
-    const r = await fetch('/api/mapping/suggestions?threshold=0.7&max=3');
+    const r = await apiFetch('/api/mapping/suggestions?threshold=0.7&max=3');
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to load suggestions');
     state.suggestions = j.suggestions || [];
@@ -713,7 +742,7 @@ async function loadSuggestions() {
 async function loadEPGValidation() {
   try {
     state.loadingEPGValidation = true;
-    const r = await fetch('/api/epg/validate');
+    const r = await apiFetch('/api/epg/validate');
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to validate EPG');
     state.epgValidation = j;
@@ -743,6 +772,10 @@ async function checkAuthStatus() {
     const j = await r.json();
     state.authConfigured = !!j.configured;
     state.showSetupModal = !j.configured;
+    // Fetch the CSRF token once we know auth is configured (requires a valid session)
+    if (j.configured) {
+      await fetchCsrfToken();
+    }
   } catch (e) {
     // If status check fails, assume auth may be configured; don't force modal,
     // but surface an error so the user/admin knows something went wrong.
@@ -759,7 +792,7 @@ async function checkAuthStatus() {
 async function logout() {
   state.loggingOut = true;
   try {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' });
   } catch (_) {}
   window.location.href = '/admin/login';
 }
@@ -772,7 +805,7 @@ async function submitSetup() {
   if (password !== confirm) { state.setupError = 'Passwords do not match.'; return; }
   try {
     state.savingSetup = true;
-    const r = await fetch('/api/auth/setup', {
+    const r = await apiFetch('/api/auth/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: username.trim(), password }),
@@ -796,7 +829,7 @@ async function changePassword() {
   if (newPass !== confirm) { message.error('New passwords do not match.'); return; }
   try {
     state.savingPassword = true;
-    const r = await fetch('/api/auth/password', {
+    const r = await apiFetch('/api/auth/password', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword: current, newPassword: newPass }),
