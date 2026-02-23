@@ -5,6 +5,7 @@ import path from 'path';
 import crypto from 'crypto';
 import session from 'express-session';
 import RateLimit from 'express-rate-limit';
+import csurf from 'csurf';
 import { initConfig } from './server/init-config.js';
 import { loadAllConfigs } from './libs/config-loader.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
@@ -66,6 +67,22 @@ app.use(
     },
   })
 );
+
+// CSRF protection middleware — uses a separate cookie to store the CSRF secret
+app.use(
+  csurf({
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: 'auto',
+    },
+  })
+);
+
+// Helper endpoint for clients to retrieve the CSRF token
+app.get('/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
+});
 
 // Admin UI setup (before static middleware to control access)
 const publicDir = path.resolve('./public');
