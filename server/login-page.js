@@ -88,7 +88,12 @@ export function loginPage() {
             return;
           }
           const params = new URLSearchParams(window.location.search);
-          window.location.href = params.get('redirect') || '/admin';
+          const redirect = params.get('redirect') || '/admin';
+          const isValidRedirect =
+            redirect.startsWith('/') &&
+            !redirect.startsWith('//') &&
+            !redirect.includes('://');
+          window.location.href = isValidRedirect ? redirect : '/admin';
         } catch (e) {
           errorEl.textContent = e.message || 'Login failed';
         } finally {
