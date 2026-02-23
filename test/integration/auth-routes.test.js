@@ -27,6 +27,7 @@ function buildApp() {
       secret: 'test-secret-for-auth-routes',
       resave: false,
       saveUninitialized: false,
+      cookie: { secure: false }, // HTTP is fine in test environments
     })
   );
   app.use(authRouter);
