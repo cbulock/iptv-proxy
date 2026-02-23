@@ -20,7 +20,8 @@
 
     <n-layout>
       <n-layout-header bordered style="padding:1rem;display:flex;align-items:center;gap:1rem;">
-        <h1 style="margin:0;font-size:1.2rem;">IPTV Proxy Admin</h1>
+        <h1 style="margin:0;font-size:1.2rem;flex:1;">IPTV Proxy Admin</h1>
+        <n-button v-if="authConfigured" size="small" secondary @click="logout" :loading="loggingOut">Sign Out</n-button>
       </n-layout-header>
       <n-layout-content style="padding:1rem;">
   <n-tabs v-model:value="tab" type="line" animated>
@@ -281,6 +282,7 @@ const state = reactive({
   setupForm: { username: 'admin', password: '', confirm: '' },
   setupError: '',
   savingSetup: false,
+  loggingOut: false,
   passwordForm: { current: '', newPass: '', confirm: '' },
   savingPassword: false,
   channelSources: [],
@@ -754,6 +756,14 @@ async function checkAuthStatus() {
   }
 }
 
+async function logout() {
+  state.loggingOut = true;
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch (_) {}
+  window.location.href = '/admin/login';
+}
+
 async function submitSetup() {
   state.setupError = '';
   const { username, password, confirm } = state.setupForm;
@@ -791,6 +801,10 @@ async function changePassword() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword: current, newPassword: newPass }),
     });
+    if (r.status === 401) {
+      window.location.href = '/admin/login';
+      return;
+    }
     const j = await r.json();
     if (!r.ok) { message.error(j.error || 'Password update failed.'); return; }
     state.passwordForm = { current: '', newPass: '', confirm: '' };
@@ -819,7 +833,7 @@ watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, passwordForm, savingPassword, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
+const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,

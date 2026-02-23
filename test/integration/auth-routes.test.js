@@ -1,6 +1,7 @@
 import { describe, it, before, after, beforeEach } from 'mocha';
 import { expect } from 'chai';
 import express from 'express';
+import session from 'express-session';
 import axios from 'axios';
 import fs from 'fs/promises';
 import os from 'os';
@@ -18,14 +19,16 @@ import path from 'path';
 
 import authRouter from '../../server/auth-routes.js';
 
-/** Build a Basic Auth header value for the given credentials. */
-const basicAuthHeader = (user, pass) => ({
-  Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
-});
-
 function buildApp() {
   const app = express();
   app.use(express.json());
+  app.use(
+    session({
+      secret: 'test-secret-for-auth-routes',
+      resave: false,
+      saveUninitialized: false,
+    })
+  );
   app.use(authRouter);
   return app;
 }
@@ -42,6 +45,26 @@ async function startServer(app) {
 async function stopServer(server) {
   return new Promise((resolve) => server.close(resolve));
 }
+
+/**
+ * Log in via POST /api/auth/login and return the session cookie string,
+ * ready to be used in subsequent requests.
+ */
+async function loginAndGetCookie(baseUrl, username, password) {
+  const res = await axios.post(
+    `${baseUrl}/api/auth/login`,
+    { username, password },
+    { withCredentials: true }
+  );
+  // axios returns Set-Cookie headers in res.headers['set-cookie']
+  const setCookie = res.headers['set-cookie'];
+  if (!setCookie || !setCookie.length) throw new Error('No session cookie returned from login');
+  // Return only the cookie name=value pair (first part before semicolon)
+  return setCookie[0].split(';')[0];
+}
+
+/** Build Cookie header object from a cookie string. */
+const cookieHeader = (cookie) => ({ Cookie: cookie });
 
 describe('Auth Routes Integration', () => {
   let server;
@@ -91,6 +114,79 @@ describe('Auth Routes Integration', () => {
       const res = await axios.get(`${baseUrl}/api/auth/status`);
       expect(res.status).to.equal(200);
       expect(res.data).to.deep.equal({ configured: true });
+    });
+  });
+
+  // ── GET /api/auth/session ──────────────────────────────────────────────────
+
+  describe('GET /api/auth/session', () => {
+    it('returns authenticated: false when no session exists', async () => {
+      const res = await axios.get(`${baseUrl}/api/auth/session`);
+      expect(res.status).to.equal(200);
+      expect(res.data).to.deep.equal({ authenticated: false });
+    });
+
+    it('returns authenticated: true after a successful login', async () => {
+      await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      const cookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+      const res = await axios.get(`${baseUrl}/api/auth/session`, { headers: cookieHeader(cookie) });
+      expect(res.status).to.equal(200);
+      expect(res.data).to.deep.equal({ authenticated: true });
+    });
+  });
+
+  // ── POST /api/auth/login ───────────────────────────────────────────────────
+
+  describe('POST /api/auth/login', () => {
+    beforeEach(async () => {
+      await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+    });
+
+    it('returns 200 and a session cookie with valid credentials', async () => {
+      const res = await axios.post(`${baseUrl}/api/auth/login`, { username: 'admin', password: 'password123' });
+      expect(res.status).to.equal(200);
+      expect(res.data).to.deep.equal({ status: 'ok' });
+      expect(res.headers['set-cookie']).to.be.an('array').with.length.greaterThan(0);
+    });
+
+    it('returns 401 with invalid credentials', async () => {
+      try {
+        await axios.post(`${baseUrl}/api/auth/login`, { username: 'admin', password: 'wrong' });
+        expect.fail('Expected 401');
+      } catch (err) {
+        expect(err.response.status).to.equal(401);
+      }
+    });
+
+    it('returns 400 when username or password is missing', async () => {
+      try {
+        await axios.post(`${baseUrl}/api/auth/login`, { username: 'admin' });
+        expect.fail('Expected 400');
+      } catch (err) {
+        expect(err.response.status).to.equal(400);
+      }
+    });
+  });
+
+  // ── POST /api/auth/logout ──────────────────────────────────────────────────
+
+  describe('POST /api/auth/logout', () => {
+    it('destroys the session and returns logged_out', async () => {
+      await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      const cookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+
+      // Confirm we are logged in
+      const before = await axios.get(`${baseUrl}/api/auth/session`, { headers: cookieHeader(cookie) });
+      expect(before.data.authenticated).to.equal(true);
+
+      // Log out
+      const logoutRes = await axios.post(`${baseUrl}/api/auth/logout`, {}, { headers: cookieHeader(cookie) });
+      expect(logoutRes.status).to.equal(200);
+      expect(logoutRes.data).to.deep.equal({ status: 'logged_out' });
+
+      // The old session cookie should no longer be authenticated
+      const after = await axios.get(`${baseUrl}/api/auth/session`, { headers: cookieHeader(cookie) });
+      expect(after.data.authenticated).to.equal(false);
     });
   });
 
@@ -186,12 +282,16 @@ describe('Auth Routes Integration', () => {
   // ── PUT /api/auth/password ─────────────────────────────────────────────────
 
   describe('PUT /api/auth/password', () => {
+    let sessionCookie;
+
     beforeEach(async () => {
       // Set up credentials before each password test
       await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      // Obtain a valid session cookie
+      sessionCookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
     });
 
-    it('returns 401 when no authorization header is provided', async () => {
+    it('returns 401 when no session cookie is provided', async () => {
       try {
         await axios.put(`${baseUrl}/api/auth/password`, { currentPassword: 'password123', newPassword: 'newpassword456' });
         expect.fail('Expected 401');
@@ -200,11 +300,11 @@ describe('Auth Routes Integration', () => {
       }
     });
 
-    it('successfully updates password with valid credentials', async () => {
+    it('successfully updates password with a valid session', async () => {
       const res = await axios.put(
         `${baseUrl}/api/auth/password`,
         { currentPassword: 'password123', newPassword: 'newpassword456' },
-        { headers: basicAuthHeader('admin', 'password123') }
+        { headers: cookieHeader(sessionCookie) }
       );
       expect(res.status).to.equal(200);
       expect(res.data).to.deep.equal({ status: 'updated' });
@@ -215,7 +315,7 @@ describe('Auth Routes Integration', () => {
         await axios.put(
           `${baseUrl}/api/auth/password`,
           { currentPassword: 'wrongpassword', newPassword: 'newpassword456' },
-          { headers: basicAuthHeader('admin', 'password123') }
+          { headers: cookieHeader(sessionCookie) }
         );
         expect.fail('Expected 401');
       } catch (err) {
@@ -229,7 +329,7 @@ describe('Auth Routes Integration', () => {
         await axios.put(
           `${baseUrl}/api/auth/password`,
           { currentPassword: 'password123', newPassword: 'short' },
-          { headers: basicAuthHeader('admin', 'password123') }
+          { headers: cookieHeader(sessionCookie) }
         );
         expect.fail('Expected 400');
       } catch (err) {
@@ -242,7 +342,7 @@ describe('Auth Routes Integration', () => {
         await axios.put(
           `${baseUrl}/api/auth/password`,
           { currentPassword: 'password123', newPassword: 'a'.repeat(129) },
-          { headers: basicAuthHeader('admin', 'password123') }
+          { headers: cookieHeader(sessionCookie) }
         );
         expect.fail('Expected 400');
       } catch (err) {
@@ -256,7 +356,7 @@ describe('Auth Routes Integration', () => {
         await axios.put(
           `${baseUrl}/api/auth/password`,
           { newPassword: 'newpassword456' },
-          { headers: basicAuthHeader('admin', 'password123') }
+          { headers: cookieHeader(sessionCookie) }
         );
         expect.fail('Expected 400');
       } catch (err) {
@@ -269,7 +369,7 @@ describe('Auth Routes Integration', () => {
         await axios.put(
           `${baseUrl}/api/auth/password`,
           { currentPassword: 'wrongpassword', newPassword: 'newpassword456' },
-          { headers: basicAuthHeader('admin', 'password123') }
+          { headers: cookieHeader(sessionCookie) }
         );
       } catch (err) {
         expect(err.response.data).to.not.have.property('detail');

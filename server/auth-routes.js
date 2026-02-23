@@ -5,6 +5,7 @@ import RateLimit from 'express-rate-limit';
 import { isAuthEnabled, hashPassword, verifyCredentials, requireAuth } from './auth.js';
 import { loadConfig } from '../libs/config-loader.js';
 import { getConfigPath } from '../libs/paths.js';
+import { loginPage } from './login-page.js';
 
 const router = express.Router();
 
@@ -56,6 +57,68 @@ function releaseLock() {
  */
 router.get('/api/auth/status', authLimiter, (req, res) => {
   res.json({ configured: isAuthEnabled() });
+});
+
+/**
+ * GET /api/auth/session
+ * Public endpoint — returns whether the current request has an authenticated session.
+ */
+router.get('/api/auth/session', (req, res) => {
+  res.json({ authenticated: !!req.session?.authenticated });
+});
+
+/**
+ * POST /api/auth/login
+ * Exchange credentials for a session cookie.
+ */
+router.post('/api/auth/login', authLimiter, (req, res) => {
+  if (!isAuthEnabled()) {
+    // No auth configured — treat as open access
+    return res.json({ status: 'ok' });
+  }
+
+  const { username, password } = req.body || {};
+
+  if (!username || typeof username !== 'string' || !password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
+  if (!verifyCredentials(username, password)) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  // Regenerate the session to prevent fixation attacks
+  req.session.regenerate((err) => {
+    if (err) {
+      console.error('Session regenerate error:', err);
+      return res.status(500).json({ error: 'Login failed' });
+    }
+    req.session.authenticated = true;
+    req.session.username = username;
+    res.json({ status: 'ok' });
+  });
+});
+
+/**
+ * POST /api/auth/logout
+ * Destroy the current session.
+ */
+router.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Session destroy error:', err);
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    res.json({ status: 'logged_out' });
+  });
+});
+
+/**
+ * GET /admin/login
+ * Standalone login page (served without authentication).
+ */
+router.get('/admin/login', (req, res) => {
+  res.send(loginPage());
 });
 
 /**

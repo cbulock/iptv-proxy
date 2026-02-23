@@ -2,6 +2,8 @@ import express from 'express';
 import fs from 'fs';
 import chalk from 'chalk';
 import path from 'path';
+import crypto from 'crypto';
+import session from 'express-session';
 import RateLimit from 'express-rate-limit';
 import { initConfig } from './server/init-config.js';
 import { loadAllConfigs } from './libs/config-loader.js';
@@ -31,13 +33,39 @@ initConfig();
 const app = express();
 const port = 34400;
 
-app.set('trust proxy', true);
-app.use(express.json({ limit: '1mb' }));
-
-// Load and validate config first (needed for auth check)
+// Load and validate config first (needed for auth check and session secret)
 const configs = loadAllConfigs();
 
 const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
+
+app.set('trust proxy', true);
+app.use(express.json({ limit: '1mb' }));
+
+// Session middleware — secret is read from config or generated fresh each run
+const sessionSecret = (() => {
+  try {
+    const appCfg = configs.app || {};
+    if (typeof appCfg.session_secret === 'string' && appCfg.session_secret.length >= 32) {
+      return appCfg.session_secret;
+    }
+  } catch (_) { /* ignore: start with default */ }
+  return crypto.randomBytes(32).toString('hex');
+})();
+
+app.use(
+  session({
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      // Use secure cookies only when behind HTTPS (trust proxy is already set)
+      secure: 'auto',
+      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+    },
+  })
+);
 
 // Admin UI setup (before static middleware to control access)
 const publicDir = path.resolve('./public');
