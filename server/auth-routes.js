@@ -117,7 +117,7 @@ router.post('/api/auth/logout', (req, res) => {
  * GET /admin/login
  * Standalone login page (served without authentication).
  */
-router.get('/admin/login', (req, res) => {
+router.get('/admin/login', authLimiter, (req, res) => {
   res.send(loginPage());
 });
 
