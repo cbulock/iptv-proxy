@@ -49,8 +49,22 @@ export function csrfMiddleware(req, res, next) {
   // requireAuth will return 401 first for protected routes.
   if (!req.session.csrfToken) return next();
 
-  const token = req.headers['x-csrf-token'];
-  if (!token || token !== req.session.csrfToken) {
+  const headerToken = req.headers['x-csrf-token'];
+  const sessionToken = req.session.csrfToken;
+
+  // Use constant-time comparison to prevent timing attacks
+  let validToken = false;
+  if (typeof headerToken === 'string' && typeof sessionToken === 'string') {
+    try {
+      const a = Buffer.from(headerToken, 'utf8');
+      const b = Buffer.from(sessionToken, 'utf8');
+      validToken = a.length === b.length && crypto.timingSafeEqual(a, b);
+    } catch (_) {
+      validToken = false;
+    }
+  }
+
+  if (!validToken) {
     return res.status(403).json({ error: 'Invalid CSRF token' });
   }
 

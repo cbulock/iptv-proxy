@@ -62,14 +62,17 @@ export function loginPage() {
     <div class="card">
       <h1>IPTV Proxy Admin</h1>
       <div id="error" class="error"></div>
-      <label for="username">Username</label>
-      <input type="text" id="username" autocomplete="username" />
-      <label for="password">Password</label>
-      <input type="password" id="password" autocomplete="current-password" />
-      <button id="submit" onclick="login()">Sign In</button>
+      <form id="loginForm" onsubmit="login(event)">
+        <label for="username">Username</label>
+        <input type="text" id="username" autocomplete="username" />
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" />
+        <button id="submit" type="submit">Sign In</button>
+      </form>
     </div>
     <script>
-      async function login() {
+      async function login(e) {
+        if (e) e.preventDefault();
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         const errorEl = document.getElementById('error');
@@ -101,9 +104,6 @@ export function loginPage() {
           btn.disabled = false;
         }
       }
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !document.getElementById('submit').disabled) login();
-      });
     </script>
   </body>
 </html>`;
