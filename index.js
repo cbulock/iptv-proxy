@@ -50,7 +50,12 @@ const sessionSecret = (() => {
     }
   } catch (_) { /* ignore: start with default */ }
   return crypto.randomBytes(32).toString('hex');
-})();
+  const randomSecret = crypto.randomBytes(32).toString('hex');
+  console.warn(
+    'Session secret not configured: using a random secret for this process. ' +
+      'Sessions will be invalidated on every restart. Configure "session_secret" in app.yaml for production use.'
+  );
+  return randomSecret;
 
 app.use(
   session({
