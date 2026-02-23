@@ -98,7 +98,7 @@ admin_auth:
   session_secret: "your-64-char-hex-value-here"
   ```
 - Minimum length is 32 characters. Shorter values are ignored and a new secret is auto-generated
-- If writing to `app.yaml` fails (e.g., read-only filesystem), a warning is logged and sessions will not persist across restarts
+- If writing to `app.yaml` fails (e.g., read-only filesystem), a warning is logged and a per-process random session secret will be used, invalidating all existing session cookies on each restart
 
 **Password Hashing:**
 - Generate a bcrypt hash using the included utility script:
