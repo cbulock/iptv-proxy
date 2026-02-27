@@ -1,5 +1,6 @@
 import fs from 'fs';
 import axios from 'axios';
+import RateLimit from 'express-rate-limit';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import escapeHtml from 'escape-html';
 import { loadConfig } from '../libs/config-loader.js';
@@ -9,6 +10,14 @@ import { validateEPG, validateEPGCoverage } from '../libs/epg-validator.js';
 import cacheManager from '../libs/cache-manager.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
+
+// Rate limiter for the public XMLTV endpoint
+const epgLimiter = RateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // limit each IP to 30 requests per minute
+  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: (req) => req.ip || 'unknown',
+});
 
 // Module-level refresher that will be set when routes are initialized
 let refreshImpl = null;
@@ -243,7 +252,7 @@ export async function setupEPGRoutes(app) {
     await fetchAndMergeEPGs();
     setInterval(fetchAndMergeEPGs, 6 * 60 * 60 * 1000);
 
-    app.get('/xmltv.xml', asyncHandler(async (req, res) => {
+    app.get('/xmltv.xml', epgLimiter, asyncHandler(async (req, res) => {
         if (!mergedEPG) {
             throw new AppError('EPG not loaded yet', 503);
         }
