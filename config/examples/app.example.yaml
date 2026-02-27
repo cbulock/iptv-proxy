@@ -161,3 +161,35 @@
 # - X-Real-IP: Client IP address (alternative to X-Forwarded-For)
 # 
 # See README.md for nginx, Caddy, and Traefik configuration examples.
+
+# ============================================================================
+# Webhook Notifications
+# ============================================================================
+#
+# Optional: Configure outbound HTTP webhooks fired after channel or EPG refreshes.
+# Useful for integrating with external automation (Home Assistant, n8n, etc.).
+#
+# Each entry requires a `url`. The `events` list is optional — omit it to receive
+# all events. `timeout_ms` defaults to 5000 if not specified.
+#
+# Available events:
+#   - channels.refreshed  (fired after POST /api/reload/channels)
+#   - epg.refreshed       (fired after POST /api/reload/epg)
+#
+# Delivery failures are logged but never interrupt the refresh operation.
+
+# webhooks:
+#   - url: "https://example.com/iptv-hook"
+#     events:
+#       - channels.refreshed
+#       - epg.refreshed
+#     timeout_ms: 5000
+#
+#   # Receive ALL events (no events filter):
+#   - url: "https://automation.example.com/notify"
+#     timeout_ms: 3000
+#
+#   # Single event only:
+#   - url: "https://example.com/epg-hook"
+#     events:
+#       - epg.refreshed
