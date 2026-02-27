@@ -612,3 +612,98 @@ Preview merged EPG as JSON with temporary configuration.
 }
 ```
 
+
+---
+
+## Config Backup & Restore
+
+All endpoints require authentication (session cookie or equivalent).
+
+### POST /api/config/backup
+
+Create a timestamped snapshot of all YAML configuration files. Backups are stored under `data/backups/`.
+
+**Response:**
+```json
+{
+  "status": "created",
+  "name": "backup-2026-01-01T12-00-00",
+  "files": ["m3u.yaml", "epg.yaml", "app.yaml", "channel-map.yaml"]
+}
+```
+
+### GET /api/config/backups
+
+List all available backups (newest first).
+
+**Response:**
+```json
+{
+  "backups": [
+    { "name": "backup-2026-01-01T12-00-00" }
+  ],
+  "count": 1
+}
+```
+
+### POST /api/config/backups/:name/restore
+
+Restore configuration files from the named backup.
+
+**URL Parameters:**
+- `name` - Backup name (e.g. `backup-2026-01-01T12-00-00`)
+
+**Response:**
+```json
+{
+  "status": "restored",
+  "name": "backup-2026-01-01T12-00-00",
+  "files": ["m3u.yaml", "epg.yaml"]
+}
+```
+
+**Error responses:**
+- `400` – Invalid backup name (name fails validation)
+- `404` – Backup not found
+
+### DELETE /api/config/backups/:name
+
+Delete the named backup directory.
+
+**URL Parameters:**
+- `name` - Backup name
+
+**Response:**
+```json
+{
+  "status": "deleted",
+  "name": "backup-2026-01-01T12-00-00"
+}
+```
+
+---
+
+## Usage History
+
+### GET /api/usage/history
+
+Return recently completed stream sessions in reverse-chronological order. Requires authentication. The server keeps up to the last 100 sessions in memory.
+
+**Response:**
+```json
+{
+  "history": [
+    {
+      "ip": "192.168.1.10",
+      "channelId": "23.1",
+      "name": "PBS",
+      "tvg_id": "PBS",
+      "startedAt": "2026-01-01T12:00:00.000Z",
+      "lastSeen": "2026-01-01T12:44:50.000Z",
+      "endedAt": "2026-01-01T12:45:00.000Z",
+      "durationSeconds": 2700
+    }
+  ],
+  "count": 1
+}
+```

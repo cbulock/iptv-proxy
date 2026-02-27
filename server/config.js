@@ -10,6 +10,7 @@ import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 import { invalidateCache, getChannels } from '../libs/channels-cache.js';
 import { getConfigPath } from '../libs/paths.js';
 import { requireAuth } from './auth.js';
+import { notifyWebhooks } from '../libs/webhooks.js';
 
 const router = express.Router();
 
@@ -214,6 +215,7 @@ router.post('/api/reload/channels', requireAuth, async (req, res) => {
   try {
     const count = await parseAll();
     await invalidateCache();
+    notifyWebhooks('channels.refreshed', { channels: count }).catch(() => {});
     res.json({ status: 'reloaded', channels: count });
   } catch (e) {
     res.status(500).json({ 
@@ -227,6 +229,7 @@ router.post('/api/reload/channels', requireAuth, async (req, res) => {
 router.post('/api/reload/epg', requireAuth, async (req, res) => {
   try {
     await refreshEPG();
+    notifyWebhooks('epg.refreshed', {}).catch(() => {});
     res.json({ status: 'reloaded' });
   } catch (e) {
     res.status(500).json({ 

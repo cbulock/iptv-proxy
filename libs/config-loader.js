@@ -56,7 +56,17 @@ const appSchema = Joi.object({
       'number.integer': 'cache.m3u_ttl must be an integer',
       'number.min': 'cache.m3u_ttl must be at least 0'
     })
-  }).optional()
+  }).optional(),
+  webhooks: Joi.array().items(
+    Joi.object({
+      url: Joi.string().uri().required().messages({
+        'any.required': 'Each webhook must have a "url"',
+        'string.uri': 'Webhook "url" must be a valid URL'
+      }),
+      events: Joi.array().items(Joi.string()).optional(),
+      timeout_ms: Joi.number().integer().min(0).optional()
+    })
+  ).optional()
 }).unknown(true).default({});
 
 const channelMapSchema = Joi.object().pattern(

@@ -1,10 +1,19 @@
 import axios from 'axios';
+import RateLimit from 'express-rate-limit';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import cacheManager from '../libs/cache-manager.js';
 import { loadConfig } from '../libs/config-loader.js';
+
+// Rate limiter for public playlist endpoints
+const lineupLimiter = RateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // limit each IP to 60 requests per minute
+  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: (req) => req.ip || 'unknown',
+});
 
 // M3U and JSON lineup caches
 let m3uCache = null;
@@ -111,7 +120,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
   } = usageHelpers;
   const loadChannels = () => getChannels();
 
-  app.get('/lineup.json', asyncHandler(async (req, res) => {
+  app.get('/lineup.json', lineupLimiter, asyncHandler(async (req, res) => {
     const cacheKey = `${req.protocol}://${req.get('host')}`;
     
     // Check cache
@@ -142,7 +151,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     res.json(lineup);
   }));
 
-  app.get('/lineup.m3u', asyncHandler(async (req, res) => {
+  app.get('/lineup.m3u', lineupLimiter, asyncHandler(async (req, res) => {
     // Extract query parameters for filtering
     const filterSource = req.query.source ? String(req.query.source) : null;
     const filterGroup = req.query.group ? String(req.query.group) : null;

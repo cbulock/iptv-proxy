@@ -19,6 +19,10 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 - 🔧 **NEW:** Dynamic channel management API (reorder, rename, group)
 - ⚡ **NEW:** Advanced caching system with configurable TTL for EPG and M3U data
 - 👁️ **NEW:** Live preview API to test configuration changes before saving
+- 💾 **NEW:** Config backup & restore API to snapshot and recover configuration files
+- 📜 **NEW:** Stream usage history tracking with session duration
+- 🔔 **NEW:** Webhook notifications on channel/EPG refresh events
+- 🚦 **NEW:** Rate limiting on public playlist and guide endpoints
 
 This project was inspired by [xTeVe](https://github.com/xteve-project/xTeVe) and [Threadfin](https://github.com/Threadfin/Threadfin), but I wanted something a little lighter and had better control over using the feeds through reverse proxies.
 
@@ -44,6 +48,12 @@ By default, the server runs on `http://localhost:34400` and serves:
 
 - `http://localhost:34400/lineup.m3u`
 - `http://localhost:34400/xmltv.xml`
+
+To use a custom port, set the `PORT` environment variable:
+
+```bash
+PORT=8080 npm start
+```
 
 ---
 
@@ -491,6 +501,116 @@ curl -X POST http://localhost:34400/api/preview/epg \
 ```
 
 Returns the merged XMLTV with your temporary configuration applied.
+
+### Config Backup & Restore
+
+Create timestamped snapshots of all YAML configuration files and restore them if needed. All endpoints require authentication.
+
+**Create a backup:**
+```bash
+curl -X POST http://localhost:34400/api/config/backup \
+  -H "Cookie: <session-cookie>"
+# Response: { "status": "created", "name": "backup-2026-01-01T12-00-00", "files": [...] }
+```
+
+**List backups:**
+```bash
+curl http://localhost:34400/api/config/backups \
+  -H "Cookie: <session-cookie>"
+# Response: { "backups": [{ "name": "backup-2026-01-01T12-00-00" }], "count": 1 }
+```
+
+**Restore a backup:**
+```bash
+curl -X POST http://localhost:34400/api/config/backups/backup-2026-01-01T12-00-00/restore \
+  -H "Cookie: <session-cookie>"
+# Response: { "status": "restored", "name": "...", "files": [...] }
+```
+
+**Delete a backup:**
+```bash
+curl -X DELETE http://localhost:34400/api/config/backups/backup-2026-01-01T12-00-00 \
+  -H "Cookie: <session-cookie>"
+# Response: { "status": "deleted", "name": "..." }
+```
+
+Backups are stored under `data/backups/` and protected against path traversal attacks.
+
+---
+
+### Stream Usage History
+
+In addition to the active stream view, a history of recently completed stream sessions is available.
+
+**View recently completed sessions:**
+```bash
+curl http://localhost:34400/api/usage/history \
+  -H "Cookie: <session-cookie>"
+```
+
+**Example response:**
+```json
+{
+  "history": [
+    {
+      "ip": "192.168.1.10",
+      "channelId": "23.1",
+      "name": "PBS",
+      "startedAt": "2026-01-01T12:00:00.000Z",
+      "endedAt": "2026-01-01T12:45:00.000Z",
+      "durationSeconds": 2700
+    }
+  ],
+  "count": 1
+}
+```
+
+Sessions are returned in reverse-chronological order. The last 100 completed sessions are kept in memory.
+
+---
+
+### Webhook Notifications
+
+Configure outbound HTTP webhooks to be notified when channels or the EPG are refreshed. This enables integration with external automation (e.g. Home Assistant, n8n, custom scripts).
+
+Add a `webhooks` array to your `app.yaml`:
+
+```yaml
+webhooks:
+  - url: https://example.com/hook
+    events:           # optional – omit to receive all events
+      - channels.refreshed
+      - epg.refreshed
+    timeout_ms: 5000  # optional, default 5000
+```
+
+Each webhook receives a POST request with the following JSON body:
+
+```json
+{
+  "event": "channels.refreshed",
+  "timestamp": "2026-01-01T12:00:00.000Z",
+  "data": {}
+}
+```
+
+Available events: `channels.refreshed`, `epg.refreshed`. Delivery failures are logged but never interrupt the refresh operation.
+
+---
+
+### Rate Limiting
+
+Public playlist and guide endpoints have per-IP rate limiting to prevent abuse from misconfigured clients or scrapers. Requests from localhost (`127.0.0.1` / `::1`) are always exempt.
+
+| Endpoint | Limit |
+|---|---|
+| `GET /lineup.json` | 60 req/min |
+| `GET /lineup.m3u` | 60 req/min |
+| `GET /xmltv.xml` | 30 req/min |
+
+When the limit is exceeded the server responds with `429 Too Many Requests`.
+
+---
 
 ### Environment Variables
 

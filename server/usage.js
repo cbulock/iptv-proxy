@@ -7,6 +7,9 @@ const router = express.Router();
 const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, startedAt, lastSeen }
 // Short grace period to smooth HLS segment request gaps.
 const ACTIVE_IDLE_TTL_MS = 45 * 1000;
+// Ring buffer for recently-completed stream sessions.
+const HISTORY = [];
+const HISTORY_MAX = 100;
 let channelsCache = [];
 
 async function loadChannels() {
@@ -50,6 +53,15 @@ export function touchUsage(key) {
 }
 
 export function unregisterUsage(key) {
+  const entry = ACTIVE.get(key);
+  if (entry) {
+    const endedAt = new Date().toISOString();
+    const durationSeconds = Math.round(
+      (new Date(endedAt).getTime() - new Date(entry.startedAt).getTime()) / 1000
+    );
+    HISTORY.push({ ...entry, endedAt, durationSeconds });
+    if (HISTORY.length > HISTORY_MAX) HISTORY.shift();
+  }
   ACTIVE.delete(key);
 }
 
@@ -65,6 +77,12 @@ router.get('/api/usage/active', requireAuth, (req, res) => {
     lastSeenAt: entry.lastSeen
   }));
   res.json({ active: list, count: list.length });
+});
+
+router.get('/api/usage/history', requireAuth, (req, res) => {
+  // Return a copy in reverse-chronological order (most recent first)
+  const list = [...HISTORY].reverse();
+  res.json({ history: list, count: list.length });
 });
 
 export default router;

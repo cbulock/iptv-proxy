@@ -29,12 +29,13 @@ import { notFoundHandler, errorHandler } from './server/error-handler.js';
 import { requireAuthHTML } from './server/auth.js';
 import { csrfMiddleware } from './server/csrf.js';
 import authRoutesRouter from './server/auth-routes.js';
+import backupRouter from './server/backup.js';
 
 // Ensure config files exist before anything else
 initConfig();
 
 const app = express();
-const port = 34400;
+const port = parseInt(process.env.PORT || '34400', 10);
 
 // Load and validate config first (needed for auth check and session secret)
 const configs = loadAllConfigs();
@@ -249,6 +250,7 @@ app.use('/', statusRouter);
 app.use('/', usageRouter);
 app.use(previewRouter); // Preview API routes
 app.use(cacheRouter); // Cache management routes
+app.use(backupRouter); // Config backup/restore routes
 imageProxyRoute(app);
 setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
