@@ -17,6 +17,20 @@ async function ensureBackupsDir() {
 }
 
 /**
+ * Resolve and validate a backup name to a safe absolute path within BACKUPS_DIR.
+ * Returns the resolved path, or null if the name is invalid.
+ * @param {string} name
+ * @returns {string|null}
+ */
+function resolveBackupPath(name) {
+  if (!/^backup-[\dT\-]+$/.test(name)) return null;
+  const backupsBase = path.resolve(BACKUPS_DIR);
+  const resolved = path.resolve(backupsBase, name);
+  if (!resolved.startsWith(backupsBase + path.sep)) return null;
+  return resolved;
+}
+
+/**
  * List all available backups.
  * GET /api/config/backups
  */
@@ -73,12 +87,10 @@ router.post('/api/config/backups/:name/restore', requireAuth, async (req, res) =
   try {
     const { name } = req.params;
 
-    // Validate name to prevent path traversal
-    if (!/^backup-[\dT\-]+$/.test(name)) {
+    const backupDir = resolveBackupPath(name);
+    if (!backupDir) {
       return res.status(400).json({ error: 'Invalid backup name' });
     }
-
-    const backupDir = path.join(BACKUPS_DIR, name);
 
     let stat;
     try {
@@ -114,12 +126,10 @@ router.delete('/api/config/backups/:name', requireAuth, async (req, res) => {
   try {
     const { name } = req.params;
 
-    // Validate name to prevent path traversal
-    if (!/^backup-[\dT\-]+$/.test(name)) {
+    const backupDir = resolveBackupPath(name);
+    if (!backupDir) {
       return res.status(400).json({ error: 'Invalid backup name' });
     }
-
-    const backupDir = path.join(BACKUPS_DIR, name);
 
     try {
       await fs.stat(backupDir);
