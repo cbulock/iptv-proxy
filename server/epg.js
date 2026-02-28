@@ -8,7 +8,6 @@ import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import { validateEPGCoverage } from '../libs/epg-validator.js';
 import cacheManager from '../libs/cache-manager.js';
-import { getConfigPath } from '../libs/paths.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
@@ -86,16 +85,10 @@ export async function setupEPGRoutes(app) {
   const appConfig = loadConfig('app');
 
   function loadEPGSources() {
-    // Prefer providers.yaml if it exists, otherwise fall back to epg.yaml
-    const providersPath = getConfigPath('providers.yaml');
-    if (fs.existsSync(providersPath)) {
-      const providersConfig = loadConfig('providers');
-      return (providersConfig.providers || [])
-        .filter(p => p.epg)
-        .map(p => ({ name: p.name, url: p.epg }));
-    }
-    const epgConfig = loadConfig('epg');
-    return epgConfig.urls || [];
+    const providersConfig = loadConfig('providers');
+    return (providersConfig.providers || [])
+      .filter(p => p.epg)
+      .map(p => ({ name: p.name, url: p.epg }));
   }
 
   // Initialize EPG cache with TTL from config (default: 6 hours)
