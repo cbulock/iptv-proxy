@@ -255,7 +255,7 @@
 
 <script setup>
 import { reactive, toRefs, h, watch, computed } from 'vue';
-import { darkTheme, NInput, NSelect, NButton, NAlert, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, createDiscreteApi } from 'naive-ui';
+import { darkTheme, NInput, NSelect, NButton, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, createDiscreteApi } from 'naive-ui';
 const { message } = createDiscreteApi(['message']);
 
 // CSRF token for mutating API requests — fetched after login
@@ -355,7 +355,7 @@ async function loadProviders() {
 
 async function loadMapping() {
   try {
-  const [mapRes, candRes, unmappedRes] = await Promise.all([
+    const [mapRes, candRes, unmappedRes] = await Promise.all([
       apiFetch('/api/config/channel-map'),
       apiFetch('/api/mapping/candidates'),
       apiFetch('/api/mapping/unmapped')
@@ -407,7 +407,7 @@ async function refreshUnmapped() {
       return String(av).localeCompare(String(bv));
     };
     state.unmapped = filtered.slice().sort(cmpTvg);
-  } catch (_) {}
+  } catch (_) { /* ignore refresh errors */ }
 }
 
 async function loadApp() {
@@ -631,7 +631,7 @@ async function runTask(taskName) {
             setStatus(`Task "${taskName}" completed`);
           }
         }
-      } catch (_) {}
+      } catch (_) { /* ignore poll errors */ }
     }, 1000);
     // Safety timeout - stop polling after 5 minutes
     setTimeout(() => {
@@ -729,7 +729,7 @@ async function logout() {
   state.loggingOut = true;
   try {
     await apiFetch('/api/auth/logout', { method: 'POST' });
-  } catch (_) {}
+  } catch (_) { /* ignore logout errors */ }
   window.location.href = '/admin/login';
 }
 
@@ -801,7 +801,7 @@ watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, providers, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, status, statusOk, savingProviders, reloadingChannels, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
+const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, providers, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, savingProviders, reloadingChannels, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,
@@ -882,8 +882,6 @@ const taskColumns = [
     }
   }
 ];
-
-function rowKey(row) { return row.name + row.url; }
 
 const providerColumns = [
   { title: 'Name', key: 'name', render(row) { return h(NInput, { value: row?.name ?? '', onUpdateValue: v => row.name = v }); } },

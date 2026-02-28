@@ -5,7 +5,6 @@ import axios from 'axios';
 import RateLimit from 'express-rate-limit';
 import { parseAll } from '../scripts/parseM3U.js';
 import { refreshEPG } from './epg.js';
-import fsPromises from 'fs/promises';
 import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 import { invalidateCache, getChannels } from '../libs/channels-cache.js';
 import { getConfigPath } from '../libs/paths.js';
@@ -242,10 +241,10 @@ router.put('/api/config/channel-map', requireAuth, configWriteLimiter, (req, res
     fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
     res.json({ status: 'saved' });
   } catch (e) {    console.error('Error writing channel-map.yaml:', e);    res.status(500).json({ 
-      error: 'Failed to write channel-map.yaml', 
-      detail: e.message,
-      fix: 'Check file permissions on the config directory and ensure disk space is available.'
-    });
+    error: 'Failed to write channel-map.yaml', 
+    detail: e.message,
+    fix: 'Check file permissions on the config directory and ensure disk space is available.'
+  });
   }
 });
 
@@ -447,7 +446,7 @@ router.get('/api/mapping/candidates', requireAuth, async (req, res) => {
     if (Array.isArray(channelSources) && channelSources.length > 0) {
       for (const source of channelSources) {
         if (!source.url || !source.name) {
-          console.log(`[Mapping] Skipping source - missing url or name`);
+          console.log('[Mapping] Skipping source - missing url or name');
           continue;
         }
         
@@ -522,7 +521,7 @@ router.get('/api/mapping/candidates', requireAuth, async (req, res) => {
         }
       }
     } else {
-      console.log(`[Mapping] No M3U sources found or m3u.urls is not an array`);
+      console.log('[Mapping] No M3U sources found or m3u.urls is not an array');
     }
     
     // Convert to dropdown options format
@@ -602,7 +601,7 @@ router.post('/api/mapping', requireAuth, writeLimiter, async (req, res) => {
     }
     
     // Load current mappings
-    let channelMap = loadChannelMap();
+    const channelMap = loadChannelMap();
     
     // Add or update the mapping
     channelMap[key] = {
@@ -635,7 +634,7 @@ router.delete('/api/mapping/:key', requireAuth, writeLimiter, async (req, res) =
     }
     
     // Load current mappings
-    let channelMap = loadChannelMap();
+    const channelMap = loadChannelMap();
     
     // Check if key exists
     if (!channelMap[key]) {
@@ -673,7 +672,7 @@ router.post('/api/mapping/bulk', requireAuth, writeLimiter, async (req, res) => 
     }
     
     // Load current mappings
-    let channelMap = loadChannelMap();
+    const channelMap = loadChannelMap();
     
     // Merge the new mappings
     let count = 0;

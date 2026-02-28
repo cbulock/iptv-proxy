@@ -1,24 +1,11 @@
 import fs from 'fs';
-import path from 'path';
 import { CONFIG_DIR, getConfigPath } from '../libs/paths.js';
 
-const DEFAULT_CONFIGS = {
+const COMMON_CONFIGS = {
   'app.yaml': `# Application configuration
 # Example:
 # base_url: https://your-domain.com
 {}
-`,
-  'providers.yaml': `# IPTV Providers configuration
-# Each provider combines a channel source (M3U/HDHomeRun) with an optional EPG source.
-providers: []
-# Example:
-#   - name: My IPTV
-#     url: http://example.com/playlist.m3u
-#     type: m3u
-#     epg: http://example.com/epg.xml
-#   - name: HDHomeRun
-#     url: http://192.168.1.100
-#     type: hdhomerun
 `,
   'channel-map.yaml': `# Channel mapping overrides
 # Example:
@@ -29,9 +16,24 @@ providers: []
 `
 };
 
+const PROVIDERS_CONFIG = `# IPTV Providers configuration
+# Each provider combines a channel source (M3U/HDHomeRun) with an optional EPG source.
+providers: []
+# Example:
+#   - name: My IPTV
+#     url: http://example.com/playlist.m3u
+#     type: m3u
+#     epg: http://example.com/epg.xml
+#   - name: HDHomeRun
+#     url: http://192.168.1.100
+#     type: hdhomerun
+`;
+
 /**
  * Ensures the config directory and all required config files exist.
  * Creates them with default content if missing.
+ * providers.yaml is only created on fresh installs (when neither m3u.yaml
+ * nor epg.yaml exist) to preserve backward compatibility with existing setups.
  */
 export function initConfig() {
   // Ensure config directory exists
@@ -40,13 +42,22 @@ export function initConfig() {
     console.log(`Created config directory: ${CONFIG_DIR}`);
   }
 
-  // Ensure each config file exists
-  for (const [filename, defaultContent] of Object.entries(DEFAULT_CONFIGS)) {
+  // Ensure common config files exist
+  for (const [filename, defaultContent] of Object.entries(COMMON_CONFIGS)) {
     const filePath = getConfigPath(filename);
     if (!fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, defaultContent, 'utf8');
       console.log(`Created default config: ${filePath}`);
     }
+  }
+
+  // Only create providers.yaml on a fresh install (neither legacy file exists).
+  // Existing deployments with m3u.yaml / epg.yaml will continue using those.
+  const hasLegacyConfig = fs.existsSync(getConfigPath('m3u.yaml')) || fs.existsSync(getConfigPath('epg.yaml'));
+  const hasProvidersConfig = fs.existsSync(getConfigPath('providers.yaml'));
+  if (!hasLegacyConfig && !hasProvidersConfig) {
+    fs.writeFileSync(getConfigPath('providers.yaml'), PROVIDERS_CONFIG, 'utf8');
+    console.log(`Created default config: ${getConfigPath('providers.yaml')}`);
   }
 }
 

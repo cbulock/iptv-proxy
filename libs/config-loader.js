@@ -139,10 +139,10 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
     } catch (parseError) {
       console.error(chalk.red(`❌ Failed to parse YAML in ${path}:`));
       console.error(chalk.red(`   ${parseError.message}`));
-      console.log(chalk.yellow(`   💡 Fix: Check YAML syntax - common issues include:`));
-      console.log(chalk.yellow(`      • Incorrect indentation (use spaces, not tabs)`));
-      console.log(chalk.yellow(`      • Missing quotes around strings with special characters`));
-      console.log(chalk.yellow(`      • Unclosed brackets or quotes`));
+      console.log(chalk.yellow('   💡 Fix: Check YAML syntax - common issues include:'));
+      console.log(chalk.yellow('      • Incorrect indentation (use spaces, not tabs)'));
+      console.log(chalk.yellow('      • Missing quotes around strings with special characters'));
+      console.log(chalk.yellow('      • Unclosed brackets or quotes'));
       console.log(chalk.yellow(`      • Use a YAML validator: ${YAML_VALIDATOR_URL}`));
       console.log(chalk.gray(`   Using default configuration for ${name}`));
       return defaultValue;
@@ -159,10 +159,10 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
       for (const detail of error.details) {
         console.error(chalk.red(`   • ${detail.message}`));
       }
-      console.log(chalk.yellow(`   💡 Fix: Review your configuration against the examples:`));
-      console.log(chalk.yellow(`      • See config/examples/ for valid configuration templates`));
-      console.log(chalk.yellow(`      • Ensure all required fields are present`));
-      console.log(chalk.yellow(`      • Check that URLs are valid and accessible`));
+      console.log(chalk.yellow('   💡 Fix: Review your configuration against the examples:'));
+      console.log(chalk.yellow('      • See config/examples/ for valid configuration templates'));
+      console.log(chalk.yellow('      • Ensure all required fields are present'));
+      console.log(chalk.yellow('      • Check that URLs are valid and accessible'));
       console.log(chalk.gray(`   Using default configuration for ${name}`));
       return defaultValue;
     }

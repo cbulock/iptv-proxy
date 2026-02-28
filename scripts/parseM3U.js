@@ -62,8 +62,8 @@ async function processSource(source, map) {
       if (!source.url) {
         const errorMsg = `Missing URL for HDHomeRun source "${source.name}"`;
         console.error(`❌ ${errorMsg}`);
-        console.log(`   💡 Fix: Add a "url" field in m3u.yaml for this source`);
-        console.log(`      Example: url: "http://192.168.1.100" or url: "http://hdhomerun.local"`);
+        console.log('   💡 Fix: Add a "url" field in m3u.yaml for this source');
+        console.log('      Example: url: "http://192.168.1.100" or url: "http://hdhomerun.local"');
         throw new Error(errorMsg);
       }
 
@@ -186,42 +186,42 @@ async function processSource(source, map) {
 
     // Provide actionable error messages based on error type
     if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN') {
-      console.log(`   💡 Fix: DNS resolution failed - check the hostname/URL`);
-      console.log(`      • Verify the domain name is correct`);
+      console.log('   💡 Fix: DNS resolution failed - check the hostname/URL');
+      console.log('      • Verify the domain name is correct');
       console.log(`      • Try using an IP address instead: ${source.url}`);
-      console.log(`      • Check your DNS server settings`);
+      console.log('      • Check your DNS server settings');
     } else if (err.code === 'ECONNREFUSED') {
-      console.log(`   💡 Fix: Connection refused - the server is not responding`);
-      console.log(`      • Verify the service is running on the target host`);
-      console.log(`      • Check the port number is correct`);
-      console.log(`      • Ensure firewall rules allow the connection`);
+      console.log('   💡 Fix: Connection refused - the server is not responding');
+      console.log('      • Verify the service is running on the target host');
+      console.log('      • Check the port number is correct');
+      console.log('      • Ensure firewall rules allow the connection');
     } else if (err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT') {
-      console.log(`   💡 Fix: Connection timed out`);
+      console.log('   💡 Fix: Connection timed out');
       console.log(`      • Check network connectivity to ${source.url}`);
-      console.log(`      • Verify the server is online and responsive`);
-      console.log(`      • Consider increasing timeout settings if server is slow`);
+      console.log('      • Verify the server is online and responsive');
+      console.log('      • Consider increasing timeout settings if server is slow');
     } else if (err.response?.status === 401 || err.response?.status === 403) {
       console.log(`   💡 Fix: Authentication failed (${err.response.status})`);
-      console.log(`      • Check username and password are correct`);
-      console.log(`      • Ensure credentials are URL-encoded in the URL`);
-      console.log(`      • Example: https://user:pass@example.com/playlist.m3u`);
+      console.log('      • Check username and password are correct');
+      console.log('      • Ensure credentials are URL-encoded in the URL');
+      console.log('      • Example: https://user:pass@example.com/playlist.m3u');
     } else if (err.response?.status === 404) {
-      console.log(`   💡 Fix: Resource not found (404)`);
+      console.log('   💡 Fix: Resource not found (404)');
       console.log(`      • Verify the URL path is correct: ${source.url}`);
-      console.log(`      • Check the M3U file exists at this location`);
+      console.log('      • Check the M3U file exists at this location');
     } else if (err.response?.status >= 500) {
       console.log(`   💡 Fix: Server error (${err.response.status})`);
-      console.log(`      • The source server is experiencing issues`);
-      console.log(`      • Try again later or contact the service provider`);
+      console.log('      • The source server is experiencing issues');
+      console.log('      • Try again later or contact the service provider');
     } else if (source.type === 'hdhomerun') {
-      console.log(`   💡 Fix: HDHomeRun device error`);
-      console.log(`      • Verify device is powered on and connected to network`);
+      console.log('   💡 Fix: HDHomeRun device error');
+      console.log('      • Verify device is powered on and connected to network');
       console.log(`      • Test access: curl ${source.url}/discover.json`);
-      console.log(`      • Check device IP address hasn't changed`);
+      console.log('      • Check device IP address hasn\'t changed');
     } else {
-      console.log(`   💡 Fix: Check the source URL and network connectivity`);
+      console.log('   💡 Fix: Check the source URL and network connectivity');
       console.log(`      • Test manually: curl -I "${source.url}"`);
-      console.log(`      • See troubleshooting guide in README.md`);
+      console.log('      • See troubleshooting guide in README.md');
     }
 
     if (statusCallback) statusCallback(source.name, 'error', err.message);
