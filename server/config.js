@@ -280,14 +280,8 @@ router.post('/api/reload/epg', requireAuth, async (req, res) => {
 // Get raw M3U tvg_ids from all sources (before mapping is applied)
 router.get('/api/mapping/m3u-tvg-ids', requireAuth, readLimiter, async (req, res) => {
   try {
-    let channelSources;
-    if (fs.existsSync(PROVIDERS_PATH)) {
-      const providers = loadProviders();
-      channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
-    } else {
-      const m3u = loadM3U();
-      channelSources = m3u?.urls || [];
-    }
+    const providers = loadProviders();
+    const channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
     const allTvgIds = [];
     const tvgsBySource = {};
     
@@ -371,16 +365,10 @@ router.get('/api/mapping/m3u-tvg-ids', requireAuth, readLimiter, async (req, res
 // Get available EPG channels (from all configured EPG sources)
 router.get('/api/mapping/epg-channels', requireAuth, readLimiter, async (req, res) => {
   try {
-    let epgSources;
-    if (fs.existsSync(PROVIDERS_PATH)) {
-      const providers = loadProviders();
-      epgSources = (providers.providers || [])
-        .filter(p => p.epg)
-        .map(p => ({ name: p.name, url: p.epg }));
-    } else {
-      const epg = loadEPG();
-      epgSources = epg?.urls || [];
-    }
+    const providers = loadProviders();
+    const epgSources = (providers.providers || [])
+      .filter(p => p.epg)
+      .map(p => ({ name: p.name, url: p.epg }));
     const epgChannels = epgSources
       .filter(s => s.url)
       .map(s => ({ source: s.name || 'Unknown', url: s.url }));
@@ -395,14 +383,8 @@ router.get('/api/mapping/epg-channels', requireAuth, readLimiter, async (req, re
 // This shows the tvg_ids that come directly from the M3U sources
 router.get('/api/mapping/m3u-channels', requireAuth, readLimiter, async (req, res) => {
   try {
-    let channelSources;
-    if (fs.existsSync(PROVIDERS_PATH)) {
-      const providers = loadProviders();
-      channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
-    } else {
-      const m3u = loadM3U();
-      channelSources = m3u?.urls || [];
-    }
+    const providers = loadProviders();
+    const channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
     const m3uChannels = [];
     
     for (const source of channelSources) {
@@ -422,20 +404,12 @@ router.get('/api/mapping/m3u-channels', requireAuth, readLimiter, async (req, re
 // Helper data endpoints for mapping UI
 router.get('/api/mapping/candidates', requireAuth, async (req, res) => {
   try {
-    // Get sources - prefer providers.yaml, fall back to m3u.yaml
-    let channelSources;
-    if (fs.existsSync(PROVIDERS_PATH)) {
-      const providers = loadProviders();
-      channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
-    } else {
-      const m3u = loadM3U();
-      channelSources = m3u?.urls || [];
-    }
+    const providers = loadProviders();
+    const channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
     const m3uSources = channelSources.map(u => u.name);
     
     // Get EPG sources for reference
-    const epg = loadEPG();
-    const epgSources = epg?.urls?.map(u => u.name) || [];
+    const epgSources = (providers.providers || []).filter(p => p.epg).map(p => p.name);
     
     console.log(`[Mapping] Starting candidates endpoint - found ${m3uSources.length} M3U sources`);
     

@@ -2,7 +2,7 @@ import fs from 'fs';
 import axios from 'axios';
 import pLimit from 'p-limit';
 import { loadConfig } from '../libs/config-loader.js';
-import { getDataPath, DATA_DIR, getConfigPath } from '../libs/paths.js';
+import { getDataPath, DATA_DIR } from '../libs/paths.js';
 
 const outputPath = getDataPath('channels.json');
 
@@ -256,20 +256,12 @@ export async function parseAll() {
   const startTime = Date.now();
 
   // Load config dynamically so updates take effect without restart
-  // Prefer providers.yaml if it exists, otherwise fall back to m3u.yaml
-  let sources;
-  const providersPath = getConfigPath('providers.yaml');
-  if (fs.existsSync(providersPath)) {
-    const providersConfig = loadConfig('providers');
-    sources = (providersConfig.providers || []).map(p => ({
-      name: p.name,
-      url: p.url,
-      type: p.type || 'm3u',
-    }));
-  } else {
-    const m3uConfig = loadConfig('m3u');
-    sources = m3uConfig.urls || [];
-  }
+  const providersConfig = loadConfig('providers');
+  const sources = (providersConfig.providers || []).map(p => ({
+    name: p.name,
+    url: p.url,
+    type: p.type || 'm3u',
+  }));
   const map = loadConfig('channelMap');
 
   // Process sources in parallel with concurrency limit

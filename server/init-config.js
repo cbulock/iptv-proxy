@@ -32,8 +32,6 @@ providers: []
 /**
  * Ensures the config directory and all required config files exist.
  * Creates them with default content if missing.
- * providers.yaml is only created on fresh installs (when neither m3u.yaml
- * nor epg.yaml exist) to preserve backward compatibility with existing setups.
  */
 export function initConfig() {
   // Ensure config directory exists
@@ -51,11 +49,8 @@ export function initConfig() {
     }
   }
 
-  // Only create providers.yaml on a fresh install (neither legacy file exists).
-  // Existing deployments with m3u.yaml / epg.yaml will continue using those.
-  const hasLegacyConfig = fs.existsSync(getConfigPath('m3u.yaml')) || fs.existsSync(getConfigPath('epg.yaml'));
-  const hasProvidersConfig = fs.existsSync(getConfigPath('providers.yaml'));
-  if (!hasLegacyConfig && !hasProvidersConfig) {
+  // Ensure providers.yaml exists
+  if (!fs.existsSync(getConfigPath('providers.yaml'))) {
     fs.writeFileSync(getConfigPath('providers.yaml'), PROVIDERS_CONFIG, 'utf8');
     console.log(`Created default config: ${getConfigPath('providers.yaml')}`);
   }
