@@ -1,0 +1,68 @@
+# Providers Configuration
+# Each provider combines a channel source (M3U/HDHomeRun) with an optional EPG source.
+# The "epg" field is optional — omit it if no EPG data is available for that provider.
+
+providers:
+  # ============================================================================
+  # Standard M3U/M3U8 Providers
+  # ============================================================================
+
+  # M3U provider with a matching EPG source
+  - name: "Premium IPTV"
+    url: "https://example.com/iptv/playlist.m3u"
+    type: "m3u"
+    epg: "https://example.com/iptv/epg.xml"
+
+  # M3U provider without EPG (EPG is optional)
+  - name: "Sports Channels"
+    url: "https://sports-provider.com/channels.m3u8"
+    type: "m3u"
+
+  # Local media server (e.g., ErsatzTV, Plex, Jellyfin) with EPG
+  - name: "ErsatzTV"
+    url: "http://192.168.1.100:8409/iptv/channels.m3u"
+    type: "m3u"
+    epg: "http://192.168.1.100:8409/iptv/xmltv.xml"
+
+  # Provider with authentication (URL-encoded credentials)
+  - name: "Authenticated Service"
+    url: "https://username:password@secure-iptv.com/playlist.m3u"
+    type: "m3u"
+    epg: "https://username:password@secure-iptv.com/epg.xml"
+
+  # ============================================================================
+  # HDHomeRun OTA Tuner Devices
+  # ============================================================================
+
+  # HDHomeRun device (EPG is served by the device itself or a DVR service)
+  - name: "HDHomeRun Living Room"
+    url: "http://hdhomerun-living.local"
+    type: "hdhomerun"
+
+  # HDHomeRun device by IP address
+  - name: "HDHomeRun Bedroom"
+    url: "http://192.168.1.150"
+    type: "hdhomerun"
+
+# ============================================================================
+# Configuration Notes:
+# ============================================================================
+#
+# - Each provider must have a unique "name" — this becomes the group-title in the output
+# - The "url" field points to the channel source (M3U playlist or HDHomeRun base URL)
+# - The "type" field is optional and defaults to "m3u"; use "hdhomerun" for tuner devices
+# - The "epg" field is optional; provide an XMLTV URL to associate EPG data with this provider
+# - Providers are processed in the order listed
+# - If a source fails to load, it will be skipped with a warning
+#
+# ============================================================================
+# Troubleshooting:
+# ============================================================================
+#
+# - "Failed to fetch M3U": Check URL accessibility and network connectivity
+# - "Missing URL for source": Ensure each provider has a valid url field
+# - HDHomeRun not working: Verify device is on the network and accessible
+# - No EPG data: Check the epg URL is reachable and returns valid XMLTV
+# - Authentication issues: Ensure credentials are properly URL-encoded
+#
+# For more help, see the README.md troubleshooting section.

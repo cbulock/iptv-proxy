@@ -2,13 +2,12 @@ import express from 'express';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
-import yaml from 'yaml';
 import { getConfigPath, getDataPath } from '../libs/paths.js';
 import { requireAuth } from './auth.js';
 
 const router = express.Router();
 
-const CONFIG_FILES = ['m3u.yaml', 'epg.yaml', 'app.yaml', 'channel-map.yaml'];
+const CONFIG_FILES = ['providers.yaml', 'm3u.yaml', 'epg.yaml', 'app.yaml', 'channel-map.yaml'];
 const BACKUPS_DIR = getDataPath('backups');
 
 /** Ensure the backups directory exists. */
@@ -23,7 +22,7 @@ async function ensureBackupsDir() {
  * @returns {string|null}
  */
 function resolveBackupPath(name) {
-  if (!/^backup-[\dT\-]+$/.test(name)) return null;
+  if (!/^backup-[\dT-]+$/.test(name)) return null;
   const backupsBase = path.resolve(BACKUPS_DIR);
   const resolved = path.resolve(backupsBase, name);
   if (!resolved.startsWith(backupsBase + path.sep)) return null;

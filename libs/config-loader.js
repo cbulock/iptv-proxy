@@ -41,6 +41,27 @@ const epgSchema = Joi.object({
   ).default([])
 }).default({ urls: [] });
 
+const providersSchema = Joi.object({
+  providers: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required().messages({
+        'any.required': 'Each provider must have a "name"',
+        'string.empty': 'Provider "name" cannot be empty'
+      }),
+      url: Joi.string().required().messages({
+        'any.required': 'Each provider must have a "url"',
+        'string.empty': 'Provider "url" cannot be empty'
+      }),
+      type: Joi.string().valid('m3u', 'hdhomerun').lowercase().default('m3u').messages({
+        'any.only': 'Provider "type" must be either "m3u" or "hdhomerun"'
+      }),
+      epg: Joi.string().optional().allow(null, '').messages({
+        'string.base': 'Provider "epg" must be a string URL'
+      })
+    })
+  ).default([])
+}).default({ providers: [] });
+
 const appSchema = Joi.object({
   base_url: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
     'string.uri': 'app.yaml "base_url" must be a valid URL'
@@ -87,6 +108,7 @@ const channelMapSchema = Joi.object().pattern(
 const defaultConfigs = {
   m3u: { urls: [] },
   epg: { urls: [] },
+  providers: { providers: [] },
   app: {},
   channelMap: {}
 };
@@ -117,10 +139,10 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
     } catch (parseError) {
       console.error(chalk.red(`❌ Failed to parse YAML in ${path}:`));
       console.error(chalk.red(`   ${parseError.message}`));
-      console.log(chalk.yellow(`   💡 Fix: Check YAML syntax - common issues include:`));
-      console.log(chalk.yellow(`      • Incorrect indentation (use spaces, not tabs)`));
-      console.log(chalk.yellow(`      • Missing quotes around strings with special characters`));
-      console.log(chalk.yellow(`      • Unclosed brackets or quotes`));
+      console.log(chalk.yellow('   💡 Fix: Check YAML syntax - common issues include:'));
+      console.log(chalk.yellow('      • Incorrect indentation (use spaces, not tabs)'));
+      console.log(chalk.yellow('      • Missing quotes around strings with special characters'));
+      console.log(chalk.yellow('      • Unclosed brackets or quotes'));
       console.log(chalk.yellow(`      • Use a YAML validator: ${YAML_VALIDATOR_URL}`));
       console.log(chalk.gray(`   Using default configuration for ${name}`));
       return defaultValue;
@@ -137,10 +159,10 @@ function loadAndValidateConfig(path, schema, defaultValue, name) {
       for (const detail of error.details) {
         console.error(chalk.red(`   • ${detail.message}`));
       }
-      console.log(chalk.yellow(`   💡 Fix: Review your configuration against the examples:`));
-      console.log(chalk.yellow(`      • See config/examples/ for valid configuration templates`));
-      console.log(chalk.yellow(`      • Ensure all required fields are present`));
-      console.log(chalk.yellow(`      • Check that URLs are valid and accessible`));
+      console.log(chalk.yellow('   💡 Fix: Review your configuration against the examples:'));
+      console.log(chalk.yellow('      • See config/examples/ for valid configuration templates'));
+      console.log(chalk.yellow('      • Ensure all required fields are present'));
+      console.log(chalk.yellow('      • Check that URLs are valid and accessible'));
       console.log(chalk.gray(`   Using default configuration for ${name}`));
       return defaultValue;
     }
@@ -175,6 +197,13 @@ export function loadAllConfigs() {
     'EPG config'
   );
 
+  const providers = loadAndValidateConfig(
+    getConfigPath('providers.yaml'),
+    providersSchema,
+    defaultConfigs.providers,
+    'Providers config'
+  );
+
   const app = loadAndValidateConfig(
     getConfigPath('app.yaml'),
     appSchema,
@@ -189,7 +218,7 @@ export function loadAllConfigs() {
     'Channel map'
   );
 
-  return { m3u, epg, app, channelMap };
+  return { m3u, epg, providers, app, channelMap };
 }
 
 /**
@@ -210,6 +239,12 @@ export function loadConfig(configType) {
       schema: epgSchema,
       default: defaultConfigs.epg,
       name: 'EPG config'
+    },
+    providers: {
+      path: getConfigPath('providers.yaml'),
+      schema: providersSchema,
+      default: defaultConfigs.providers,
+      name: 'Providers config'
     },
     app: {
       path: getConfigPath('app.yaml'),
@@ -243,6 +278,7 @@ export function validateConfigData(configType, data) {
   const schemas = {
     m3u: m3uSchema,
     epg: epgSchema,
+    providers: providersSchema,
     app: appSchema,
     channelMap: channelMapSchema
   };
