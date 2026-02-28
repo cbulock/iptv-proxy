@@ -8,7 +8,7 @@ import { requireAuth } from './auth.js';
 
 const router = express.Router();
 
-const CONFIG_FILES = ['m3u.yaml', 'epg.yaml', 'app.yaml', 'channel-map.yaml'];
+const CONFIG_FILES = ['providers.yaml', 'm3u.yaml', 'epg.yaml', 'app.yaml', 'channel-map.yaml'];
 const BACKUPS_DIR = getDataPath('backups');
 
 /** Ensure the backups directory exists. */

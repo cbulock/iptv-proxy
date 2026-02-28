@@ -56,26 +56,10 @@
             </div>
           </n-tab-pane>
 
-          <n-tab-pane name="channels" tab="Channels">
+          <n-tab-pane name="providers" tab="Providers">
             <n-space align="center" wrap style="margin-bottom:.5rem;">
-              <n-button type="primary" secondary @click="addSource">Add Source</n-button>
-              <n-button type="primary" @click="saveChannels" :loading="savingChannels">{{ savingChannels ? 'Saving...' : 'Save Channels' }}</n-button>
-            </n-space>
-            <n-data-table
-              v-if="Array.isArray(channelSources) && channelSources.length"
-              :columns="channelColumns"
-              :data="channelSources"
-              :bordered="false"
-              :row-key="rowKeyFn"
-            />
-            <div v-else style="margin-top:1rem; opacity:.7">No channel sources configured yet.</div>
-            <div class="foot">Editing <code>config/m3u.yaml</code>. Changes require channel reload.</div>
-          </n-tab-pane>
-
-          <n-tab-pane name="epg" tab="EPG">
-            <n-space align="center" wrap style="margin-bottom:.5rem;">
-              <n-button type="primary" secondary @click="addEPGSource">Add EPG Source</n-button>
-              <n-button type="primary" @click="saveEPG" :loading="savingEPG">{{ savingEPG ? 'Saving...' : 'Save EPG' }}</n-button>
+              <n-button type="primary" secondary @click="addProvider">Add Provider</n-button>
+              <n-button type="primary" @click="saveProviders" :loading="savingProviders">{{ savingProviders ? 'Saving...' : 'Save Providers' }}</n-button>
               <n-button @click="loadEPGValidation" :loading="loadingEPGValidation">{{ loadingEPGValidation ? 'Validating...' : 'Validate EPG' }}</n-button>
             </n-space>
             <div v-if="epgValidation" style="margin-bottom:1rem; padding:.75rem; background:rgba(255,255,255,.05); border-radius:4px;">
@@ -111,14 +95,14 @@
               </div>
             </div>
             <n-data-table
-              v-if="Array.isArray(epgSources) && epgSources.length"
-              :columns="epgColumns"
-              :data="epgSources"
+              v-if="Array.isArray(providers) && providers.length"
+              :columns="providerColumns"
+              :data="providers"
               :bordered="false"
               :row-key="rowKeyFn"
             />
-            <div v-else style="margin-top:1rem; opacity:.7">No EPG sources configured yet.</div>
-            <div class="foot">Editing <code>config/epg.yaml</code>. Changes require EPG reload.</div>
+            <div v-else style="margin-top:1rem; opacity:.7">No providers configured yet.</div>
+            <div class="foot">Editing <code>config/providers.yaml</code>. Each provider has a channel source and an optional EPG URL.</div>
           </n-tab-pane>
 
           <n-tab-pane name="mapping" tab="Mapping">
@@ -181,7 +165,7 @@
                     style="min-width: 220px;"
                     clearable
                     placeholder="Filter by source"
-                    :options="channelSources.map(s => ({ label: s.name, value: s.name }))"
+                    :options="providers.map(s => ({ label: s.name, value: s.name }))"
                     v-model:value="unmappedSource"
                   />
                   <div style="display:flex; align-items:center; gap:.5rem;">
@@ -314,8 +298,7 @@ const state = reactive({
   loggingOut: false,
   passwordForm: { current: '', newPass: '', confirm: '' },
   savingPassword: false,
-  channelSources: [],
-  epgSources: [],
+  providers: [],
   mapping: {},
   mappingRows: [],
   candidates: { epgNames: [], tvgIds: [], tvgOptions: [] },
@@ -330,10 +313,8 @@ const state = reactive({
   loadingEPGValidation: false,
   status: '',
   statusOk: true,
-  savingChannels: false,
+  savingProviders: false,
   reloadingChannels: false,
-  savingEPG: false,
-  reloadingEPG: false,
   savingApp: false,
   savingMapping: false,
   health: {},
@@ -351,39 +332,23 @@ function setStatus(msg, ok = true) {
   state.statusOk = ok;
 }
 
-async function loadChannels() {
+async function loadProviders() {
   try {
-    const r = await apiFetch("/api/config/m3u");
+    const r = await apiFetch('/api/config/providers');
     const cfg = await r.json();
-    state.channelSources.splice(
+    state.providers.splice(
       0,
-      state.channelSources.length,
-      ...(cfg.urls && Array.isArray(cfg.urls) ? cfg.urls : [])
+      state.providers.length,
+      ...(cfg.providers && Array.isArray(cfg.providers) ? cfg.providers : [])
     );
-    state.channelSources.forEach((s, i) => { 
-      s.type = s.type ? String(s.type).toLowerCase() : 'm3u';
-      // Add stable ID for row-key if missing
-      if (!s._id) s._id = `ch_${Date.now()}_${i}`;
+    state.providers.forEach((p, i) => {
+      p.type = p.type ? String(p.type).toLowerCase() : 'm3u';
+      p.epg = p.epg || '';
+      if (!p._id) p._id = `prov_${Date.now()}_${i}`;
     });
-    setStatus('Loaded channel config');
+    setStatus('Loaded providers config');
   } catch (e) {
-    setStatus("Failed to load config: " + e.message, false);
-    message.error(e.message);
-  }
-}
-
-async function loadEPG() {
-  try {
-    const r = await apiFetch('/api/config/epg');
-    const cfg = await r.json();
-    state.epgSources.splice(0, state.epgSources.length, ...(cfg.urls && Array.isArray(cfg.urls) ? cfg.urls : []));
-    state.epgSources.forEach((s, i) => {
-      // Add stable ID for row-key if missing
-      if (!s._id) s._id = `epg_${Date.now()}_${i}`;
-    });
-    setStatus('Loaded EPG config');
-  } catch (e) {
-    setStatus('Failed to load EPG config: ' + e.message, false);
+    setStatus('Failed to load providers config: ' + e.message, false);
     message.error(e.message);
   }
 }
@@ -456,39 +421,43 @@ async function loadApp() {
   }
 }
 
-async function saveChannels() {
+async function saveProviders() {
   try {
-  state.savingChannels = true;
-  const cleaned = state.channelSources
-      .filter((u) => u.name && u.url)
-      .map(u => ({ name: u.name, url: u.url, type: u.type ? String(u.type).toLowerCase() : 'm3u' }));
-    const body = { urls: cleaned };
-    const r = await apiFetch("/api/config/m3u", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
+    state.savingProviders = true;
+    const cleaned = state.providers
+      .filter(p => p.name && p.url)
+      .map(p => {
+        const entry = { name: p.name, url: p.url, type: p.type ? String(p.type).toLowerCase() : 'm3u' };
+        if (p.epg) entry.epg = p.epg;
+        return entry;
+      });
+    const body = { providers: cleaned };
+    const r = await apiFetch('/api/config/providers', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const j = await r.json();
-  if (!r.ok) throw new Error(j.error || "Save channels failed");
-  setStatus("Channels saved. Reloading...");
-  message.success('Channels saved');
-  // Automatically reload channels after save
-  await reloadChannels();
+    if (!r.ok) throw new Error(j.error || 'Save providers failed');
+    setStatus('Providers saved. Reloading...');
+    message.success('Providers saved');
+    // Reload channels and EPG concurrently after save
+    await Promise.all([reloadChannels(), reloadEPG()]);
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
   } finally {
-  state.savingChannels = false;
+    state.savingProviders = false;
   }
 }
 
 async function reloadChannels() {
   try {
     state.reloadingChannels = true;
-    setStatus("Reloading channels...");
-    const r = await apiFetch("/api/reload/channels", { method: "POST" });
+    setStatus('Reloading channels...');
+    const r = await apiFetch('/api/reload/channels', { method: 'POST' });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "Reload failed");
+    if (!r.ok) throw new Error(j.error || 'Reload failed');
     setStatus(`Reloaded ${j.channels} channels.`);
     // Refresh mapping data after channels reload
     await loadMapping();
@@ -500,43 +469,14 @@ async function reloadChannels() {
   }
 }
 
-async function saveEPG() {
-  try {
-    state.savingEPG = true;
-    const cleaned = state.epgSources.filter(u => u.name && u.url).map(u => ({ name: u.name, url: u.url }));
-    const body = { urls: cleaned };
-    const r = await apiFetch('/api/config/epg', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-    });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Save EPG failed');
-    setStatus('EPG saved. Reloading...');
-    message.success('EPG saved');
-    // Automatically reload EPG after save
-    await reloadEPG();
-  } catch (e) {
-    setStatus(e.message, false);
-    message.error(e.message);
-  } finally {
-    state.savingEPG = false;
-  }
-}
-
 async function reloadEPG() {
   try {
-    state.reloadingEPG = true;
-    setStatus('Reloading EPG...');
     const r = await apiFetch('/api/reload/epg', { method: 'POST' });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Reload EPG failed');
     setStatus('EPG reloaded.');
-    // Refresh health data after EPG reload
-    await loadHealth();
-    message.success('Health data updated with new EPG');
   } catch (e) {
     setStatus(e.message, false);
-  } finally {
-    state.reloadingEPG = false;
   }
 }
 
@@ -579,14 +519,10 @@ async function saveMapping() {
   }
 }
 
-function addSource() { addChannelSource(); }
-function addChannelSource() {
-  state.channelSources.push({ _id: `ch_${Date.now()}_${Math.random()}`, name: '', type: 'm3u', url: '' });
+function addProvider() {
+  state.providers.push({ _id: `prov_${Date.now()}_${Math.random()}`, name: '', type: 'm3u', url: '', epg: '' });
 }
-function removeChannelSource(i) { state.channelSources.splice(i,1); }
-
-function addEPGSource() { state.epgSources.push({ _id: `epg_${Date.now()}_${Math.random()}`, name: '', url: '' }); }
-function removeEPGSource(i) { state.epgSources.splice(i,1); }
+function removeProvider(i) { state.providers.splice(i, 1); }
 
 function addMappingRow() { state.mappingRows.push({ name: '', number: '', tvg_id: '' }); }
 function removeMappingRow(i) { state.mappingRows.splice(i,1); }
@@ -851,8 +787,7 @@ async function changePassword() {
 
 // Initial loads
 checkAuthStatus();
-loadChannels();
-loadEPG();
+loadProviders();
 loadApp();
 loadMapping();
 loadHealth();
@@ -866,7 +801,7 @@ watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, channelSources, epgSources, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, status, statusOk, savingChannels, reloadingChannels, savingEPG, reloadingEPG, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
+const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, providers, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, status, statusOk, savingProviders, reloadingChannels, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, runningTask } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,
@@ -950,17 +885,12 @@ const taskColumns = [
 
 function rowKey(row) { return row.name + row.url; }
 
-const channelColumns = [
+const providerColumns = [
   { title: 'Name', key: 'name', render(row) { return h(NInput, { value: row?.name ?? '', onUpdateValue: v => row.name = v }); } },
   { title: 'Type', key: 'type', render(row) { return h(NSelect, { value: row?.type ?? 'm3u', options: [ {label:'M3U', value:'m3u'}, {label:'HDHomeRun', value:'hdhomerun'} ], onUpdateValue: v => row.type = v }); } },
-  { title: 'URL', key: 'url', render(row) { return h(NInput, { value: row?.url ?? '', onUpdateValue: v => row.url = v }); } },
-  { title: 'Remove', key: 'remove', render(row) { return h(NButton, { type:'error', size:'small', onClick: () => removeChannelSource(channelSources.value.indexOf(row)) }, { default: () => '✕' }); } }
-];
-
-const epgColumns = [
-  { title: 'Name', key: 'name', render(row) { return h(NInput, { value: row?.name ?? '', onUpdateValue: v => row.name = v }); } },
-  { title: 'URL', key: 'url', render(row) { return h(NInput, { value: row?.url ?? '', onUpdateValue: v => row.url = v }); } },
-  { title: 'Remove', key: 'remove', render(row) { return h(NButton, { type:'error', size:'small', onClick: () => removeEPGSource(epgSources.value.indexOf(row)) }, { default: () => '✕' }); } }
+  { title: 'Channel URL', key: 'url', render(row) { return h(NInput, { value: row?.url ?? '', onUpdateValue: v => row.url = v }); } },
+  { title: 'EPG URL (optional)', key: 'epg', render(row) { return h(NInput, { value: row?.epg ?? '', placeholder: 'https://...epg.xml (optional)', onUpdateValue: v => row.epg = v }); } },
+  { title: 'Remove', key: 'remove', render(row) { return h(NButton, { type:'error', size:'small', onClick: () => removeProvider(providers.value.indexOf(row)) }, { default: () => '✕' }); } }
 ];
 
 function rowKeyFn(row) {

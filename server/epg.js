@@ -8,6 +8,7 @@ import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import { validateEPG, validateEPGCoverage } from '../libs/epg-validator.js';
 import cacheManager from '../libs/cache-manager.js';
+import { getConfigPath } from '../libs/paths.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
@@ -82,10 +83,21 @@ function rewriteImageUrls(xmlString, req) {
 }
 
 export async function setupEPGRoutes(app) {
-    const epgConfig = loadConfig('epg');
     const appConfig = loadConfig('app');
-    const epgSources = epgConfig.urls || [];
-    
+
+    function loadEPGSources() {
+        // Prefer providers.yaml if it exists, otherwise fall back to epg.yaml
+        const providersPath = getConfigPath('providers.yaml');
+        if (fs.existsSync(providersPath)) {
+            const providersConfig = loadConfig('providers');
+            return (providersConfig.providers || [])
+                .filter(p => p.epg)
+                .map(p => ({ name: p.name, url: p.epg }));
+        }
+        const epgConfig = loadConfig('epg');
+        return epgConfig.urls || [];
+    }
+
     // Initialize EPG cache with TTL from config (default: 6 hours)
     const epgTTL = (appConfig.cache?.epg_ttl ?? 21600) * 1000; // Convert seconds to milliseconds
     epgCache = cacheManager.createCache('epg', epgTTL);
@@ -97,6 +109,7 @@ export async function setupEPGRoutes(app) {
         const startTime = Date.now();
         const allChannels = getChannels();
         const merged = { tv: { channel: [], programme: [] } };
+        const epgSources = loadEPGSources();
 
         for (const source of epgSources) {
             const sourceName = source.name;

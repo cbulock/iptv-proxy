@@ -8,21 +8,17 @@ const DEFAULT_CONFIGS = {
 # base_url: https://your-domain.com
 {}
 `,
-  'm3u.yaml': `# M3U playlist sources
-urls: []
+  'providers.yaml': `# IPTV Providers configuration
+# Each provider combines a channel source (M3U/HDHomeRun) with an optional EPG source.
+providers: []
 # Example:
 #   - name: My IPTV
 #     url: http://example.com/playlist.m3u
 #     type: m3u
+#     epg: http://example.com/epg.xml
 #   - name: HDHomeRun
 #     url: http://192.168.1.100
 #     type: hdhomerun
-`,
-  'epg.yaml': `# EPG (XMLTV) sources
-urls: []
-# Example:
-#   - name: My EPG
-#     url: http://example.com/epg.xml
 `,
   'channel-map.yaml': `# Channel mapping overrides
 # Example:

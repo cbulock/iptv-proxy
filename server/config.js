@@ -45,6 +45,7 @@ const readLimiter = RateLimit({
 
 const M3U_PATH = getConfigPath('m3u.yaml');
 const EPG_PATH = getConfigPath('epg.yaml');
+const PROVIDERS_PATH = getConfigPath('providers.yaml');
 const APP_PATH = getConfigPath('app.yaml');
 const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
 
@@ -54,6 +55,10 @@ function loadM3U() {
 
 function loadEPG() {
   return loadConfig('epg');
+}
+
+function loadProviders() {
+  return loadConfig('providers');
 }
 
 function loadAPP() {
@@ -84,6 +89,18 @@ router.get('/api/config/epg', requireAuth, (req, res) => {
       error: 'Failed to read epg.yaml', 
       detail: e.message,
       fix: 'Check that epg.yaml exists in the config directory and is valid YAML. See config/examples/epg.example.yaml for reference.'
+    });
+  }
+});
+
+router.get('/api/config/providers', requireAuth, (req, res) => {
+  try {
+    res.json(loadProviders());
+  } catch (e) {
+    res.status(500).json({
+      error: 'Failed to read providers.yaml',
+      detail: e.message,
+      fix: 'Check that providers.yaml exists in the config directory and is valid YAML. See config/examples/providers.example.yaml for reference.'
     });
   }
 });
@@ -148,6 +165,27 @@ router.put('/api/config/epg', requireAuth, configWriteLimiter, (req, res) => {
     console.error('Error writing epg.yaml:', e);
     res.status(500).json({ 
       error: 'Failed to write epg.yaml', 
+      detail: e.message,
+      fix: 'Check file permissions on the config directory and ensure disk space is available.'
+    });
+  }
+});
+
+router.put('/api/config/providers', requireAuth, configWriteLimiter, (req, res) => {
+  const incoming = req.body;
+  const validation = validateConfigData('providers', incoming);
+  if (!validation.valid) return res.status(400).json({
+    error: validation.error,
+    fix: 'Ensure all providers have required fields: name (string) and url (string). The type field is optional ("m3u" or "hdhomerun"). The epg field is optional. See config/examples/providers.example.yaml for examples.'
+  });
+  try {
+    const yamlText = yaml.stringify(validation.value);
+    fs.writeFileSync(PROVIDERS_PATH, yamlText, 'utf8');
+    res.json({ status: 'saved' });
+  } catch (e) {
+    console.error('Error writing providers.yaml:', e);
+    res.status(500).json({
+      error: 'Failed to write providers.yaml',
       detail: e.message,
       fix: 'Check file permissions on the config directory and ensure disk space is available.'
     });
@@ -243,16 +281,23 @@ router.post('/api/reload/epg', requireAuth, async (req, res) => {
 // Get raw M3U tvg_ids from all sources (before mapping is applied)
 router.get('/api/mapping/m3u-tvg-ids', requireAuth, readLimiter, async (req, res) => {
   try {
-    const m3u = loadM3U();
+    let channelSources;
+    if (fs.existsSync(PROVIDERS_PATH)) {
+      const providers = loadProviders();
+      channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
+    } else {
+      const m3u = loadM3U();
+      channelSources = m3u?.urls || [];
+    }
     const allTvgIds = [];
     const tvgsBySource = {};
     
-    if (!m3u?.urls || !Array.isArray(m3u.urls)) {
+    if (!Array.isArray(channelSources) || channelSources.length === 0) {
       return res.json({ tvgIds: [], tvgsBySource: {} });
     }
     
     // Parse each M3U source to extract tvg_ids
-    for (const source of m3u.urls) {
+    for (const source of channelSources) {
       if (!source.url || !source.name) continue;
       
       const sourceTvgIds = [];
@@ -327,21 +372,19 @@ router.get('/api/mapping/m3u-tvg-ids', requireAuth, readLimiter, async (req, res
 // Get available EPG channels (from all configured EPG sources)
 router.get('/api/mapping/epg-channels', requireAuth, readLimiter, async (req, res) => {
   try {
-    const epg = loadEPG();
-    const epgChannels = [];
-    
-    if (epg && epg.urls && Array.isArray(epg.urls)) {
-      for (const source of epg.urls) {
-        if (!source.url) continue;
-        
-        // Extract channel IDs from merged XMLTV (simple parsing)
-        // In production, this would read from the merged EPG file
-        epgChannels.push({
-          source: source.name || 'Unknown',
-          url: source.url
-        });
-      }
+    let epgSources;
+    if (fs.existsSync(PROVIDERS_PATH)) {
+      const providers = loadProviders();
+      epgSources = (providers.providers || [])
+        .filter(p => p.epg)
+        .map(p => ({ name: p.name, url: p.epg }));
+    } else {
+      const epg = loadEPG();
+      epgSources = epg?.urls || [];
     }
+    const epgChannels = epgSources
+      .filter(s => s.url)
+      .map(s => ({ source: s.name || 'Unknown', url: s.url }));
     
     res.json({ epgSources: epgChannels });
   } catch (e) {
@@ -353,17 +396,22 @@ router.get('/api/mapping/epg-channels', requireAuth, readLimiter, async (req, re
 // This shows the tvg_ids that come directly from the M3U sources
 router.get('/api/mapping/m3u-channels', requireAuth, readLimiter, async (req, res) => {
   try {
-    const m3u = loadM3U();
+    let channelSources;
+    if (fs.existsSync(PROVIDERS_PATH)) {
+      const providers = loadProviders();
+      channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
+    } else {
+      const m3u = loadM3U();
+      channelSources = m3u?.urls || [];
+    }
     const m3uChannels = [];
     
-    if (m3u && m3u.urls && Array.isArray(m3u.urls)) {
-      for (const source of m3u.urls) {
-        m3uChannels.push({
-          source: source.name || 'Unknown',
-          url: source.url,
-          type: source.type || 'm3u'
-        });
-      }
+    for (const source of channelSources) {
+      m3uChannels.push({
+        source: source.name || 'Unknown',
+        url: source.url,
+        type: source.type || 'm3u'
+      });
     }
     
     res.json({ m3uSources: m3uChannels });
@@ -375,9 +423,16 @@ router.get('/api/mapping/m3u-channels', requireAuth, readLimiter, async (req, re
 // Helper data endpoints for mapping UI
 router.get('/api/mapping/candidates', requireAuth, async (req, res) => {
   try {
-    // Get M3U sources for reference
-    const m3u = loadM3U();
-    const m3uSources = m3u?.urls?.map(u => u.name) || [];
+    // Get sources - prefer providers.yaml, fall back to m3u.yaml
+    let channelSources;
+    if (fs.existsSync(PROVIDERS_PATH)) {
+      const providers = loadProviders();
+      channelSources = (providers.providers || []).map(p => ({ name: p.name, url: p.url, type: p.type || 'm3u' }));
+    } else {
+      const m3u = loadM3U();
+      channelSources = m3u?.urls || [];
+    }
+    const m3uSources = channelSources.map(u => u.name);
     
     // Get EPG sources for reference
     const epg = loadEPG();
@@ -389,8 +444,8 @@ router.get('/api/mapping/candidates', requireAuth, async (req, res) => {
     const tvgMap = new Map(); // key: tvg_id, value: { name, sources }
     let totalParsed = 0;
     
-    if (m3u?.urls && Array.isArray(m3u.urls)) {
-      for (const source of m3u.urls) {
+    if (Array.isArray(channelSources) && channelSources.length > 0) {
+      for (const source of channelSources) {
         if (!source.url || !source.name) {
           console.log(`[Mapping] Skipping source - missing url or name`);
           continue;
