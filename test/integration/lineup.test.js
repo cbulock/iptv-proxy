@@ -97,7 +97,7 @@ describe('Lineup Route Integration', () => {
   });
 
   it('returns a valid M3U response for /lineup.m3u', async () => {
-    const response = await axios.get(`${baseUrl}/lineup.m3u`);
+    const response = await axios.get(`${baseUrl}/lineup.m3u?include_unmapped=1`);
     const body = response.data;
 
     expect(response.status).to.equal(200);
@@ -108,6 +108,15 @@ describe('Lineup Route Integration', () => {
     expect(body).to.include('tvg-id="test.2"');
     expect(body).to.include(`tvg-logo="${baseUrl}/images/TestSource/http%3A%2F%2Fexample.com%2Flogo1.png"`);
     expect(body).to.include('tvg-chno="6"');
+  });
+
+  it('excludes unmapped channels from /lineup.m3u by default', async () => {
+    const response = await axios.get(`${baseUrl}/lineup.m3u`);
+    const body = response.data;
+
+    expect(response.status).to.equal(200);
+    expect(body).to.not.include('Test Channel One');
+    expect(body).to.not.include('Test Channel Two');
   });
 
   it('uses tvg_id as GuideNumber for HDHomeRun channels in /lineup.json', async () => {

@@ -105,6 +105,28 @@ function resolveGuideNumberForLineup(channel) {
   return channel?.guideNumber || channel?.tvg_id || channel?.name;
 }
 
+function isChannelMapped(channel, map, mapKeys) {
+  const name = channel?.name || '';
+  const tvgId = channel?.tvg_id || '';
+
+  if (mapKeys.has(name)) return true;
+  if (tvgId && mapKeys.has(tvgId)) return true;
+
+  if (tvgId) {
+    for (const value of Object.values(map || {})) {
+      if (value && value.tvg_id === tvgId) return true;
+    }
+  }
+
+  return false;
+}
+
+function parseBooleanQueryParam(value) {
+  if (value === undefined || value === null) return false;
+  const normalized = String(value).trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+}
+
 export function setupLineupRoutes(app, config, usageHelpers = {}) {
   // Initialize lineup caches with TTL from config (default: 1 hour)
   const appConfig = loadConfig('app');
@@ -121,7 +143,8 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
   const loadChannels = () => getChannels();
 
   app.get('/lineup.json', lineupLimiter, asyncHandler(async (req, res) => {
-    const cacheKey = `${req.protocol}://${req.get('host')}`;
+    const includeUnmapped = parseBooleanQueryParam(req.query.include_unmapped ?? req.query.includeUnmapped);
+    const cacheKey = `${req.protocol}://${req.get('host')}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
     
     // Check cache
     const cached = jsonCache.get(cacheKey);
@@ -129,11 +152,17 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       return res.json(cached);
     }
     
-    const channels = loadChannels();
+    let channels = loadChannels();
     
     // Validate that we have channels
     if (!Array.isArray(channels)) {
       throw new AppError('Invalid channels data structure', 500);
+    }
+
+    if (!includeUnmapped) {
+      const channelMap = loadConfig('channelMap') || {};
+      const mapKeys = new Set(Object.keys(channelMap));
+      channels = channels.filter(channel => isChannelMapped(channel, channelMap, mapKeys));
     }
 
     const baseUrl = getBaseUrl(req);
@@ -155,9 +184,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     // Extract query parameters for filtering
     const filterSource = req.query.source ? String(req.query.source) : null;
     const filterGroup = req.query.group ? String(req.query.group) : null;
+    const includeUnmapped = parseBooleanQueryParam(req.query.include_unmapped ?? req.query.includeUnmapped);
     
     // Create cache key including filters
-    const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}`;
+    const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
     
     // Check cache
     const cached = m3uCache.get(cacheKey);
@@ -183,6 +213,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     
     // Filter out invalid channels
     channels = channels.filter(ch => ch && ch.name && ch.source);
+
+    if (!includeUnmapped) {
+      const channelMap = loadConfig('channelMap') || {};
+      const mapKeys = new Set(Object.keys(channelMap));
+      channels = channels.filter(channel => isChannelMapped(channel, channelMap, mapKeys));
+    }
     
     const tvgIdMap = new Map(); // For deduplication
     const baseUrl = getBaseUrl(req);
