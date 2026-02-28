@@ -120,7 +120,7 @@ describe('Lineup Route Integration', () => {
   });
 
   it('uses tvg_id as GuideNumber for HDHomeRun channels in /lineup.json', async () => {
-    const response = await axios.get(`${baseUrl}/lineup.json`);
+    const response = await axios.get(`${baseUrl}/lineup.json?include_unmapped=1`);
     expect(response.status).to.equal(200);
 
     const wlns = response.data.find(ch => ch.GuideName === 'WLNS-TV');
