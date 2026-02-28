@@ -40,13 +40,31 @@ const builder = new XMLBuilder({
  * Apply channel mapping to a channel object
  */
 function applyMapping(channel, map) {
+  let matchedKey = null;
+
   let mapping = map[channel.name];
+  if (mapping) matchedKey = channel.name;
   if (!mapping && channel.tvg_id) {
     mapping = map[channel.tvg_id];
+    if (mapping) matchedKey = channel.tvg_id;
+  }
+
+  if (!mapping && channel.tvg_id && map && typeof map === 'object') {
+    for (const [key, value] of Object.entries(map)) {
+      if (value && value.tvg_id === channel.tvg_id) {
+        mapping = value;
+        matchedKey = key;
+        break;
+      }
+    }
   }
 
   if (mapping) {
-    channel.name = mapping.name || channel.name;
+    const inferredName =
+      matchedKey && matchedKey !== channel.name && matchedKey !== channel.tvg_id
+        ? matchedKey
+        : channel.name;
+    channel.name = mapping.name || inferredName;
     channel.tvg_id = mapping.tvg_id || channel.tvg_id;
     channel.logo = mapping.logo || channel.logo;
     channel.url = mapping.url || channel.url;

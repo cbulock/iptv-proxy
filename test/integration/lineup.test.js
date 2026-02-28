@@ -106,6 +106,8 @@ describe('Lineup Route Integration', () => {
     expect(body).to.include('Test Channel Two');
     expect(body).to.include('tvg-id="test.1"');
     expect(body).to.include('tvg-id="test.2"');
+    expect(body).to.include(`tvg-logo="${baseUrl}/images/TestSource/http%3A%2F%2Fexample.com%2Flogo1.png"`);
+    expect(body).to.include('tvg-chno="6"');
   });
 
   it('uses tvg_id as GuideNumber for HDHomeRun channels in /lineup.json', async () => {

@@ -16,16 +16,38 @@ export function setStatusCallback(callback) {
 }
 
 export function applyMapping(channel, map) {
+  let matchedKey = null;
+
   // Try name-based mapping first
   let mapping = map[channel.name];
+  if (mapping) matchedKey = channel.name;
 
   // If not found, fall back to tvg_id
   if (!mapping && channel.tvg_id) {
     mapping = map[channel.tvg_id];
+    if (mapping) matchedKey = channel.tvg_id;
+  }
+
+  // If still not found, allow reverse lookup by mapping value tvg_id.
+  // This supports admin UI mappings keyed by EPG channel name.
+  if (!mapping && channel.tvg_id && map && typeof map === 'object') {
+    for (const [key, value] of Object.entries(map)) {
+      if (value && value.tvg_id === channel.tvg_id) {
+        mapping = value;
+        matchedKey = key;
+        break;
+      }
+    }
   }
 
   if (mapping) {
-    channel.name = mapping.name || channel.name;
+    // If mapping.name is omitted and the matched key is not the source name/tvg_id,
+    // treat that key as the canonical EPG/display name.
+    const inferredName =
+      matchedKey && matchedKey !== channel.name && matchedKey !== channel.tvg_id
+        ? matchedKey
+        : channel.name;
+    channel.name = mapping.name || inferredName;
     channel.tvg_id = mapping.tvg_id || channel.tvg_id;
     channel.logo = mapping.logo || channel.logo;
     channel.url = mapping.url || channel.url;

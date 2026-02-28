@@ -80,7 +80,6 @@ Copilot should help identify:
 
 - Frontend/UI libraries (React, Vue, etc.)
 - TypeScript conversion (this is a plain JS project for now)
-- Linting/Prettier unless project adds config for it
 
 ## 10. Tone of Suggestions
 

@@ -7,6 +7,10 @@ import usageRouter, { registerUsage, touchUsage, unregisterUsage } from '../../s
 describe('Usage Route Integration', () => {
   it('deduplicates sessions per ip/channel and returns lastSeenAt', async () => {
     const app = express();
+    app.use((req, _res, next) => {
+      req.session = { authenticated: true };
+      next();
+    });
     app.use(usageRouter);
 
     let server = null;

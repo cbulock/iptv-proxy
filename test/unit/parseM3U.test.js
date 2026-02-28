@@ -99,6 +99,29 @@ describe('M3U Parser - applyMapping', () => {
       expect(result.name).to.equal('Mapped by Name');
       expect(result.guideNumber).to.equal('100');
     });
+
+    it('should map by reverse tvg_id match when key is canonical EPG name', () => {
+      const channel = createMockChannel({
+        name: 'Source Channel Name',
+        tvg_id: '3.1',
+        guideNumber: '3.1',
+      });
+
+      const mapping = {
+        CBS: {
+          tvg_id: '3.1',
+          number: '6',
+          logo: 'http://example.com/cbs.png',
+        },
+      };
+
+      const result = applyMapping(channel, mapping);
+
+      expect(result.name).to.equal('CBS');
+      expect(result.tvg_id).to.equal('3.1');
+      expect(result.guideNumber).to.equal('6');
+      expect(result.logo).to.equal('http://example.com/cbs.png');
+    });
   });
 
   describe('Fallback behavior', () => {
