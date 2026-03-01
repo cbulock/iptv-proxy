@@ -38,7 +38,7 @@ function parseClientName(userAgent) {
   if (/perfect\s*player/i.test(ua)) return 'Perfect Player';
   if (/televizo/i.test(ua)) return 'Televizo';
   if (/sparkle/i.test(ua)) return 'Sparkle';
-  if (/otttv/i.test(ua)) return 'OTT Navigator';
+  if (/ott\s*navigator|ottnavigator/i.test(ua)) return 'OTT Navigator';
   // Fall back to first token of UA string
   const match = ua.match(/^([^\s/]+)/);
   return match ? match[1] : '';
