@@ -589,7 +589,11 @@ async function loadUsage() {
         startedAtRaw: u.startedAt || '',
         lastSeenAt: (u.lastSeenAt || u.lastSeen) ? new Date(u.lastSeenAt || u.lastSeen).toLocaleString() : ''
       }))
-      .sort((a, b) => b.startedAtRaw.localeCompare(a.startedAtRaw));
+      .sort((a, b) => {
+        if (a.startedAtRaw < b.startedAtRaw) return 1;
+        if (a.startedAtRaw > b.startedAtRaw) return -1;
+        return 0;
+      });
   } catch (e) {
     setStatus(e.message, false);
   } finally {
