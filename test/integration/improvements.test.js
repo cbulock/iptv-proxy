@@ -136,6 +136,43 @@ describe('Config Backup API', () => {
     expect(names).to.not.include(name);
   });
 
+  it('GET /api/config/backups/:name/download returns a zip file', async () => {
+    const createRes = await axios.post(`${baseUrl}/api/config/backup`);
+    const { name } = createRes.data;
+
+    const downloadRes = await axios.get(`${baseUrl}/api/config/backups/${name}/download`, {
+      responseType: 'arraybuffer',
+    });
+
+    expect(downloadRes.status).to.equal(200);
+    expect(downloadRes.headers['content-type']).to.equal('application/zip');
+    expect(downloadRes.headers['content-disposition']).to.include(`${name}.zip`);
+    expect(downloadRes.headers['cache-control']).to.include('no-store');
+
+    // ZIP files start with the PK magic bytes (0x50 0x4B)
+    const buf = Buffer.from(downloadRes.data);
+    expect(buf[0]).to.equal(0x50); // 'P'
+    expect(buf[1]).to.equal(0x4b); // 'K'
+  });
+
+  it('GET /api/config/backups/:name/download returns 404 for unknown backup', async () => {
+    try {
+      await axios.get(`${baseUrl}/api/config/backups/backup-9999-99-99T99-99-99/download`);
+      expect.fail('Expected 404');
+    } catch (err) {
+      expect(err.response.status).to.equal(404);
+    }
+  });
+
+  it('GET /api/config/backups/:name/download returns 400 for invalid backup name', async () => {
+    try {
+      await axios.get(`${baseUrl}/api/config/backups/../../etc/passwd/download`);
+      expect.fail('Expected 400 or 404');
+    } catch (err) {
+      expect([400, 404]).to.include(err.response.status);
+    }
+  });
+
   it('POST /api/config/backups/:name/restore returns 404 for unknown backup', async () => {
     try {
       await axios.post(`${baseUrl}/api/config/backups/backup-9999-99-99T99-99-99/restore`);

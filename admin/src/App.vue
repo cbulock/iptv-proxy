@@ -247,6 +247,22 @@
             <div v-else style="opacity:.6">No scheduled tasks found.</div>
             <div class="foot">Scheduled tasks run automatically. You can also trigger them manually.</div>
           </n-tab-pane>
+          <n-tab-pane name="backups" tab="Backups">
+            <n-space align="center" wrap style="margin-bottom:.75rem;">
+              <n-button type="primary" @click="createBackup" :loading="creatingBackup">{{ creatingBackup ? 'Creating...' : 'Create Backup' }}</n-button>
+              <n-button @click="loadBackups" :loading="loadingBackups">{{ loadingBackups ? 'Loading...' : 'Refresh' }}</n-button>
+            </n-space>
+            <div v-if="backups.length">
+              <n-data-table
+                :columns="backupColumns"
+                :data="backups"
+                :bordered="false"
+                :row-key="row => row.name"
+              />
+            </div>
+            <div v-else style="opacity:.6">No backups yet. Click "Create Backup" to save the current config.</div>
+            <div class="foot">Backups are stored in <code>data/backups/</code> and contain all YAML config files.</div>
+          </n-tab-pane>
         </n-tabs>
       </n-layout-content>
     </n-layout>
@@ -325,6 +341,11 @@ const state = reactive({
   tasks: [],
   loadingTasks: false,
   runningTask: null,
+  backups: [],
+  loadingBackups: false,
+  creatingBackup: false,
+  restoringBackup: null,
+  deletingBackup: null,
 });
 
 function setStatus(msg, ok = true) {
@@ -812,6 +833,101 @@ async function changePassword() {
   }
 }
 
+async function loadBackups() {
+  try {
+    state.loadingBackups = true;
+    const r = await apiFetch('/api/config/backups');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to load backups');
+    state.backups = Array.isArray(j?.backups) ? j.backups : [];
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.loadingBackups = false;
+  }
+}
+
+async function createBackup() {
+  try {
+    state.creatingBackup = true;
+    const r = await apiFetch('/api/config/backup', { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to create backup');
+    message.success(`Backup created: ${j.name}`);
+    await loadBackups();
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.creatingBackup = false;
+  }
+}
+
+async function restoreBackup(name) {
+  try {
+    state.restoringBackup = name;
+    const r = await apiFetch(`/api/config/backups/${encodeURIComponent(name)}/restore`, { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to restore backup');
+    message.success(`Restored backup: ${name}`);
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.restoringBackup = null;
+  }
+}
+
+async function downloadBackup(name) {
+  try {
+    const r = await apiFetch(`/api/config/backups/${encodeURIComponent(name)}/download`);
+    if (!r.ok) {
+      let errorMessage = 'Failed to download backup';
+      try {
+        const j = await r.json();
+        if (j && typeof j === 'object' && j.error) {
+          errorMessage = j.error;
+        }
+      } catch {
+        // Ignore JSON parse errors and fall back to generic message
+      }
+      throw new Error(errorMessage);
+    }
+
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    const messageText = e?.message ?? 'Failed to download backup';
+    setStatus(messageText, false);
+    message.error(messageText);
+  }
+}
+
+async function deleteBackup(name) {
+  try {
+    state.deletingBackup = name;
+    const r = await apiFetch(`/api/config/backups/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to delete backup');
+    message.success(`Deleted backup: ${name}`);
+    await loadBackups();
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.deletingBackup = null;
+  }
+}
+
 // Initial loads
 checkAuthStatus();
 loadProviders();
@@ -820,6 +936,7 @@ loadMapping();
 loadHealth();
 loadUsage();
 loadTasks();
+loadBackups();
 // poll usage every 5s
 setInterval(() => { loadUsage(); }, 5000);
 // keep unmapped list in sync when filters or rows change
@@ -828,7 +945,7 @@ watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, providers, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, savingProviders, reloadingChannels, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks } = toRefs(state);
+const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, providers, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, savingProviders, reloadingChannels, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, backups, loadingBackups, creatingBackup } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,
@@ -951,6 +1068,59 @@ const sortedMappingRows = computed(() => {
   };
   return state.mappingRows.slice().sort((a, b) => num(a.number) - num(b.number));
 });
+
+/**
+ * Format a backup name (e.g. "backup-2024-01-15T14-30-00") into a human-readable
+ * timestamp string (e.g. "2024-01-15 14:30:00").
+ * @param {string} name
+ * @returns {string}
+ */
+function formatBackupTimestamp(name) {
+  return name
+    .replace(/^backup-/, '')
+    .replace('T', ' ')
+    .replace(/-(\d{2})-(\d{2})-(\d{2})$/, ':$1:$2:$3');
+}
+
+const backupColumns = [
+  {
+    title: 'Backup',
+    key: 'name',
+    render(row) {
+      const ts = formatBackupTimestamp(row.name);
+      return h('code', { style: 'font-size:.85em' }, ts || row.name);
+    }
+  },
+  {
+    title: 'Actions',
+    key: 'actions',
+    render(row) {
+      return h(NSpace, { align: 'center' }, {
+        default: () => [
+          h(NButton, {
+            size: 'small',
+            secondary: true,
+            loading: state.restoringBackup === row.name,
+            disabled: !!state.restoringBackup || !!state.deletingBackup,
+            onClick: () => restoreBackup(row.name)
+          }, { default: () => state.restoringBackup === row.name ? 'Restoring...' : 'Restore' }),
+          h(NButton, {
+            size: 'small',
+            secondary: true,
+            onClick: () => downloadBackup(row.name)
+          }, { default: () => 'Download' }),
+          h(NButton, {
+            type: 'error',
+            size: 'small',
+            loading: state.deletingBackup === row.name,
+            disabled: !!state.restoringBackup || !!state.deletingBackup,
+            onClick: () => deleteBackup(row.name)
+          }, { default: () => '✕' }),
+        ]
+      });
+    }
+  }
+];
 </script>
 
 <style>
