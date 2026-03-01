@@ -38,6 +38,15 @@ function normalizeChannelMapKeys(map) {
         )
       );
     }
+    if (Object.prototype.hasOwnProperty.call(normalized, decodedKey)) {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Channel map key collision: "${decodedKey}" is defined more than once after HTML entity decoding. ` +
+            `The entry for "${key}" will overwrite the previous value. ` +
+            `Check your channel-map.yaml for duplicate or equivalent keys.`
+        )
+      );
+    }
     normalized[decodedKey] = value;
   }
   return normalized;
@@ -345,4 +354,5 @@ export function validateConfigData(configType, data) {
   return { valid: true, value };
 }
 
+export { normalizeChannelMapKeys };
 export default { loadAllConfigs, loadConfig, validateConfigData };
