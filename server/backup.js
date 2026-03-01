@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
+import archiver from 'archiver';
 import { getConfigPath, getDataPath } from '../libs/paths.js';
 import { requireAuth } from './auth.js';
 
@@ -115,6 +116,45 @@ router.post('/api/config/backups/:name/restore', requireAuth, async (req, res) =
   } catch (e) {
     res.status(500).json({ error: 'Failed to restore backup', detail: e.message });
   }
+});
+
+/**
+ * Download a named backup as a zip file.
+ * GET /api/config/backups/:name/download
+ */
+router.get('/api/config/backups/:name/download', requireAuth, async (req, res) => {
+  const { name } = req.params;
+
+  const backupDir = resolveBackupPath(name);
+  if (!backupDir) {
+    return res.status(400).json({ error: 'Invalid backup name' });
+  }
+
+  let stat;
+  try {
+    stat = await fs.stat(backupDir);
+  } catch {
+    return res.status(404).json({ error: 'Backup not found', name });
+  }
+
+  if (!stat.isDirectory()) {
+    return res.status(404).json({ error: 'Backup not found', name });
+  }
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => {
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to create zip', detail: err.message });
+    } else {
+      res.destroy(err);
+    }
+  });
+  archive.pipe(res);
+  archive.directory(backupDir, false);
+  archive.finalize();
 });
 
 /**
