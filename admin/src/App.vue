@@ -177,8 +177,8 @@
                 <div v-if="Array.isArray(unmapped) && unmapped.length">
                   <n-space vertical>
                     <div v-for="(s, i) in unmapped" :key="'u'+i" style="display:flex; gap:.5rem; align-items:center;">
-                      <div style="flex:1 1 auto; opacity:.9">{{ s.name }} <span v-if="s.tvg_id" style="opacity:.6">({{ s.tvg_id }})</span> <span v-if="s.source" style="opacity:.5; margin-left:.5rem;">— {{ s.source }}</span></div>
                       <n-button size="small" @click="quickAddMapping(s)">Add</n-button>
+                      <div style="flex:1 1 auto; opacity:.9">{{ s.name }} <span v-if="s.tvg_id" style="opacity:.6">({{ s.tvg_id }})</span> <span v-if="s.source" style="opacity:.5; margin-left:.5rem;">— {{ s.source }}</span></div>
                     </div>
                   </n-space>
                 </div>
