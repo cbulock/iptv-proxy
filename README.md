@@ -59,7 +59,7 @@ PORT=8080 npm start
 
 ## Configuration
 
-All configuration is done in `epg.yaml`, `m3u.yaml`, `channel-map.yaml`, and `app.yaml`.
+All configuration is done in `providers.yaml`, `channel-map.yaml`, and `app.yaml`.
 
 ### `app.yaml`
 
@@ -131,30 +131,32 @@ admin_auth:
 - Always use HTTPS when accessing the admin UI remotely to protect credentials in transit
 - Add `config/app.yaml` to your `.gitignore` if it contains real credentials
 
-### `epg.yaml`
+### `providers.yaml`
 
-Define all EPG sources here.
-
-```yaml
-urls:
-  - name: "ErsatzTV"
-    url: "https://ersatztv.local/iptv/xmltv.xml"
-  - name: "HDHomeRun"
-    url: "file://./data/epg.xml"
-```
-
-### `M3U.yaml`
-
-Define all M3U, M3U8, and HDHR sources here.
+Define all channel sources here. Each provider combines an M3U or HDHomeRun channel source with an optional EPG (XMLTV) source.
 
 ```yaml
-urls:
+providers:
   - name: "ErsatzTV"
     url: "https://ersatztv.local/iptv/channels.m3u"
+    type: "m3u"
+    epg: "https://ersatztv.local/iptv/xmltv.xml"
+
   - name: "HDHomeRun"
-    type: "hdhomerun"
     url: "http://antenna.local"
+    type: "hdhomerun"
+
+  - name: "Premium IPTV"
+    url: "https://example.com/playlist.m3u"
+    type: "m3u"
+    epg: "https://example.com/epg.xml"
 ```
+
+**Provider fields:**
+- `name` - Display name for the provider (used as group-title in the output)
+- `url` - URL of the M3U playlist or HDHomeRun device base URL
+- `type` - Provider type: `m3u` (default) or `hdhomerun`
+- `epg` - (Optional) XMLTV URL providing EPG data for this provider's channels
 
 ### `channel-map.yaml`
 
@@ -237,7 +239,7 @@ This will run the container as your user, so files are owned by you instead of r
 
 ## Adding HDHomeRun Devices
 
-If a source entry includes an `hdhomerun` URL, the server will automatically:
+If a provider entry uses `type: hdhomerun`, the server will automatically:
 
 - Fetch `discover.json`
 - Build a fake M3U playlist
@@ -622,8 +624,7 @@ When the limit is exceeded the server responds with `429 Too Many Requests`.
 
 For more detailed configuration examples covering edge cases, see the `config/examples/` directory:
 
-- `m3u.example.yaml` - Comprehensive M3U source examples
-- `epg.example.yaml` - EPG source configuration examples
+- `providers.example.yaml` - Comprehensive provider source examples (M3U, HDHomeRun, EPG)
 - `channel-map.example.yaml` - Advanced channel mapping scenarios
 - `app.example.yaml` - Application settings and scheduler configuration
 
@@ -644,7 +645,7 @@ For more detailed configuration examples covering edge cases, see the `config/ex
    ```
 2. Review server logs for source fetch errors
 3. Verify config files are valid YAML (use a YAML validator)
-4. Ensure source URLs in `m3u.yaml` are correct
+4. Ensure source URLs in `providers.yaml` are correct
 5. Check API status endpoint: `http://localhost:34400/status`
 
 #### EPG Data Not Showing
@@ -667,7 +668,7 @@ For more detailed configuration examples covering edge cases, see the `config/ex
 **Solutions:**
 1. Verify the device is on your network: `ping hdhomerun-device.local`
 2. Test the discover endpoint: `curl http://device-ip/discover.json`
-3. Ensure `type: "hdhomerun"` is set in m3u.yaml
+3. Ensure `type: "hdhomerun"` is set in `providers.yaml`
 4. Check firewall rules aren't blocking access
 5. Try using IP address instead of hostname
 
