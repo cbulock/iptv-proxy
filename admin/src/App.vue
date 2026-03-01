@@ -504,7 +504,11 @@ async function saveMapping() {
     const obj = {};
     for (const row of state.mappingRows) {
       if (!row.name) continue;
-      obj[row.name] = { number: String(row.number || ''), tvg_id: String(row.tvg_id || '') };
+      const entry = {};
+      if (row.number) entry.number = String(row.number);
+      if (row.tvg_id) entry.tvg_id = String(row.tvg_id);
+      if (Object.keys(entry).length === 0) continue;
+      obj[row.name] = entry;
     }
     const r = await apiFetch('/api/config/channel-map', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
     const j = await r.json();
