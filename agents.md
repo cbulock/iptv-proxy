@@ -111,4 +111,12 @@ When prompted, Copilot should be able to:
 
 ---
 
+## Important: Do NOT Run the Admin Build
+
+**Never run `npm run build` or `vite build` inside the `admin/` directory.**
+
+The admin build generates content-hashed asset filenames (e.g. `index-Abc123.js`) and rewrites `public/admin/index.html` with those hashes. This file is tracked in git and must stay pointing to the stable, non-hashed filenames (`index.js`, `index.css`). Running the build will pollute the PR with unrelated asset hash changes.
+
+---
+
 Copilot: treat this file as the authoritative reference for this repository.
