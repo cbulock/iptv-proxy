@@ -42,6 +42,10 @@ describe('parseClientName', () => {
     expect(parseClientName('IPTVSmarters/2.0')).to.equal('IPTV Smarters');
   });
 
+  it('detects IPTV Pro', () => {
+    expect(parseClientName('Mozilla/5.0 (Linux; Android 16; samsung SM-F966U1 Build/BP2A.250605.031.A3) IPTV Pro/9.1.15')).to.equal('IPTV Pro');
+  });
+
   it('detects GSE IPTV', () => {
     expect(parseClientName('GSE IPTV/6.0 (iOS)')).to.equal('GSE IPTV');
   });

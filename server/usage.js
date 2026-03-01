@@ -33,6 +33,7 @@ export function parseClientName(userAgent) {
   if (/vlc/i.test(ua)) return 'VLC';
   if (/kodi/i.test(ua)) return 'Kodi';
   if (/tivimate/i.test(ua)) return 'TiViMate';
+  if (/iptv\s*pro/i.test(ua)) return 'IPTV Pro';
   if (/iptv\s*smarters/i.test(ua)) return 'IPTV Smarters';
   if (/gse\s*iptv/i.test(ua)) return 'GSE IPTV';
   if (/perfect\s*player/i.test(ua)) return 'Perfect Player';
