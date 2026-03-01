@@ -123,38 +123,46 @@ router.post('/api/config/backups/:name/restore', requireAuth, async (req, res) =
  * GET /api/config/backups/:name/download
  */
 router.get('/api/config/backups/:name/download', requireAuth, async (req, res) => {
-  const { name } = req.params;
-
-  const backupDir = resolveBackupPath(name);
-  if (!backupDir) {
-    return res.status(400).json({ error: 'Invalid backup name' });
-  }
-
-  let stat;
   try {
-    stat = await fs.stat(backupDir);
-  } catch {
-    return res.status(404).json({ error: 'Backup not found', name });
-  }
+    const { name } = req.params;
 
-  if (!stat.isDirectory()) {
-    return res.status(404).json({ error: 'Backup not found', name });
-  }
-
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename="${name}.zip"`);
-
-  const archive = archiver('zip', { zlib: { level: 9 } });
-  archive.on('error', (err) => {
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to create zip', detail: err.message });
-    } else {
-      res.destroy(err);
+    const backupDir = resolveBackupPath(name);
+    if (!backupDir) {
+      return res.status(400).json({ error: 'Invalid backup name' });
     }
-  });
-  archive.pipe(res);
-  archive.directory(backupDir, false);
-  archive.finalize();
+
+    let stat;
+    try {
+      stat = await fs.stat(backupDir);
+    } catch {
+      return res.status(404).json({ error: 'Backup not found', name });
+    }
+
+    if (!stat.isDirectory()) {
+      return res.status(404).json({ error: 'Backup not found', name });
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}.zip"`);
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to create zip', detail: err.message });
+      } else {
+        res.destroy(err);
+      }
+    });
+    archive.pipe(res);
+    archive.directory(backupDir, false);
+    archive.finalize();
+  } catch (e) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to download backup', detail: e.message });
+    } else {
+      res.destroy(e);
+    }
+  }
 });
 
 /**
