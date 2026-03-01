@@ -4,7 +4,7 @@ import { getDataPath } from '../libs/paths.js';
 import { requireAuth } from './auth.js';
 
 const router = express.Router();
-const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, startedAt, lastSeen }
+const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, userAgent, client, startedAt, lastSeen }
 // Short grace period to smooth HLS segment request gaps.
 const ACTIVE_IDLE_TTL_MS = 45 * 1000;
 // Ring buffer for recently-completed stream sessions.
@@ -22,6 +22,28 @@ function findChannelMeta(channelId) {
   return byId ? { name: byId.name || byId.display_name || '', tvg_id: byId.tvg_id || '' } : {};
 }
 
+export function parseClientName(userAgent) {
+  if (!userAgent) return '';
+  const ua = String(userAgent);
+  // Common IPTV clients
+  if (/plex/i.test(ua)) return 'Plex';
+  if (/jellyfin/i.test(ua)) return 'Jellyfin';
+  if (/emby/i.test(ua)) return 'Emby';
+  if (/infuse/i.test(ua)) return 'Infuse';
+  if (/vlc/i.test(ua)) return 'VLC';
+  if (/kodi/i.test(ua)) return 'Kodi';
+  if (/tivimate/i.test(ua)) return 'TiViMate';
+  if (/iptv\s*smarters/i.test(ua)) return 'IPTV Smarters';
+  if (/gse\s*iptv/i.test(ua)) return 'GSE IPTV';
+  if (/perfect\s*player/i.test(ua)) return 'Perfect Player';
+  if (/televizo/i.test(ua)) return 'Televizo';
+  if (/sparkle/i.test(ua)) return 'Sparkle';
+  if (/ott\s*navigator|ottnavigator/i.test(ua)) return 'OTT Navigator';
+  // Fall back to first token of UA string
+  const match = ua.match(/^([^\s/]+)/);
+  return match ? match[1] : '';
+}
+
 function normalizeIp(ip) {
   const raw = String(ip || '').trim();
   if (!raw) return '';
@@ -30,7 +52,7 @@ function normalizeIp(ip) {
   return first;
 }
 
-export async function registerUsage({ ip, channelId }) {
+export async function registerUsage({ ip, channelId, userAgent = '' }) {
   if (!channelsCache.length) await loadChannels();
   const meta = findChannelMeta(channelId);
   const now = new Date().toISOString();
@@ -41,9 +63,14 @@ export async function registerUsage({ ip, channelId }) {
     existing.lastSeen = now;
     if (!existing.name && meta.name) existing.name = meta.name;
     if (!existing.tvg_id && meta.tvg_id) existing.tvg_id = meta.tvg_id;
+    if (!existing.userAgent && userAgent) {
+      existing.userAgent = userAgent;
+      existing.client = parseClientName(userAgent);
+    }
     return key;
   }
-  ACTIVE.set(key, { ip: normalizedIp, channelId, ...meta, startedAt: now, lastSeen: now });
+  const client = parseClientName(userAgent);
+  ACTIVE.set(key, { ip: normalizedIp, channelId, ...meta, userAgent, client, startedAt: now, lastSeen: now });
   return key;
 }
 

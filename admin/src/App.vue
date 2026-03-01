@@ -255,7 +255,7 @@
 
 <script setup>
 import { reactive, toRefs, h, watch, computed } from 'vue';
-import { darkTheme, NInput, NSelect, NButton, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, createDiscreteApi } from 'naive-ui';
+import { darkTheme, NInput, NSelect, NButton, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, NTooltip, createDiscreteApi } from 'naive-ui';
 const { message } = createDiscreteApi(['message']);
 
 // CSRF token for mutating API requests — fetched after login
@@ -583,6 +583,8 @@ async function loadUsage() {
         channelId: u.channelId,
         name: u.name || '',
         tvg_id: u.tvg_id || '',
+        client: u.client || '',
+        userAgent: u.userAgent || '',
         startedAt: u.startedAt ? new Date(u.startedAt).toLocaleString() : '',
         lastSeenAt: (u.lastSeenAt || u.lastSeen) ? new Date(u.lastSeenAt || u.lastSeen).toLocaleString() : ''
       }))
@@ -833,6 +835,18 @@ const usageColumns = [
   { title: 'Channel ID', key: 'channelId' },
   { title: 'Name', key: 'name' },
   { title: 'tvg-id', key: 'tvg_id' },
+  {
+    title: 'Client',
+    key: 'client',
+    render(row) {
+      const label = row.client || h('span', { style: 'opacity:.5' }, '—');
+      if (!row.userAgent) return label;
+      return h(NTooltip, null, {
+        trigger: () => h('span', { style: 'cursor:default;border-bottom:1px dotted currentColor' }, label),
+        default: () => h('span', { style: 'font-size:.8em;word-break:break-all' }, row.userAgent)
+      });
+    }
+  },
   { title: 'Started', key: 'startedAt' },
   { title: 'Last Seen', key: 'lastSeenAt' }
 ];

@@ -309,15 +309,16 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     const channelId = channel.guideNumber || channel.tvg_id || channel.name;
     const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+    const userAgent = req.headers['user-agent'] || '';
     let usageKey;
     let usageInterval;
     const touchViewer = async () => {
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId) });
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent });
       touchUsage(usageKey);
     };
     const registerPersistentViewer = async () => {
       if (usageKey) return;
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId) });
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent });
       usageInterval = setInterval(() => touchUsage(usageKey), 10000);
       const cleanup = () => {
         if (usageInterval) clearInterval(usageInterval);
