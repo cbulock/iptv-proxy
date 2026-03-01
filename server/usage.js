@@ -22,7 +22,7 @@ function findChannelMeta(channelId) {
   return byId ? { name: byId.name || byId.display_name || '', tvg_id: byId.tvg_id || '' } : {};
 }
 
-function parseClientName(userAgent) {
+export function parseClientName(userAgent) {
   if (!userAgent) return '';
   const ua = String(userAgent);
   // Common IPTV clients
