@@ -504,11 +504,27 @@ async function saveMapping() {
     const obj = {};
     for (const row of state.mappingRows) {
       if (!row.name) continue;
-      const entry = {};
-      if (row.number) entry.number = String(row.number);
-      if (row.tvg_id) entry.tvg_id = String(row.tvg_id);
-      if (Object.keys(entry).length === 0) continue;
-      obj[row.name] = entry;
+      // Start from the full existing entry to preserve fields not editable in the UI
+      // (e.g. name override, logo, url, group set directly in channel-map.yaml).
+      const existing = state.mapping[row.name] || {};
+      const merged = { ...existing };
+      // Apply the editable fields; remove them when blank so Joi rejects empty strings.
+      if (row.number) {
+        merged.number = String(row.number);
+      } else {
+        delete merged.number;
+      }
+      if (row.tvg_id) {
+        merged.tvg_id = String(row.tvg_id);
+      } else {
+        delete merged.tvg_id;
+      }
+      // Strip any remaining empty-string values defensively.
+      for (const k of Object.keys(merged)) {
+        if (merged[k] === '') delete merged[k];
+      }
+      if (Object.keys(merged).length === 0) continue;
+      obj[row.name] = merged;
     }
     const r = await apiFetch('/api/config/channel-map', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
     const j = await r.json();

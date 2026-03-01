@@ -68,6 +68,16 @@ describe('validateConfigData - channelMap', () => {
     expect(result.value.NBC.tvg_id).to.equal('nbc.la');
   });
 
+  it('accepts a mapping with extra fields preserved alongside number', () => {
+    // Verifies that fields like logo, url, group are not stripped by the schema.
+    const result = validateConfigData('channelMap', {
+      NBC: { number: '4', tvg_id: 'nbc.la', logo: 'https://example.com/nbc.png', group: 'News' },
+    });
+    expect(result.valid).to.be.true;
+    expect(result.value.NBC.logo).to.equal('https://example.com/nbc.png');
+    expect(result.value.NBC.group).to.equal('News');
+  });
+
   it('rejects a mapping where tvg_id is an empty string', () => {
     // The admin UI must never send empty-string fields - only omit them.
     const result = validateConfigData('channelMap', { NBC: { number: '4', tvg_id: '' } });
