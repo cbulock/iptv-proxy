@@ -59,30 +59,16 @@ describe('M3U Parser Integration', () => {
       expect(groupMatch[1]).to.equal('News');
     });
 
-    it('should extract tvg-chno (channel number) from EXTINF line', () => {
-      const line = '#EXTINF:-1 tvg-id="6.1" tvg-chno="6" tvg-logo="http://example.com/logo.png" group-title="Local",WLNS-TV';
-
-      const nameMatch = line.match(/,(.*)$/);
-      const tvgIdMatch = line.match(/tvg-id="(.*?)"/);
-      const tvgChnoMatch = line.match(/tvg-chno="(.*?)"/);
-
-      expect(nameMatch[1]).to.equal('WLNS-TV');
-      expect(tvgIdMatch[1]).to.equal('6.1');
-      expect(tvgChnoMatch[1]).to.equal('6');
-    });
-
     it('should handle EXTINF line without optional attributes', () => {
       const line = '#EXTINF:-1,Simple Channel';
       
       const nameMatch = line.match(/,(.*)$/);
       const tvgIdMatch = line.match(/tvg-id="(.*?)"/);
       const tvgLogoMatch = line.match(/tvg-logo="(.*?)"/);
-      const tvgChnoMatch = line.match(/tvg-chno="(.*?)"/);
       
       expect(nameMatch[1]).to.equal('Simple Channel');
       expect(tvgIdMatch).to.be.null;
       expect(tvgLogoMatch).to.be.null;
-      expect(tvgChnoMatch).to.be.null;
     });
   });
 

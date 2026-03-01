@@ -166,13 +166,11 @@ async function processSource(source, map) {
             const nameMatch = trimmedLine.match(/,(.*)$/);
             const tvgIdMatch = trimmedLine.match(/tvg-id="(.*?)"/);
             const tvgLogoMatch = trimmedLine.match(/tvg-logo="(.*?)"/);
-            const tvgChnoMatch = trimmedLine.match(/tvg-chno="(.*?)"/);
 
             current = {
               name: nameMatch ? nameMatch[1].trim() : 'Unknown',
               tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
               logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
-              guideNumber: tvgChnoMatch ? tvgChnoMatch[1] : '',
               source: source.name,
             };
           } catch (lineErr) {
