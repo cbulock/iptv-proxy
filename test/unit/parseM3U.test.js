@@ -215,6 +215,34 @@ describe('M3U Parser - applyMapping', () => {
       expect(result.tvg_id).to.equal('original.1');
       expect(result.logo).to.equal('http://example.com/logo.png');
     });
+
+    it('should apply number from mapping as guideNumber (used for tvg-chno in lineup.m3u)', () => {
+      // Verifies the full flow: mapping.number → channel.guideNumber → tvg-chno
+      // config-loader normalises HTML entity keys (e.g. "H &amp; I" → "H & I")
+      // so the channel name "H & I" correctly matches the decoded key.
+      const channel = createMockChannel({
+        name: 'H & I',
+        tvg_id: '10.3',
+        guideNumber: undefined,
+      });
+
+      // Simulates a channel-map entry after HTML-entity normalization by config-loader:
+      //   H & I:        ← was "H &amp; I:" in the raw YAML file
+      //     number: "12"
+      //     tvg_id: "10.3"
+      const mapping = {
+        'H & I': {
+          number: '12',
+          tvg_id: '10.3',
+        },
+      };
+
+      const result = applyMapping(channel, mapping);
+
+      expect(result.name).to.equal('H & I');
+      expect(result.guideNumber).to.equal('12');
+      expect(result.tvg_id).to.equal('10.3');
+    });
   });
 });
 

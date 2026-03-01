@@ -7,6 +7,42 @@ import { getConfigPath } from './paths.js';
 // Constants for external URLs used in error messages
 const YAML_VALIDATOR_URL = 'https://www.yamllint.com/';
 
+/**
+ * Decode common HTML entities in a string (e.g. &amp; → &).
+ * Uses a single-pass replacement to avoid any risk of double-decoding.
+ * @param {string} str
+ * @returns {string}
+ */
+function decodeHtmlEntities(str) {
+  const entities = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'" };
+  return String(str).replace(/&(?:amp|lt|gt|quot|apos);/g, match => entities[match] ?? match);
+}
+
+/**
+ * Normalize channel map keys by decoding HTML entities.
+ * YAML does not decode HTML entities, so keys like "H &amp; I" must be
+ * normalised to "H & I" before being matched against channel names.
+ * @param {object} map
+ * @returns {object}
+ */
+function normalizeChannelMapKeys(map) {
+  if (!map || typeof map !== 'object') return map;
+  const normalized = {};
+  for (const [key, value] of Object.entries(map)) {
+    const decodedKey = decodeHtmlEntities(key);
+    if (decodedKey !== key) {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Channel map key contains HTML entities: "${key}" → "${decodedKey}". ` +
+            `Consider updating your channel-map.yaml to use "${decodedKey}:" directly.`
+        )
+      );
+    }
+    normalized[decodedKey] = value;
+  }
+  return normalized;
+}
+
 // Define schemas for each config file
 const m3uSchema = Joi.object({
   urls: Joi.array().items(
@@ -211,12 +247,12 @@ export function loadAllConfigs() {
     'App config'
   );
 
-  const channelMap = loadAndValidateConfig(
+  const channelMap = normalizeChannelMapKeys(loadAndValidateConfig(
     getConfigPath('channel-map.yaml'),
     channelMapSchema,
     defaultConfigs.channelMap,
     'Channel map'
-  );
+  ));
 
   return { m3u, epg, providers, app, channelMap };
 }
@@ -265,7 +301,15 @@ export function loadConfig(configType) {
     throw new Error(`Unknown config type: ${configType}`);
   }
 
-  return loadAndValidateConfig(config.path, config.schema, config.default, config.name);
+  const result = loadAndValidateConfig(config.path, config.schema, config.default, config.name);
+
+  // Normalize channel map keys so HTML entities in YAML keys (e.g. "H &amp; I")
+  // are decoded to their plain-text equivalents (e.g. "H & I") before matching.
+  if (configType === 'channelMap') {
+    return normalizeChannelMapKeys(result);
+  }
+
+  return result;
 }
 
 /**
