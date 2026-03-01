@@ -575,7 +575,7 @@ async function loadUsage() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to load usage');
     const list = Array.isArray(j?.active) ? j.active : [];
-    // Normalize and sort by lastSeen desc
+    // Normalize and sort by startedAt desc
     state.activeUsage = list
       .map(u => ({
         key: `${u.ip}|${u.channelId}`,
@@ -586,9 +586,10 @@ async function loadUsage() {
         client: u.client || '',
         userAgent: u.userAgent || '',
         startedAt: u.startedAt ? new Date(u.startedAt).toLocaleString() : '',
+        startedAtRaw: u.startedAt || '',
         lastSeenAt: (u.lastSeenAt || u.lastSeen) ? new Date(u.lastSeenAt || u.lastSeen).toLocaleString() : ''
       }))
-      .sort((a, b) => (new Date(b.lastSeenAt).getTime() || 0) - (new Date(a.lastSeenAt).getTime() || 0));
+      .sort((a, b) => b.startedAtRaw.localeCompare(a.startedAtRaw));
   } catch (e) {
     setStatus(e.message, false);
   } finally {
