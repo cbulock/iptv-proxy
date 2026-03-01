@@ -879,13 +879,37 @@ async function restoreBackup(name) {
   }
 }
 
-function downloadBackup(name) {
-  const a = document.createElement('a');
-  a.href = `/api/config/backups/${encodeURIComponent(name)}/download`;
-  a.download = `${name}.zip`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+async function downloadBackup(name) {
+  try {
+    const r = await apiFetch(`/api/config/backups/${encodeURIComponent(name)}/download`);
+    if (!r.ok) {
+      let errorMessage = 'Failed to download backup';
+      try {
+        const j = await r.json();
+        if (j && typeof j === 'object' && j.error) {
+          errorMessage = j.error;
+        }
+      } catch {
+        // Ignore JSON parse errors and fall back to generic message
+      }
+      throw new Error(errorMessage);
+    }
+
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    const messageText = e?.message ?? 'Failed to download backup';
+    setStatus(messageText, false);
+    message.error(messageText);
+  }
 }
 
 async function deleteBackup(name) {

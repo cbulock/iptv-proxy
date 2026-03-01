@@ -3,6 +3,7 @@ import express from 'express';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
 import { refreshEPG } from './epg.js';
 import { requireAuth } from './auth.js';
+import { createBackupSnapshot } from './backup.js';
 
 // Constants for external URLs used in error messages
 const CRON_VALIDATOR_URL = 'https://crontab.guru/';
@@ -181,6 +182,14 @@ export function initDefaultJobs() {
     '0 */6 * * *',
     refreshEPG,
     false // EPG is already loaded during setupEPGRoutes
+  );
+
+  // Weekly config backup every Sunday at 2 AM
+  registerJob(
+    'Weekly Config Backup',
+    '0 2 * * 0',
+    createBackupSnapshot,
+    false
   );
 }
 
