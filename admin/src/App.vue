@@ -866,13 +866,25 @@ async function createBackup() {
 
 async function restoreBackup(name) {
   const confirmed = await new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = (value) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(value);
+    };
     dialog.warning({
       title: 'Restore Backup',
       content: `Restore config from "${formatBackupTimestamp(name) || name}"? This will overwrite your current configuration files.`,
       positiveText: 'Restore',
       negativeText: 'Cancel',
-      onPositiveClick: () => resolve(true),
-      onNegativeClick: () => resolve(false),
+      maskClosable: false,
+      closeOnEsc: false,
+      closable: false,
+      onPositiveClick: () => safeResolve(true),
+      onNegativeClick: () => safeResolve(false),
+      onClose: () => safeResolve(false),
+      onMaskClick: () => safeResolve(false),
+      onEsc: () => safeResolve(false),
     });
   });
   if (!confirmed) return;
