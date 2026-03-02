@@ -272,7 +272,7 @@
 <script setup>
 import { reactive, toRefs, h, watch, computed } from 'vue';
 import { darkTheme, NInput, NSelect, NButton, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, NTooltip, createDiscreteApi } from 'naive-ui';
-const { message } = createDiscreteApi(['message']);
+const { message, dialog } = createDiscreteApi(['message', 'dialog']);
 
 // CSRF token for mutating API requests — fetched after login
 let _csrfToken = '';
@@ -865,6 +865,17 @@ async function createBackup() {
 }
 
 async function restoreBackup(name) {
+  const confirmed = await new Promise((resolve) => {
+    dialog.warning({
+      title: 'Restore Backup',
+      content: `Restore config from "${formatBackupTimestamp(name) || name}"? This will overwrite your current configuration files.`,
+      positiveText: 'Restore',
+      negativeText: 'Cancel',
+      onPositiveClick: () => resolve(true),
+      onNegativeClick: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
   try {
     state.restoringBackup = name;
     const r = await apiFetch(`/api/config/backups/${encodeURIComponent(name)}/restore`, { method: 'POST' });
@@ -913,6 +924,17 @@ async function downloadBackup(name) {
 }
 
 async function deleteBackup(name) {
+  const confirmed = await new Promise((resolve) => {
+    dialog.error({
+      title: 'Delete Backup',
+      content: `Delete backup "${formatBackupTimestamp(name) || name}"? This cannot be undone.`,
+      positiveText: 'Delete',
+      negativeText: 'Cancel',
+      onPositiveClick: () => resolve(true),
+      onNegativeClick: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
   try {
     state.deletingBackup = name;
     const r = await apiFetch(`/api/config/backups/${encodeURIComponent(name)}`, { method: 'DELETE' });
