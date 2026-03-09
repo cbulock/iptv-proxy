@@ -195,6 +195,65 @@
             <div v-else style="margin-top:1rem; opacity:.7">No mappings yet. Add one to map EPG names to tvg-id and numbers.</div>
             <div class="foot">Editing <code>config/channel-map.yaml</code>. Save and then reload channels to apply.</div>
           </n-tab-pane>
+          <n-tab-pane name="preview" tab="Preview">
+            <n-space align="center" wrap style="margin-bottom:.75rem;">
+              <n-input v-model:value="previewSearch" placeholder="Search channels by name, group, or tvg-id…" clearable style="min-width:260px;" />
+              <n-button @click="loadPreviewChannels" :loading="loadingPreviewChannels">{{ loadingPreviewChannels ? 'Loading…' : 'Refresh' }}</n-button>
+              <span style="opacity:.6;font-size:.9em;">{{ filteredPreviewChannels.length }} channel{{ filteredPreviewChannels.length !== 1 ? 's' : '' }}</span>
+            </n-space>
+            <div v-if="loadingPreviewChannels && !previewChannels.length" style="opacity:.6;padding:2rem 0;text-align:center;">Loading channels…</div>
+            <div v-else-if="!previewChannels.length" style="opacity:.6;padding:2rem 0;text-align:center;">No channels loaded. Check your provider configuration.</div>
+            <n-data-table
+              v-else
+              :columns="previewColumns"
+              :data="filteredPreviewChannels"
+              :bordered="false"
+              :row-key="row => `${row.source}|${row.name}`"
+              size="small"
+              :max-height="500"
+              virtual-scroll
+            />
+            <div class="foot">Live merged channel list from all active providers. Click <strong>▶ Watch</strong> to preview a stream.</div>
+
+            <!-- Video player modal -->
+            <n-modal v-model:show="showVideoModal" preset="card" :title="previewWatchingChannel ? previewWatchingChannel.name : 'Watch Channel'" style="max-width:720px;width:95vw;" @after-leave="stopVideoPlayer">
+              <div v-if="previewWatchingChannel">
+                <!-- Logo + player area -->
+                <div style="background:#000;border-radius:4px;overflow:hidden;margin-bottom:1rem;position:relative;">
+                  <video ref="videoPlayerEl" controls autoplay style="width:100%;max-height:360px;display:block;" preload="auto" />
+                </div>
+
+                <!-- Stream URL row -->
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+                  <span style="opacity:.7;font-size:.85em;flex-shrink:0;">Stream URL:</span>
+                  <code style="font-size:.78em;word-break:break-all;flex:1;opacity:.85;">{{ previewStreamUrl }}</code>
+                  <n-button size="tiny" secondary @click="copyStreamUrl">Copy</n-button>
+                  <a :href="previewStreamUrl" target="_blank" rel="noopener" style="font-size:.8em;opacity:.7;">Open ↗</a>
+                </div>
+
+                <!-- Guide / EPG -->
+                <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:.75rem;">
+                  <div style="font-weight:600;margin-bottom:.5rem;">Guide</div>
+                  <div v-if="loadingGuide" style="opacity:.6;font-size:.9em;">Loading guide data…</div>
+                  <div v-else-if="!previewGuide.length" style="opacity:.5;font-size:.9em;">No guide data available for this channel.</div>
+                  <div v-else style="max-height:220px;overflow-y:auto;">
+                    <div
+                      v-for="(prog, idx) in previewGuide"
+                      :key="idx"
+                      style="display:flex;gap:.75rem;padding:.35rem 0;border-bottom:1px solid rgba(255,255,255,.07);"
+                    >
+                      <span style="opacity:.6;font-size:.85em;white-space:nowrap;min-width:85px;">{{ formatXMLTVTime(prog.start) }}</span>
+                      <div style="flex:1;min-width:0;">
+                        <div style="font-size:.9em;font-weight:500;">{{ prog.title }}</div>
+                        <div v-if="prog.desc" style="font-size:.8em;opacity:.55;margin-top:.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ prog.desc }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </n-modal>
+          </n-tab-pane>
+
           <n-tab-pane name="health" tab="Health">
             <n-space align="center" wrap style="margin-bottom:.75rem;">
               <n-button type="primary" @click="loadHealth" :loading="loadingHealth">{{ loadingHealth ? 'Loading...' : 'Refresh Status' }}</n-button>
@@ -270,7 +329,7 @@
 </template>
 
 <script setup>
-import { reactive, toRefs, h, watch, computed } from 'vue';
+import { reactive, toRefs, h, watch, computed, ref, nextTick } from 'vue';
 import { darkTheme, NInput, NSelect, NButton, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, NTooltip, createDiscreteApi } from 'naive-ui';
 const { message } = createDiscreteApi(['message']);
 
@@ -346,6 +405,14 @@ const state = reactive({
   creatingBackup: false,
   restoringBackup: null,
   deletingBackup: null,
+  // Preview tab state
+  previewChannels: [],
+  loadingPreviewChannels: false,
+  previewSearch: '',
+  previewWatchingChannel: null,
+  showVideoModal: false,
+  previewGuide: [],
+  loadingGuide: false,
 });
 
 function setStatus(msg, ok = true) {
@@ -928,6 +995,161 @@ async function deleteBackup(name) {
   }
 }
 
+// ─── Preview tab ─────────────────────────────────────────────────────────────
+
+async function loadPreviewChannels() {
+  try {
+    state.loadingPreviewChannels = true;
+    const r = await apiFetch('/channels');
+    const channels = await r.json();
+    state.previewChannels = Array.isArray(channels) ? channels : [];
+  } catch (e) {
+    message.error('Failed to load channels: ' + e.message);
+  } finally {
+    state.loadingPreviewChannels = false;
+  }
+}
+
+async function loadGuide(tvgId) {
+  if (!tvgId) { state.previewGuide = []; return; }
+  try {
+    state.loadingGuide = true;
+    const r = await apiFetch(`/api/guide?tvgId=${encodeURIComponent(tvgId)}`);
+    const j = await r.json();
+    state.previewGuide = Array.isArray(j.programmes) ? j.programmes : [];
+  } catch (_) {
+    state.previewGuide = [];
+  } finally {
+    state.loadingGuide = false;
+  }
+}
+
+// Video player DOM ref (bound with ref="videoPlayerEl" in the template)
+const videoPlayerEl = ref(null);
+let hlsInstance = null;
+
+// HLS.js is loaded on-demand from CDN when a user clicks Watch and the browser
+// does not support HLS natively (i.e., non-Safari browsers).  The version is
+// pinned so that automatic CDN updates don't change behaviour unexpectedly.
+const HLS_JS_CDN = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js';
+
+async function loadHlsJs() {
+  if (window.Hls) return window.Hls;
+  return new Promise(resolve => {
+    const script = document.createElement('script');
+    script.src = HLS_JS_CDN;
+    script.crossOrigin = 'anonymous';
+    script.onload = () => resolve(window.Hls || null);
+    script.onerror = () => resolve(null);
+    document.head.appendChild(script);
+  });
+}
+
+async function setupVideoPlayer() {
+  await nextTick();
+  const video = videoPlayerEl.value;
+  if (!video || !state.previewWatchingChannel) return;
+
+  const ch = state.previewWatchingChannel;
+  const streamUrl = `/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+
+  // Destroy any previous HLS instance
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+  // Safari / iOS — native HLS support
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = streamUrl;
+    return;
+  }
+
+  // Try HLS.js (loaded from CDN) for other browsers
+  try {
+    const Hls = await loadHlsJs();
+    if (Hls && Hls.isSupported()) {
+      hlsInstance = new Hls();
+      hlsInstance.loadSource(streamUrl);
+      hlsInstance.attachMedia(video);
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
+      hlsInstance.on(Hls.Events.ERROR, (_evt, data) => {
+        if (data.fatal) {
+          hlsInstance.destroy(); hlsInstance = null;
+          // Fall back to native src
+          video.src = streamUrl;
+        }
+      });
+      return;
+    }
+  } catch (_) { /* HLS.js unavailable — fall through */ }
+
+  // Last resort: direct src (works for MP4/MPEG-TS in some browsers)
+  video.src = streamUrl;
+}
+
+function stopVideoPlayer() {
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  const video = videoPlayerEl.value;
+  if (video) { video.pause(); video.src = ''; video.load(); }
+}
+
+function watchChannel(channel) {
+  state.previewWatchingChannel = channel;
+  state.previewGuide = [];
+  state.showVideoModal = true;
+  if (channel.tvg_id) loadGuide(channel.tvg_id);
+}
+
+function copyStreamUrl() {
+  if (!state.previewWatchingChannel) return;
+  const ch = state.previewWatchingChannel;
+  const url = `${window.location.origin}/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+  navigator.clipboard.writeText(url).then(
+    () => message.success('Stream URL copied to clipboard'),
+    () => message.error('Failed to copy URL')
+  );
+}
+
+/**
+ * Format an XMLTV datetime string ("20240115143000 +0000") into a local time like "14:00".
+ * @param {string} str
+ * @returns {string}
+ */
+function formatXMLTVTime(str) {
+  if (!str) return '';
+  const match = String(str).match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
+  if (!match) return String(str).slice(0, 5);
+  const [, year, month, day, hour, min, sec, tz] = match;
+  let tzOffset = 0;
+  if (tz) {
+    const sign = tz[0] === '+' ? 1 : -1;
+    const tzH = parseInt(tz.slice(1, 3), 10);
+    const tzM = parseInt(tz.slice(3, 5), 10);
+    tzOffset = sign * (tzH * 60 + tzM) * 60 * 1000;
+  }
+  const utc = Date.UTC(+year, +month - 1, +day, +hour, +min, +sec);
+  const d = new Date(utc - tzOffset);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// Set up the video player whenever the modal opens, tear it down when it closes
+watch(() => state.showVideoModal, (open) => {
+  if (open) {
+    setupVideoPlayer();
+  } else {
+    stopVideoPlayer();
+    state.previewWatchingChannel = null;
+    state.previewGuide = [];
+  }
+});
+
+// Load channels the first time the Preview tab is selected
+let _previewLoaded = false;
+watch(() => state.tab, (newTab) => {
+  if (newTab === 'preview' && !_previewLoaded) {
+    _previewLoaded = true;
+    loadPreviewChannels();
+  }
+});
+
 // Initial loads
 checkAuthStatus();
 loadProviders();
@@ -945,7 +1167,7 @@ watch(() => state.hideAdded, () => { refreshUnmapped(); });
 watch(() => state.mappingRows.map(r => r.name), () => { if (state.hideAdded) refreshUnmapped(); });
 
 // Expose reactive fields directly in template
-const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, providers, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, savingProviders, reloadingChannels, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, backups, loadingBackups, creatingBackup } = toRefs(state);
+const { tab, app, authConfigured, showSetupModal, setupForm, setupError, savingSetup, loggingOut, passwordForm, savingPassword, providers, mappingRows, unmapped, unmappedSource, hideAdded, duplicates, suggestions, epgValidation, loadingDuplicates, loadingSuggestions, loadingEPGValidation, health, loadingHealth, runningHealth, savingProviders, reloadingChannels, savingApp, savingMapping, activeUsage, loadingUsage, tasks, loadingTasks, backups, loadingBackups, creatingBackup, previewChannels, loadingPreviewChannels, previewSearch, previewWatchingChannel, showVideoModal, previewGuide, loadingGuide } = toRefs(state);
 
 const healthDetails = computed(() => Array.isArray(health.value.details) ? health.value.details.map(d => ({
   id: d.id,
@@ -1118,6 +1340,88 @@ const backupColumns = [
           }, { default: () => '✕' }),
         ]
       });
+    }
+  }
+];
+
+// ─── Preview tab computed + column definitions ────────────────────────────────
+
+const filteredPreviewChannels = computed(() => {
+  const q = state.previewSearch.toLowerCase().trim();
+  if (!q) return state.previewChannels;
+  return state.previewChannels.filter(c =>
+    (c.name || '').toLowerCase().includes(q) ||
+    (c.group || '').toLowerCase().includes(q) ||
+    (c.tvg_id || '').toLowerCase().includes(q) ||
+    (c.source || '').toLowerCase().includes(q)
+  );
+});
+
+const previewStreamUrl = computed(() => {
+  const ch = state.previewWatchingChannel;
+  if (!ch) return '';
+  return `/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+});
+
+const previewColumns = [
+  {
+    title: '',
+    key: 'logo',
+    width: 44,
+    render(row) {
+      if (!row.logo) return h('span', { style: 'opacity:.25;font-size:1.3em;line-height:1' }, '📺');
+      return h('img', {
+        src: row.logo,
+        style: 'width:32px;height:32px;object-fit:contain;vertical-align:middle;border-radius:2px;',
+        onerror: (e) => { e.target.style.display = 'none'; }
+      });
+    }
+  },
+  {
+    title: 'Ch #',
+    key: 'guideNumber',
+    width: 68,
+    sorter: (a, b) => {
+      const n = v => { const x = parseFloat(String(v?.guideNumber ?? '')); return Number.isFinite(x) ? x : 99999; };
+      return n(a) - n(b);
+    },
+    render(row) { return h('span', { style: 'opacity:.85' }, row.guideNumber || '—'); }
+  },
+  {
+    title: 'Name',
+    key: 'name',
+    sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
+    ellipsis: { tooltip: true }
+  },
+  {
+    title: 'Group',
+    key: 'group',
+    ellipsis: { tooltip: true },
+    render(row) { return h('span', { style: 'opacity:.8' }, row.group || '—'); }
+  },
+  {
+    title: 'Source',
+    key: 'source',
+    ellipsis: { tooltip: true },
+    render(row) { return h('span', { style: 'opacity:.7;font-size:.85em' }, row.source || '—'); }
+  },
+  {
+    title: 'TVG-ID',
+    key: 'tvg_id',
+    ellipsis: { tooltip: true },
+    render(row) { return h('code', { style: 'font-size:.78em;opacity:.75' }, row.tvg_id || '—'); }
+  },
+  {
+    title: '',
+    key: 'actions',
+    width: 90,
+    render(row) {
+      return h(NButton, {
+        size: 'small',
+        secondary: true,
+        type: 'primary',
+        onClick: () => watchChannel(row)
+      }, { default: () => '▶ Watch' });
     }
   }
 ];

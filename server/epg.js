@@ -41,6 +41,40 @@ const builder = new XMLBuilder({
 // EPG cache (replaces rewrittenXMLCache)
 let epgCache = null;
 
+/**
+ * Extract a plain string from an XMLTV text field which may be a raw string,
+ * a fast-xml-parser object `{ '#text': '...', '@_lang': '...' }`, or null/undefined.
+ * @param {*} raw
+ * @returns {string}
+ */
+function extractTextField(raw) {
+  if (raw == null) return '';
+  if (typeof raw === 'object') return String(raw['#text'] ?? raw);
+  return String(raw);
+}
+
+/**
+ * Parse an XMLTV date string (e.g. "20240115143000 +0000") into a JS Date.
+ * Returns null when the string cannot be parsed.
+ * @param {string|number} str
+ * @returns {Date|null}
+ */
+function parseXMLTVDate(str) {
+  if (!str) return null;
+  const match = String(str).match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
+  if (!match) return null;
+  const [, year, month, day, hour, min, sec, tz] = match;
+  let tzOffset = 0;
+  if (tz) {
+    const sign = tz[0] === '+' ? 1 : -1;
+    const tzH = parseInt(tz.slice(1, 3), 10);
+    const tzM = parseInt(tz.slice(3, 5), 10);
+    tzOffset = sign * (tzH * 60 + tzM) * 60 * 1000;
+  }
+  const utc = Date.UTC(+year, +month - 1, +day, +hour, +min, +sec);
+  return new Date(utc - tzOffset);
+}
+
 function rewriteImageUrls(xmlString, req) {
   const protocol = req.get('X-Forwarded-Proto') ||
         req.get('X-Forwarded-Protocol') ||
@@ -373,4 +407,65 @@ export async function setupEPGRoutes(app) {
       res.status(500).json({ error: 'Validation failed', detail: err.message });
     }
   });
+
+  /**
+   * Guide data endpoint — returns current and upcoming programmes for a channel.
+   * Query params:
+   *   tvgId  — the tvg-id / XMLTV channel id to look up (required)
+   *   hours  — how many hours ahead to return (default 24, max 48)
+   */
+  app.get('/api/guide', asyncHandler(async (req, res) => {
+    if (!mergedEPG) {
+      return res.status(503).json({ error: 'EPG not loaded yet' });
+    }
+
+    const tvgId = req.query.tvgId ? String(req.query.tvgId) : null;
+    const hours = Math.min(48, Math.max(1, parseInt(req.query.hours, 10) || 24));
+
+    try {
+      const parsed = parser.parse(mergedEPG);
+      const now = Date.now();
+      const cutoff = now + hours * 60 * 60 * 1000;
+
+      let programmes = [].concat(parsed.tv?.programme || []);
+
+      if (tvgId) {
+        programmes = programmes.filter(p => p && p['@_channel'] === tvgId);
+      }
+
+      // Keep programmes that are currently airing or start within the cutoff window
+      // (allow up to 1 minute in the past so a currently-airing show is included)
+      programmes = programmes.filter(p => {
+        const start = parseXMLTVDate(p['@_start']);
+        const stop = p['@_stop'] ? parseXMLTVDate(p['@_stop']) : null;
+        if (!start) return false;
+        const startMs = start.getTime();
+        const stopMs = stop ? stop.getTime() : startMs + 30 * 60 * 1000;
+        return stopMs > now - 60 * 1000 && startMs < cutoff;
+      });
+
+      // Sort by start time ascending
+      programmes.sort((a, b) => {
+        const aMs = parseXMLTVDate(a['@_start'])?.getTime() || 0;
+        const bMs = parseXMLTVDate(b['@_start'])?.getTime() || 0;
+        return aMs - bMs;
+      });
+
+      // Limit to 20 entries
+      programmes = programmes.slice(0, 20);
+
+      // Flatten to a simple shape
+      const result = programmes.map(p => ({
+        title: extractTextField(p.title),
+        desc: extractTextField(p.desc),
+        start: p['@_start'] || '',
+        stop: p['@_stop'] || '',
+        channel: p['@_channel'] || '',
+      }));
+
+      res.json({ programmes: result, total: result.length });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }));
 }
