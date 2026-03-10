@@ -7,6 +7,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "hls.js": "^1.5.15",
     "naive-ui": "^2.39.0",
     "vue": "^3.5.11"
   },

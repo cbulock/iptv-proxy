@@ -330,6 +330,7 @@
 
 <script setup>
 import { reactive, toRefs, h, watch, computed, ref, nextTick } from 'vue';
+import Hls from 'hls.js';
 import { darkTheme, NInput, NSelect, NButton, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, NTooltip, createDiscreteApi } from 'naive-ui';
 const { message } = createDiscreteApi(['message']);
 
@@ -1028,23 +1029,6 @@ async function loadGuide(tvgId) {
 const videoPlayerEl = ref(null);
 let hlsInstance = null;
 
-// HLS.js is loaded on-demand from CDN when a user clicks Watch and the browser
-// does not support HLS natively (i.e., non-Safari browsers).  The version is
-// pinned so that automatic CDN updates don't change behaviour unexpectedly.
-const HLS_JS_CDN = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js';
-
-async function loadHlsJs() {
-  if (window.Hls) return window.Hls;
-  return new Promise(resolve => {
-    const script = document.createElement('script');
-    script.src = HLS_JS_CDN;
-    script.crossOrigin = 'anonymous';
-    script.onload = () => resolve(window.Hls || null);
-    script.onerror = () => resolve(null);
-    document.head.appendChild(script);
-  });
-}
-
 async function setupVideoPlayer() {
   await nextTick();
   const video = videoPlayerEl.value;
@@ -1062,24 +1046,21 @@ async function setupVideoPlayer() {
     return;
   }
 
-  // Try HLS.js (loaded from CDN) for other browsers
-  try {
-    const Hls = await loadHlsJs();
-    if (Hls && Hls.isSupported()) {
-      hlsInstance = new Hls();
-      hlsInstance.loadSource(streamUrl);
-      hlsInstance.attachMedia(video);
-      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
-      hlsInstance.on(Hls.Events.ERROR, (_evt, data) => {
-        if (data.fatal) {
-          hlsInstance.destroy(); hlsInstance = null;
-          // Fall back to native src
-          video.src = streamUrl;
-        }
-      });
-      return;
-    }
-  } catch (_) { /* HLS.js unavailable — fall through */ }
+  // Use bundled HLS.js for other browsers
+  if (Hls.isSupported()) {
+    hlsInstance = new Hls();
+    hlsInstance.loadSource(streamUrl);
+    hlsInstance.attachMedia(video);
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
+    hlsInstance.on(Hls.Events.ERROR, (_evt, data) => {
+      if (data.fatal) {
+        hlsInstance.destroy(); hlsInstance = null;
+        // Fall back to native src
+        video.src = streamUrl;
+      }
+    });
+    return;
+  }
 
   // Last resort: direct src (works for MP4/MPEG-TS in some browsers)
   video.src = streamUrl;
