@@ -8,6 +8,7 @@ import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import { validateEPGCoverage } from '../libs/epg-validator.js';
 import cacheManager from '../libs/cache-manager.js';
+import { requireAuth } from './auth.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 
@@ -43,13 +44,27 @@ let epgCache = null;
 
 /**
  * Extract a plain string from an XMLTV text field which may be a raw string,
- * a fast-xml-parser object `{ '#text': '...', '@_lang': '...' }`, or null/undefined.
+ * a fast-xml-parser object `{ '#text': '...', '@_lang': '...' }`, an array
+ * of such values, or null/undefined.
  * @param {*} raw
  * @returns {string}
  */
-function extractTextField(raw) {
+export function extractTextField(raw) {
   if (raw == null) return '';
-  if (typeof raw === 'object') return String(raw['#text'] ?? raw);
+  // fast-xml-parser can produce arrays for repeated elements (e.g. multiple <title> tags)
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return '';
+    return extractTextField(raw[0]);
+  }
+  if (typeof raw === 'object') {
+    // Typical shape: { '#text': 'Title', '@_lang': 'en' }
+    if (Object.prototype.hasOwnProperty.call(raw, '#text')) {
+      const value = raw['#text'];
+      return value == null ? '' : String(value);
+    }
+    // Avoid String(raw) => "[object Object]" when there is no text content
+    return '';
+  }
   return String(raw);
 }
 
@@ -59,7 +74,7 @@ function extractTextField(raw) {
  * @param {string|number} str
  * @returns {Date|null}
  */
-function parseXMLTVDate(str) {
+export function parseXMLTVDate(str) {
   if (!str) return null;
   const match = String(str).match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
   if (!match) return null;
@@ -290,7 +305,8 @@ export async function setupEPGRoutes(app) {
   refreshImpl = fetchAndMergeEPGs;
 
   await fetchAndMergeEPGs();
-  setInterval(fetchAndMergeEPGs, 6 * 60 * 60 * 1000);
+  // unref() so the interval does not prevent the process from exiting cleanly
+  setInterval(fetchAndMergeEPGs, 6 * 60 * 60 * 1000).unref();
 
   app.get('/xmltv.xml', epgLimiter, asyncHandler(async (req, res) => {
     if (!mergedEPG) {
@@ -411,10 +427,10 @@ export async function setupEPGRoutes(app) {
   /**
    * Guide data endpoint — returns current and upcoming programmes for a channel.
    * Query params:
-   *   tvgId  — the tvg-id / XMLTV channel id to look up (required)
+   *   tvgId  — the tvg-id / XMLTV channel id to filter by (optional; omit to return all channels)
    *   hours  — how many hours ahead to return (default 24, max 48)
    */
-  app.get('/api/guide', asyncHandler(async (req, res) => {
+  app.get('/api/guide', requireAuth, epgLimiter, asyncHandler(async (req, res) => {
     if (!mergedEPG) {
       return res.status(503).json({ error: 'EPG not loaded yet' });
     }
@@ -434,22 +450,20 @@ export async function setupEPGRoutes(app) {
       }
 
       // Keep programmes that are currently airing or start within the cutoff window
-      // (allow up to 1 minute in the past so a currently-airing show is included)
+      // (allow up to 1 minute in the past so a currently-airing show is included).
+      // Cache _startMs on each programme to avoid re-parsing during the sort step.
       programmes = programmes.filter(p => {
         const start = parseXMLTVDate(p['@_start']);
         const stop = p['@_stop'] ? parseXMLTVDate(p['@_stop']) : null;
         if (!start) return false;
         const startMs = start.getTime();
         const stopMs = stop ? stop.getTime() : startMs + 30 * 60 * 1000;
+        p._startMs = startMs;
         return stopMs > now - 60 * 1000 && startMs < cutoff;
       });
 
-      // Sort by start time ascending
-      programmes.sort((a, b) => {
-        const aMs = parseXMLTVDate(a['@_start'])?.getTime() || 0;
-        const bMs = parseXMLTVDate(b['@_start'])?.getTime() || 0;
-        return aMs - bMs;
-      });
+      // Sort by start time ascending using the cached timestamp
+      programmes.sort((a, b) => (a._startMs || 0) - (b._startMs || 0));
 
       // Limit to 20 entries
       programmes = programmes.slice(0, 20);

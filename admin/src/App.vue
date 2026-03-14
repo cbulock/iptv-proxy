@@ -1034,8 +1034,7 @@ async function setupVideoPlayer() {
   const video = videoPlayerEl.value;
   if (!video || !state.previewWatchingChannel) return;
 
-  const ch = state.previewWatchingChannel;
-  const streamUrl = `/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+  const streamUrl = previewStreamUrl.value;
 
   // Destroy any previous HLS instance
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
@@ -1080,9 +1079,12 @@ function watchChannel(channel) {
 }
 
 function copyStreamUrl() {
-  if (!state.previewWatchingChannel) return;
-  const ch = state.previewWatchingChannel;
-  const url = `${window.location.origin}/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+  const relativeUrl = previewStreamUrl.value;
+  if (!relativeUrl) {
+    message.error('No stream URL available');
+    return;
+  }
+  const url = `${window.location.origin}${relativeUrl}`;
   navigator.clipboard.writeText(url).then(
     () => message.success('Stream URL copied to clipboard'),
     () => message.error('Failed to copy URL')
