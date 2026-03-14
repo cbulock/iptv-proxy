@@ -501,7 +501,11 @@ describe('GET /channels?mapped_only=true', () => {
       try { await fs.unlink(channelsFile); } catch (_) { /* ignore */ }
     }
 
-    process.env.CONFIG_PATH = originalConfigPath;
+    if (originalConfigPath === undefined) {
+      delete process.env.CONFIG_PATH;
+    } else {
+      process.env.CONFIG_PATH = originalConfigPath;
+    }
   });
 
   it('returns all channels when mapped_only is not set', async () => {
