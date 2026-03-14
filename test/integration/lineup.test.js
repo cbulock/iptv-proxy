@@ -147,6 +147,25 @@ describe('Lineup Route Integration', () => {
     expect(playlistBody).not.to.include('\n/auto/v6.1/hls/seg000001.ts\n');
   });
 
+  it('falls back to MPEG-TS when HDHomeRun HLS mode returns 503', async () => {
+    nock('http://antenna.example')
+      .get('/auto/v6.1')
+      .query({ streamMode: 'hls' })
+      .reply(503, 'Service Unavailable');
+
+    nock('http://antenna.example')
+      .get('/auto/v6.1')
+      .reply(200, 'mpegts-bytes', { 'Content-Type': 'video/mp2t' });
+
+    const streamResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV`, {
+      responseType: 'arraybuffer'
+    });
+
+    expect(streamResponse.status).to.equal(200);
+    expect(streamResponse.headers['content-type']).to.include('video/mp2t');
+    expect(Buffer.from(streamResponse.data).toString()).to.equal('mpegts-bytes');
+  });
+
   it('rewrites HLS playlist URIs to proxy stream URLs', async () => {
     nock('http://tunarr.example')
       .get('/stream/channels/channel-1')
@@ -177,5 +196,39 @@ describe('Lineup Route Integration', () => {
     const segmentResponse = await axios.get(proxiedSegmentUrl);
     expect(segmentResponse.status).to.equal(200);
     expect(segmentResponse.data).to.equal('segment-bytes');
+  });
+
+  it('rejects ?upstream= URLs pointing to a different origin (SSRF protection)', async () => {
+    const maliciousUrl = encodeURIComponent('http://internal-server.local/secret');
+    const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${maliciousUrl}`, {
+      validateStatus: () => true
+    });
+    expect(response.status).to.equal(403);
+  });
+
+  it('allows ?upstream= URLs on the same origin as the channel', async () => {
+    nock('http://antenna.example')
+      .get('/auto/v6.1/hls/seg000001.ts')
+      .reply(200, 'mpegts-bytes', { 'Content-Type': 'video/mp2t' });
+
+    const segmentUrl = encodeURIComponent('http://antenna.example/auto/v6.1/hls/seg000001.ts');
+    const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${segmentUrl}`, {
+      responseType: 'arraybuffer'
+    });
+    expect(response.status).to.equal(200);
+  });
+
+  it('treats http://host and http://host:80 as the same origin (default port normalization)', async () => {
+    nock('http://antenna.example')
+      .get('/auto/v6.1/hls/seg000002.ts')
+      .reply(200, 'mpegts-bytes2', { 'Content-Type': 'video/mp2t' });
+
+    // antenna.example channel has original_url without an explicit port (default http:80).
+    // A ?upstream= with the explicit :80 port should be treated as the same origin.
+    const segmentUrl = encodeURIComponent('http://antenna.example:80/auto/v6.1/hls/seg000002.ts');
+    const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${segmentUrl}`, {
+      responseType: 'arraybuffer'
+    });
+    expect(response.status).to.equal(200);
   });
 });

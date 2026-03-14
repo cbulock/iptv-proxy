@@ -277,15 +277,62 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     if (!channel) return res.status(404).send('Channel not found');
 
+    // Helper to validate that an override URL is HTTP(S) and shares the same origin
+    // (protocol + hostname + port) as the channel's configured upstream URL.
+    const isSameOriginHttpUrl = (overrideUrlString, channelUrlString) => {
+      const defaultPorts = { 'http:': '80', 'https:': '443' };
+      const normalizePort = (url) => url.port || defaultPorts[url.protocol];
+
+      let overrideUrl;
+      let channelUrl;
+      try {
+        overrideUrl = new URL(overrideUrlString);
+        channelUrl = new URL(channelUrlString);
+      } catch (_err) {
+        return { ok: false, reason: 'parse-error' };
+      }
+
+      // Only allow HTTP(S) schemes for both URLs.
+      if (!defaultPorts[overrideUrl.protocol] || !defaultPorts[channelUrl.protocol]) {
+        return { ok: false, reason: 'invalid-protocol' };
+      }
+
+      const sameOrigin =
+        overrideUrl.protocol === channelUrl.protocol &&
+        overrideUrl.hostname === channelUrl.hostname &&
+        normalizePort(overrideUrl) === normalizePort(channelUrl);
+
+      return sameOrigin ? { ok: true } : { ok: false, reason: 'origin-mismatch' };
+    };
+
+    // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
+    // HTTP(S) origin (protocol + hostname + port) as the channel's configured upstream URL.
+    if (upstreamOverride) {
+      const result = isSameOriginHttpUrl(upstreamOverride, channel.original_url);
+      if (!result.ok) {
+        if (result.reason === 'parse-error') {
+          return res.status(400).send('Invalid upstream URL');
+        }
+        if (result.reason === 'invalid-protocol') {
+          return res.status(403).send('Upstream URL protocol not allowed');
+        }
+        // origin-mismatch or any other reason
+        return res.status(403).send('Upstream URL not allowed');
+      }
+    }
+
     let upstreamUrl = upstreamOverride || channel.original_url;
+    const baseUpstreamUrl = upstreamUrl; // Pre-HLS URL for use as fallback
 
     // HDHomeRun supports HLS via ?streamMode=hls; request it so browsers can play the stream
     // via HLS.js instead of receiving raw MPEG-TS which browsers cannot decode natively.
+    let hlsApplied = false;
     if (!upstreamOverride && channel.hdhomerun) {
       try {
         const u = new URL(upstreamUrl);
         u.searchParams.set('streamMode', 'hls');
         upstreamUrl = u.toString();
+        hlsApplied = true;
       } catch (err) {
         // If the URL is unparseable, fall through and let the upstream decide.
         console.warn(
@@ -351,13 +398,8 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       res.on('error', cleanup);
     };
 
-    try {
-      const response = await axios.get(upstreamUrl, {
-        responseType: 'stream',
-        timeout: 15000
-      });
-
-      const responseUrl = response.request?.res?.responseUrl || upstreamUrl;
+    const handleStreamResponse = async (response, resolvedUrl, isUpstreamOverride) => {
+      const responseUrl = response.request?.res?.responseUrl || resolvedUrl;
       const contentType = response.headers?.['content-type'] || '';
       if (isLikelyHlsPlaylist(contentType, responseUrl)) {
         // HLS playlist/key/segment requests are short-lived; keep session alive via touch + idle TTL.
@@ -374,7 +416,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         return;
       }
 
-      if (upstreamOverride) {
+      if (isUpstreamOverride) {
         await touchViewer();
       } else {
         // Non-HLS primary streaming response: unregister immediately on disconnect.
@@ -389,6 +431,40 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       res.set(response.headers);
       response.data.pipe(res);
       console.info('[stream] %s/%s ready in %dms', source, name, Date.now() - startTime);
+    };
+
+    try {
+      let response;
+      let resolvedUrl = upstreamUrl;
+      // When an ?upstream= override is in use, disable redirects to prevent SSRF via open
+      // redirects: the origin check above validates the initial URL but can't guard against
+      // a server-side redirect to a different host.
+      const axiosOptions = {
+        responseType: 'stream',
+        timeout: 15000,
+        ...(upstreamOverride ? { maxRedirects: 0 } : {})
+      };
+      try {
+        response = await axios.get(upstreamUrl, axiosOptions);
+      } catch (err) {
+        // If HLS mode was applied and the upstream returned 503, fall back to non-HLS (MPEG-TS).
+        if (hlsApplied && err.response?.status === 503) {
+          console.info(
+            '[stream] %s/%s HLS mode returned 503, falling back to MPEG-TS: %s',
+            source,
+            name,
+            baseUpstreamUrl
+          );
+          // Fall back to the validated baseUpstreamUrl (either the trusted channel URL or the
+          // same-origin override that has already passed isSameOriginHttpUrl checks).
+          resolvedUrl = baseUpstreamUrl;
+          response = await axios.get(resolvedUrl, axiosOptions);
+        } else {
+          throw err;
+        }
+      }
+
+      await handleStreamResponse(response, resolvedUrl, !!upstreamOverride);
     } catch (err) {
       if (usageKey && !upstreamOverride) unregisterUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
