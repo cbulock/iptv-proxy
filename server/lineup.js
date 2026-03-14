@@ -286,8 +286,15 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         const u = new URL(upstreamUrl);
         u.searchParams.set('streamMode', 'hls');
         upstreamUrl = u.toString();
-      } catch (_) {
+      } catch (err) {
         // If the URL is unparseable, fall through and let the upstream decide.
+        console.warn(
+          '[stream] failed to apply streamMode=hls for %s/%s (invalid URL: %s): %s',
+          source,
+          name,
+          upstreamUrl,
+          err && err.message ? err.message : String(err)
+        );
       }
     }
 
