@@ -3,6 +3,7 @@ import express from 'express';
 import RateLimit from 'express-rate-limit';
 import { getChannels } from '../libs/channels-cache.js';
 import { getDataPath } from '../libs/paths.js';
+import { loadConfig } from '../libs/config-loader.js';
 
 const router = express.Router();
 
@@ -29,6 +30,23 @@ router.get('/', limiter, async (req, res) => {
       }
 
       filtered = channels.filter(c => statusMap[c.tvg_id] === 'online');
+    }
+
+    if (req.query.mapped_only === 'true' || req.query.mapped_only === '1') {
+      const channelMap = loadConfig('channelMap') || {};
+      const mapKeys = new Set(Object.keys(channelMap));
+      filtered = filtered.filter(channel => {
+        const name = channel?.name || '';
+        const tvgId = channel?.tvg_id || '';
+        if (mapKeys.has(name)) return true;
+        if (tvgId && mapKeys.has(tvgId)) return true;
+        if (tvgId) {
+          for (const value of Object.values(channelMap)) {
+            if (value && value.tvg_id === tvgId) return true;
+          }
+        }
+        return false;
+      });
     }
 
     res.json(filtered);

@@ -427,3 +427,99 @@ describe('Rate limiting', () => {
     expect(skip({ ip: '192.168.1.50' })).to.be.false;
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 6. GET /channels?mapped_only=true
+// ──────────────────────────────────────────────────────────────────────────────
+describe('GET /channels?mapped_only=true', () => {
+  let tmpDir;
+  let server;
+  let baseUrl;
+  let originalConfigPath;
+  let originalChannels;
+  let hadOriginalChannels;
+
+  before(async () => {
+    originalConfigPath = process.env.CONFIG_PATH;
+
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-channels-mapped-test-'));
+
+    // Write a channel-map.yaml that maps only "Mapped Channel"
+    await fs.writeFile(
+      path.join(tmpDir, 'channel-map.yaml'),
+      [
+        '"Mapped Channel":',
+        '  number: "5"',
+        '  tvg_id: mapped.1',
+      ].join('\n') + '\n',
+      'utf8'
+    );
+
+    process.env.CONFIG_PATH = tmpDir;
+
+    // Write channels.json to the real data path (same pattern as lineup.test.js)
+    const { getDataPath } = await import('../../libs/paths.js');
+    const channelsFile = getDataPath('channels.json');
+    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
+
+    try {
+      originalChannels = await fs.readFile(channelsFile, 'utf8');
+      hadOriginalChannels = true;
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      hadOriginalChannels = false;
+    }
+
+    const testChannels = [
+      { name: 'Mapped Channel', tvg_id: 'mapped.1', source: 'TestSource', guideNumber: '5' },
+      { name: 'Unmapped Channel', tvg_id: 'unmapped.2', source: 'TestSource', guideNumber: '' },
+    ];
+    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+
+    const { initChannelsCache, cleanupCache } = await import('../../libs/channels-cache.js');
+    cleanupCache();
+    await initChannelsCache();
+
+    const channelsRouter = (await import('../../server/channels.js')).default;
+    const app = express();
+    app.use('/channels', channelsRouter);
+
+    ({ server, baseUrl } = await startServer(app));
+  });
+
+  after(async () => {
+    await stopServer(server);
+
+    const { cleanupCache } = await import('../../libs/channels-cache.js');
+    cleanupCache();
+
+    const { getDataPath } = await import('../../libs/paths.js');
+    const channelsFile = getDataPath('channels.json');
+    if (hadOriginalChannels) {
+      await fs.writeFile(channelsFile, originalChannels, 'utf8');
+    } else {
+      try { await fs.unlink(channelsFile); } catch (_) { /* ignore */ }
+    }
+
+    process.env.CONFIG_PATH = originalConfigPath;
+  });
+
+  it('returns all channels when mapped_only is not set', async () => {
+    const res = await axios.get(`${baseUrl}/channels`);
+    expect(res.status).to.equal(200);
+    expect(res.data).to.be.an('array').with.lengthOf(2);
+  });
+
+  it('returns only mapped channels when mapped_only=true', async () => {
+    const res = await axios.get(`${baseUrl}/channels?mapped_only=true`);
+    expect(res.status).to.equal(200);
+    expect(res.data).to.be.an('array').with.lengthOf(1);
+    expect(res.data[0].name).to.equal('Mapped Channel');
+  });
+
+  it('excludes unmapped channels when mapped_only=true', async () => {
+    const res = await axios.get(`${baseUrl}/channels?mapped_only=true`);
+    const names = res.data.map(c => c.name);
+    expect(names).to.not.include('Unmapped Channel');
+  });
+});

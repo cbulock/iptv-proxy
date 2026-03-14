@@ -213,7 +213,7 @@
               :max-height="500"
               virtual-scroll
             />
-            <div class="foot">Live merged channel list from all active providers. Click <strong>▶ Watch</strong> to preview a stream.</div>
+            <div class="foot">Mapped channels as they appear in the M3U output. Channel numbers reflect the configured mapping. Click <strong>▶ Watch</strong> to preview a stream.</div>
 
             <!-- Video player modal -->
             <n-modal v-model:show="showVideoModal" preset="card" :title="previewWatchingChannel ? previewWatchingChannel.name : 'Watch Channel'" style="max-width:720px;width:95vw;" @after-leave="stopVideoPlayer">
@@ -1047,7 +1047,7 @@ async function deleteBackup(name) {
 async function loadPreviewChannels() {
   try {
     state.loadingPreviewChannels = true;
-    const r = await apiFetch('/channels');
+    const r = await apiFetch('/channels?mapped_only=true');
     const channels = await r.json();
     state.previewChannels = Array.isArray(channels) ? channels : [];
   } catch (e) {
