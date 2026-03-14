@@ -489,6 +489,7 @@ describe('GET /channels?mapped_only=true', () => {
 
   after(async () => {
     await stopServer(server);
+    await fs.rm(tmpDir, { recursive: true, force: true });
 
     const { cleanupCache } = await import('../../libs/channels-cache.js');
     cleanupCache();
