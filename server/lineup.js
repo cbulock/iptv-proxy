@@ -277,7 +277,20 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     if (!channel) return res.status(404).send('Channel not found');
 
-    const upstreamUrl = upstreamOverride || channel.original_url;
+    let upstreamUrl = upstreamOverride || channel.original_url;
+
+    // HDHomeRun supports HLS via ?streamMode=hls; request it so browsers can play the stream
+    // via HLS.js instead of receiving raw MPEG-TS which browsers cannot decode natively.
+    if (!upstreamOverride && channel.hdhomerun) {
+      try {
+        const u = new URL(upstreamUrl);
+        u.searchParams.set('streamMode', 'hls');
+        upstreamUrl = u.toString();
+      } catch (_) {
+        // If the URL is unparseable, fall through and let the upstream decide.
+      }
+    }
+
     const startTime = Date.now();
     console.info('[stream] %s/%s -> %s', source, name, upstreamUrl);
 

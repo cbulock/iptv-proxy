@@ -128,6 +128,25 @@ describe('Lineup Route Integration', () => {
     expect(wlns.GuideNumber).to.equal('6.1');
   });
 
+  it('requests HDHomeRun streams in HLS mode and rewrites playlist URIs', async () => {
+    nock('http://antenna.example')
+      .get('/auto/v6.1')
+      .query({ streamMode: 'hls' })
+      .reply(
+        200,
+        '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/auto/v6.1/hls/seg000001.ts\n',
+        { 'Content-Type': 'application/vnd.apple.mpegurl' }
+      );
+
+    const playlistResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?include_unmapped=1`);
+    const playlistBody = playlistResponse.data;
+
+    expect(playlistResponse.status).to.equal(200);
+    expect(playlistBody).to.include('#EXTM3U');
+    expect(playlistBody).to.include('/stream/Antenna/WLNS-TV?upstream=');
+    expect(playlistBody).not.to.include('\n/auto/v6.1/hls/seg000001.ts\n');
+  });
+
   it('rewrites HLS playlist URIs to proxy stream URLs', async () => {
     nock('http://tunarr.example')
       .get('/stream/channels/channel-1')
