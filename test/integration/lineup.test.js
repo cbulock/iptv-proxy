@@ -138,7 +138,7 @@ describe('Lineup Route Integration', () => {
         { 'Content-Type': 'application/vnd.apple.mpegurl' }
       );
 
-    const playlistResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?include_unmapped=1`);
+    const playlistResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV`);
     const playlistBody = playlistResponse.data;
 
     expect(playlistResponse.status).to.equal(200);
