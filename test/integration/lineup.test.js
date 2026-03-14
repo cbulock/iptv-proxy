@@ -197,4 +197,24 @@ describe('Lineup Route Integration', () => {
     expect(segmentResponse.status).to.equal(200);
     expect(segmentResponse.data).to.equal('segment-bytes');
   });
+
+  it('rejects ?upstream= URLs pointing to a different origin (SSRF protection)', async () => {
+    const maliciousUrl = encodeURIComponent('http://internal-server.local/secret');
+    const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${maliciousUrl}`, {
+      validateStatus: () => true
+    });
+    expect(response.status).to.equal(403);
+  });
+
+  it('allows ?upstream= URLs on the same origin as the channel', async () => {
+    nock('http://antenna.example')
+      .get('/auto/v6.1/hls/seg000001.ts')
+      .reply(200, 'mpegts-bytes', { 'Content-Type': 'video/mp2t' });
+
+    const segmentUrl = encodeURIComponent('http://antenna.example/auto/v6.1/hls/seg000001.ts');
+    const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${segmentUrl}`, {
+      responseType: 'arraybuffer'
+    });
+    expect(response.status).to.equal(200);
+  });
 });

@@ -277,6 +277,25 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     if (!channel) return res.status(404).send('Channel not found');
 
+    // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
+    // origin (protocol + hostname + port) as the channel's configured upstream URL.
+    if (upstreamOverride) {
+      let overrideOrigin, channelOrigin;
+      try {
+        overrideOrigin = new URL(upstreamOverride).origin;
+      } catch (_err) {
+        return res.status(400).send('Invalid upstream URL');
+      }
+      try {
+        channelOrigin = new URL(channel.original_url).origin;
+      } catch (_err) {
+        return res.status(400).send('Invalid upstream URL');
+      }
+      if (overrideOrigin !== channelOrigin) {
+        return res.status(403).send('Upstream URL not allowed');
+      }
+    }
+
     let upstreamUrl = upstreamOverride || channel.original_url;
     const baseUpstreamUrl = upstreamUrl; // Pre-HLS URL for use as fallback
 
