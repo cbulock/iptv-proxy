@@ -278,14 +278,17 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     if (!channel) return res.status(404).send('Channel not found');
 
     let upstreamUrl = upstreamOverride || channel.original_url;
+    const baseUpstreamUrl = upstreamUrl; // Pre-HLS URL for use as fallback
 
     // HDHomeRun supports HLS via ?streamMode=hls; request it so browsers can play the stream
     // via HLS.js instead of receiving raw MPEG-TS which browsers cannot decode natively.
+    let hlsApplied = false;
     if (!upstreamOverride && channel.hdhomerun) {
       try {
         const u = new URL(upstreamUrl);
         u.searchParams.set('streamMode', 'hls');
         upstreamUrl = u.toString();
+        hlsApplied = true;
       } catch (err) {
         // If the URL is unparseable, fall through and let the upstream decide.
         console.warn(
@@ -351,13 +354,8 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       res.on('error', cleanup);
     };
 
-    try {
-      const response = await axios.get(upstreamUrl, {
-        responseType: 'stream',
-        timeout: 15000
-      });
-
-      const responseUrl = response.request?.res?.responseUrl || upstreamUrl;
+    const handleStreamResponse = async (response, resolvedUrl, isUpstreamOverride) => {
+      const responseUrl = response.request?.res?.responseUrl || resolvedUrl;
       const contentType = response.headers?.['content-type'] || '';
       if (isLikelyHlsPlaylist(contentType, responseUrl)) {
         // HLS playlist/key/segment requests are short-lived; keep session alive via touch + idle TTL.
@@ -374,7 +372,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         return;
       }
 
-      if (upstreamOverride) {
+      if (isUpstreamOverride) {
         await touchViewer();
       } else {
         // Non-HLS primary streaming response: unregister immediately on disconnect.
@@ -389,6 +387,36 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       res.set(response.headers);
       response.data.pipe(res);
       console.info('[stream] %s/%s ready in %dms', source, name, Date.now() - startTime);
+    };
+
+    try {
+      let response;
+      let resolvedUrl = upstreamUrl;
+      try {
+        response = await axios.get(upstreamUrl, {
+          responseType: 'stream',
+          timeout: 15000
+        });
+      } catch (err) {
+        // If HLS mode was applied and the upstream returned 503, fall back to non-HLS (MPEG-TS).
+        if (hlsApplied && err.response?.status === 503) {
+          console.info(
+            '[stream] %s/%s HLS mode returned 503, falling back to MPEG-TS: %s',
+            source,
+            name,
+            baseUpstreamUrl
+          );
+          resolvedUrl = baseUpstreamUrl;
+          response = await axios.get(resolvedUrl, {
+            responseType: 'stream',
+            timeout: 15000
+          });
+        } else {
+          throw err;
+        }
+      }
+
+      await handleStreamResponse(response, resolvedUrl, !!upstreamOverride);
     } catch (err) {
       if (usageKey && !upstreamOverride) unregisterUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
