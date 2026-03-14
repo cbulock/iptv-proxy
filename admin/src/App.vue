@@ -208,7 +208,7 @@
               :columns="previewColumns"
               :data="filteredPreviewChannels"
               :bordered="false"
-              :row-key="row => `${row.source}|${row.name}`"
+              :row-key="row => row.original_url || `${row.source}|${row.name}|${row.guideNumber}`"
               size="small"
               :max-height="500"
               virtual-scroll
