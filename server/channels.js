@@ -3,10 +3,33 @@ import express from 'express';
 import RateLimit from 'express-rate-limit';
 import { getChannels } from '../libs/channels-cache.js';
 import { getDataPath } from '../libs/paths.js';
+import { loadConfig } from '../libs/config-loader.js';
 
 const router = express.Router();
 
 const STATUS_FILE = getDataPath('lineup_status.json');
+
+let channelMapCache = null;
+let channelMapKeySet = null;
+let mappedTvgIdSet = null;
+
+function ensureChannelMapCache() {
+  if (channelMapCache !== null && channelMapKeySet && mappedTvgIdSet) {
+    return;
+  }
+
+  const channelMap = loadConfig('channelMap') || {};
+  channelMapCache = channelMap;
+  channelMapKeySet = new Set(Object.keys(channelMap));
+
+  const tvgIdSet = new Set();
+  for (const value of Object.values(channelMap)) {
+    if (value && value.tvg_id) {
+      tvgIdSet.add(value.tvg_id);
+    }
+  }
+  mappedTvgIdSet = tvgIdSet;
+}
 
 const limiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -29,6 +52,29 @@ router.get('/', limiter, async (req, res) => {
       }
 
       filtered = channels.filter(c => statusMap[c.tvg_id] === 'online');
+    }
+
+    if (req.query.mapped_only === 'true' || req.query.mapped_only === '1') {
+      ensureChannelMapCache();
+      filtered = filtered.filter(channel => {
+        const name = channel?.name || '';
+        const tvgId = channel?.tvg_id || '';
+
+        if (channelMapKeySet.has(name)) {
+          return true;
+        }
+
+        if (tvgId) {
+          if (channelMapKeySet.has(tvgId)) {
+            return true;
+          }
+          if (mappedTvgIdSet.has(tvgId)) {
+            return true;
+          }
+        }
+
+        return false;
+      });
     }
 
     res.json(filtered);
