@@ -9,6 +9,28 @@ const router = express.Router();
 
 const STATUS_FILE = getDataPath('lineup_status.json');
 
+let channelMapCache = null;
+let channelMapKeySet = null;
+let mappedTvgIdSet = null;
+
+function ensureChannelMapCache() {
+  if (channelMapCache !== null && channelMapKeySet && mappedTvgIdSet) {
+    return;
+  }
+
+  const channelMap = loadConfig('channelMap') || {};
+  channelMapCache = channelMap;
+  channelMapKeySet = new Set(Object.keys(channelMap));
+
+  const tvgIdSet = new Set();
+  for (const value of Object.values(channelMap)) {
+    if (value && value.tvg_id) {
+      tvgIdSet.add(value.tvg_id);
+    }
+  }
+  mappedTvgIdSet = tvgIdSet;
+}
+
 const limiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
@@ -33,18 +55,24 @@ router.get('/', limiter, async (req, res) => {
     }
 
     if (req.query.mapped_only === 'true' || req.query.mapped_only === '1') {
-      const channelMap = loadConfig('channelMap') || {};
-      const mapKeys = new Set(Object.keys(channelMap));
+      ensureChannelMapCache();
       filtered = filtered.filter(channel => {
         const name = channel?.name || '';
         const tvgId = channel?.tvg_id || '';
-        if (mapKeys.has(name)) return true;
-        if (tvgId && mapKeys.has(tvgId)) return true;
+
+        if (channelMapKeySet.has(name)) {
+          return true;
+        }
+
         if (tvgId) {
-          for (const value of Object.values(channelMap)) {
-            if (value && value.tvg_id === tvgId) return true;
+          if (channelMapKeySet.has(tvgId)) {
+            return true;
+          }
+          if (mappedTvgIdSet.has(tvgId)) {
+            return true;
           }
         }
+
         return false;
       });
     }
