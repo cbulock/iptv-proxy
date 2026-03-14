@@ -277,36 +277,46 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     if (!channel) return res.status(404).send('Channel not found');
 
-    // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
-    // origin (protocol + hostname + port) as the channel's configured upstream URL.
-    // We normalize the effective port explicitly because URL.origin includes the port only
-    // when it is non-default, so `http://host` and `http://host:80` would differ as strings
-    // even though they are the same origin.
-    if (upstreamOverride) {
-      const effectivePort = (url, defaultPort) => url.port || defaultPort;
+    // Helper to validate that an override URL is HTTP(S) and shares the same origin
+    // (protocol + hostname + port) as the channel's configured upstream URL.
+    const isSameOriginHttpUrl = (overrideUrlString, channelUrlString) => {
       const defaultPorts = { 'http:': '80', 'https:': '443' };
+      const normalizePort = (url) => url.port || defaultPorts[url.protocol];
 
       let overrideUrl;
-      try {
-        overrideUrl = new URL(upstreamOverride);
-      } catch (_err) {
-        return res.status(400).send('Invalid upstream URL');
-      }
-
       let channelUrl;
       try {
-        channelUrl = new URL(channel.original_url);
+        overrideUrl = new URL(overrideUrlString);
+        channelUrl = new URL(channelUrlString);
       } catch (_err) {
-        return res.status(500).send('Channel upstream URL is misconfigured');
+        return { ok: false, reason: 'parse-error' };
+      }
+
+      // Only allow HTTP(S) schemes for both URLs.
+      if (!defaultPorts[overrideUrl.protocol] || !defaultPorts[channelUrl.protocol]) {
+        return { ok: false, reason: 'invalid-protocol' };
       }
 
       const sameOrigin =
         overrideUrl.protocol === channelUrl.protocol &&
         overrideUrl.hostname === channelUrl.hostname &&
-        effectivePort(overrideUrl, defaultPorts[overrideUrl.protocol]) ===
-          effectivePort(channelUrl, defaultPorts[channelUrl.protocol]);
+        normalizePort(overrideUrl) === normalizePort(channelUrl);
 
-      if (!sameOrigin) {
+      return sameOrigin ? { ok: true } : { ok: false, reason: 'origin-mismatch' };
+    };
+
+    // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
+    // HTTP(S) origin (protocol + hostname + port) as the channel's configured upstream URL.
+    if (upstreamOverride) {
+      const result = isSameOriginHttpUrl(upstreamOverride, channel.original_url);
+      if (!result.ok) {
+        if (result.reason === 'parse-error') {
+          return res.status(400).send('Invalid upstream URL');
+        }
+        if (result.reason === 'invalid-protocol') {
+          return res.status(403).send('Upstream URL protocol not allowed');
+        }
+        // origin-mismatch or any other reason
         return res.status(403).send('Upstream URL not allowed');
       }
     }
@@ -445,6 +455,8 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
             name,
             baseUpstreamUrl
           );
+          // Fall back to the validated baseUpstreamUrl (either the trusted channel URL or the
+          // same-origin override that has already passed isSameOriginHttpUrl checks).
           resolvedUrl = baseUpstreamUrl;
           response = await axios.get(resolvedUrl, axiosOptions);
         } else {
