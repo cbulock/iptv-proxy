@@ -279,19 +279,34 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
     // origin (protocol + hostname + port) as the channel's configured upstream URL.
+    // We normalize the effective port explicitly because URL.origin includes the port only
+    // when it is non-default, so `http://host` and `http://host:80` would differ as strings
+    // even though they are the same origin.
     if (upstreamOverride) {
-      let overrideOrigin, channelOrigin;
+      const effectivePort = (url, defaultPort) => url.port || defaultPort;
+      const defaultPorts = { 'http:': '80', 'https:': '443' };
+
+      let overrideUrl;
       try {
-        overrideOrigin = new URL(upstreamOverride).origin;
+        overrideUrl = new URL(upstreamOverride);
       } catch (_err) {
         return res.status(400).send('Invalid upstream URL');
       }
+
+      let channelUrl;
       try {
-        channelOrigin = new URL(channel.original_url).origin;
+        channelUrl = new URL(channel.original_url);
       } catch (_err) {
-        return res.status(400).send('Invalid upstream URL');
+        return res.status(500).send('Channel upstream URL is misconfigured');
       }
-      if (overrideOrigin !== channelOrigin) {
+
+      const sameOrigin =
+        overrideUrl.protocol === channelUrl.protocol &&
+        overrideUrl.hostname === channelUrl.hostname &&
+        effectivePort(overrideUrl, defaultPorts[overrideUrl.protocol]) ===
+          effectivePort(channelUrl, defaultPorts[channelUrl.protocol]);
+
+      if (!sameOrigin) {
         return res.status(403).send('Upstream URL not allowed');
       }
     }
@@ -411,11 +426,16 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     try {
       let response;
       let resolvedUrl = upstreamUrl;
+      // When an ?upstream= override is in use, disable redirects to prevent SSRF via open
+      // redirects: the origin check above validates the initial URL but can't guard against
+      // a server-side redirect to a different host.
+      const axiosOptions = {
+        responseType: 'stream',
+        timeout: 15000,
+        ...(upstreamOverride ? { maxRedirects: 0 } : {})
+      };
       try {
-        response = await axios.get(upstreamUrl, {
-          responseType: 'stream',
-          timeout: 15000
-        });
+        response = await axios.get(upstreamUrl, axiosOptions);
       } catch (err) {
         // If HLS mode was applied and the upstream returned 503, fall back to non-HLS (MPEG-TS).
         if (hlsApplied && err.response?.status === 503) {
@@ -426,10 +446,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
             baseUpstreamUrl
           );
           resolvedUrl = baseUpstreamUrl;
-          response = await axios.get(resolvedUrl, {
-            responseType: 'stream',
-            timeout: 15000
-          });
+          response = await axios.get(resolvedUrl, axiosOptions);
         } else {
           throw err;
         }

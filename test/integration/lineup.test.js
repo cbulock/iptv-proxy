@@ -217,4 +217,18 @@ describe('Lineup Route Integration', () => {
     });
     expect(response.status).to.equal(200);
   });
+
+  it('treats http://host and http://host:80 as the same origin (default port normalization)', async () => {
+    nock('http://antenna.example')
+      .get('/auto/v6.1/hls/seg000002.ts')
+      .reply(200, 'mpegts-bytes2', { 'Content-Type': 'video/mp2t' });
+
+    // antenna.example channel has original_url without an explicit port (default http:80).
+    // A ?upstream= with the explicit :80 port should be treated as the same origin.
+    const segmentUrl = encodeURIComponent('http://antenna.example:80/auto/v6.1/hls/seg000002.ts');
+    const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${segmentUrl}`, {
+      responseType: 'arraybuffer'
+    });
+    expect(response.status).to.equal(200);
+  });
 });
