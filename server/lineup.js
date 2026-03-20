@@ -37,6 +37,8 @@ function invalidateCaches() {
 
 function isLikelyHlsPlaylist(contentType = '', upstreamUrl = '') {
   const normalizedContentType = String(contentType).toLowerCase();
+
+  // Explicit HLS content types are authoritative — always treat as playlist.
   if (
     normalizedContentType.includes('application/vnd.apple.mpegurl') ||
     normalizedContentType.includes('application/x-mpegurl') ||
@@ -46,6 +48,15 @@ function isLikelyHlsPlaylist(contentType = '', upstreamUrl = '') {
     return true;
   }
 
+  // Explicit non-HLS media content types are authoritative — never buffer as playlist.
+  // This prevents hanging when an HDHomeRun device returns raw MPEG-TS (video/mp2t) with
+  // HTTP 200 instead of 503 when HLS is requested but unsupported.
+  if (normalizedContentType.startsWith('video/') || normalizedContentType.startsWith('audio/')) {
+    return false;
+  }
+
+  // When content-type is absent or generic (e.g. application/octet-stream), fall back to
+  // URL-based hints to detect playlists requested with ?streamMode=hls or a .m3u8 path.
   try {
     const url = new URL(upstreamUrl);
     if (url.pathname.toLowerCase().endsWith('.m3u8')) return true;
@@ -59,8 +70,16 @@ function isLikelyHlsPlaylist(contentType = '', upstreamUrl = '') {
 
 async function readStreamToUtf8(stream) {
   const chunks = [];
+  let totalBytes = 0;
+  const maxBytes = 1 * 1024 * 1024; // 1 MB — no valid HLS playlist exceeds this
   for await (const chunk of stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buf.length;
+    if (totalBytes > maxBytes) {
+      // Stream is too large to be a text playlist; abort to avoid buffering a continuous feed.
+      throw new Error('Response exceeds maximum playlist size (1 MB); not an HLS playlist');
+    }
+    chunks.push(buf);
   }
   return Buffer.concat(chunks).toString('utf8');
 }

@@ -63,6 +63,12 @@ describe('Lineup Route Integration', () => {
         source: 'TunarrInternal',
         logo: 'http://example.com/logo4.png',
         original_url: 'http://tunarr-internal.example:8000/stream/channels/redirect-uuid'
+      },
+      {
+        name: 'Octet Stream Channel',
+        tvg_id: 'octet.1',
+        source: 'OctetSource',
+        original_url: 'http://octet.example/stream.m3u8'
       }
     ];
 
@@ -152,6 +158,42 @@ describe('Lineup Route Integration', () => {
     expect(playlistBody).to.include('#EXTM3U');
     expect(playlistBody).to.include('/stream/Antenna/WLNS-TV?upstream=');
     expect(playlistBody).not.to.include('\n/auto/v6.1/hls/seg000001.ts\n');
+  });
+
+  it('pipes MPEG-TS directly when HDHomeRun returns video/mp2t with 200 for streamMode=hls', async () => {
+    // Some HDHomeRun models return raw MPEG-TS with HTTP 200 instead of 503 when HLS is
+    // unsupported. The proxy must NOT try to buffer and rewrite this as an HLS playlist
+    // (which would hang forever on a live stream); it must pipe the bytes straight through.
+    nock('http://antenna.example')
+      .get('/auto/v6.1')
+      .query({ streamMode: 'hls' })
+      .reply(200, 'mpegts-bytes', { 'Content-Type': 'video/mp2t' });
+
+    const streamResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV`, {
+      responseType: 'arraybuffer'
+    });
+
+    expect(streamResponse.status).to.equal(200);
+    // Content-type must be forwarded as-is, NOT overwritten with application/x-mpegURL
+    expect(streamResponse.headers['content-type']).to.include('video/mp2t');
+    expect(Buffer.from(streamResponse.data).toString()).to.equal('mpegts-bytes');
+  });
+
+  it('returns 502 when a generic content-type response exceeds the 1 MB playlist size cap', async () => {
+    // When content-type is absent or generic (e.g. application/octet-stream) the proxy falls
+    // back to URL-based heuristics and may attempt to buffer the response as an HLS playlist.
+    // If the stream exceeds 1 MB the proxy must abort and return 502 instead of hanging.
+    const bigPayload = Buffer.alloc(1.1 * 1024 * 1024, 0xff); // 1.1 MB of binary data
+
+    nock('http://octet.example')
+      .get('/stream.m3u8')
+      .reply(200, bigPayload, { 'Content-Type': 'application/octet-stream' });
+
+    const response = await axios.get(`${baseUrl}/stream/OctetSource/Octet%20Stream%20Channel`, {
+      validateStatus: () => true
+    });
+
+    expect(response.status).to.equal(502);
   });
 
   it('falls back to MPEG-TS when HDHomeRun HLS mode returns 503', async () => {
