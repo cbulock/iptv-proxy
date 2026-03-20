@@ -119,4 +119,29 @@ The admin build generates content-hashed asset filenames (e.g. `index-Abc123.js`
 
 ---
 
+## Important: Keep the MCP Interface in Sync
+
+**Whenever you add or update a server API endpoint, also update `server/mcp.js`.**
+
+The MCP interface (`POST /mcp`) exposes IPTV proxy functionality to AI assistants via the Model Context Protocol. It must stay in sync with the rest of the server:
+
+- **Adding a new route or capability?** Consider whether it should also be exposed as an MCP tool. If so, register it in `server/mcp.js` using `server.tool(...)`.
+- **Changing a data shape** (e.g., channel fields, EPG fields, provider config)? Update any affected MCP tools to reflect the new shape.
+- **Removing or renaming functionality?** Remove or rename the corresponding MCP tool so the interface doesn't advertise broken capabilities.
+
+The six current MCP tools and their server-side dependencies are:
+
+| MCP Tool | Server dependency |
+|---|---|
+| `list_channels` | `libs/channels-cache.js` → `getChannels()` |
+| `get_guide` | `server/epg.js` → `getGuideData()` |
+| `list_providers` | `libs/config-loader.js` → `loadConfig('providers')` |
+| `get_status` | `server/status.js` → `getSourceStatus()` |
+| `reload_channels` | `scripts/parseM3U.js` → `parseAll()` |
+| `reload_epg` | `server/epg.js` → `refreshEPG()` |
+
+Each MCP tool also has corresponding integration tests in `test/integration/mcp.test.js` that must be kept up to date.
+
+---
+
 Copilot: treat this file as the authoritative reference for this repository.
