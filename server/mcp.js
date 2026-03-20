@@ -64,16 +64,24 @@ function createMcpServer() {
       hours: z.number().int().min(1).max(48).default(24).describe('Number of hours of guide data to return (default 24, max 48)'),
     },
     async ({ tvg_id, hours = 24 }) => {
-      const data = getGuideData(tvg_id, hours);
-      if (data === null) {
+      try {
+        const data = getGuideData(tvg_id, hours);
+        if (data === null) {
+          return {
+            content: [{ type: 'text', text: 'EPG data is not available yet. Try again after the EPG has been loaded.' }],
+            isError: true,
+          };
+        }
         return {
-          content: [{ type: 'text', text: 'EPG data is not available yet. Try again after the EPG has been loaded.' }],
+          content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+        };
+      } catch (error) {
+        console.error('Failed to get guide data for tvg_id:', tvg_id, 'hours:', hours, error);
+        return {
+          content: [{ type: 'text', text: 'Failed to load EPG data due to an internal error. Please try again later or check EPG configuration.' }],
           isError: true,
         };
       }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
-      };
     }
   );
 
@@ -118,7 +126,7 @@ function createMcpServer() {
   // ── reload_channels ────────────────────────────────────────────────────────
   server.tool(
     'reload_channels',
-    'Reload channel data from all configured M3U and HDHomeRun sources. Requires admin authentication.',
+    'Reload channel data from all configured M3U and HDHomeRun sources.',
     {},
     async () => {
       try {
@@ -138,7 +146,7 @@ function createMcpServer() {
   // ── reload_epg ─────────────────────────────────────────────────────────────
   server.tool(
     'reload_epg',
-    'Reload EPG (Electronic Programme Guide) data from all configured XMLTV sources. Requires admin authentication.',
+    'Reload EPG (Electronic Programme Guide) data from all configured XMLTV sources.',
     {},
     async () => {
       try {
@@ -175,11 +183,11 @@ export function setupMCPRoutes(app) {
         sessionIdGenerator: undefined, // stateless mode
       });
       await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
       res.on('close', () => {
         transport.close();
         server.close();
       });
+      await transport.handleRequest(req, res, req.body);
     } catch (err) {
       if (!res.headersSent) {
         res.status(500).json({

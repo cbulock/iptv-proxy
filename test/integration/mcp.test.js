@@ -5,10 +5,6 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { getDataPath } from '../../libs/paths.js';
-import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
-import { setupMCPRoutes } from '../../server/mcp.js';
-import { _resetMergedEPGForTesting } from '../../server/epg.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,24 +57,31 @@ function startServer(app) {
 describe('MCP Route Integration', () => {
   let server;
   let baseUrl;
+  let tmpDataDir;
   let tmpConfigDir;
-  const channelsFile = getDataPath('channels.json');
-  let originalChannels = null;
-  let hadOriginalChannelsFile = false;
+  let cleanupCache;
 
   before(async () => {
+    // Create isolated temp directories before importing any DATA_PATH-dependent modules
+    tmpDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-mcp-data-'));
+    tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-mcp-config-'));
+
+    process.env.DATA_PATH = tmpDataDir;
+    process.env.CONFIG_PATH = tmpConfigDir;
+
+    // Dynamic imports after env vars are set so module-level paths resolve correctly
+    const { getDataPath } = await import('../../libs/paths.js');
+    const channelsCacheModule = await import('../../libs/channels-cache.js');
+    const { initChannelsCache } = channelsCacheModule;
+    cleanupCache = channelsCacheModule.cleanupCache;
+    const { setupMCPRoutes } = await import('../../server/mcp.js');
+    const { _resetMergedEPGForTesting } = await import('../../server/epg.js');
+
     // Ensure EPG is in a clean state regardless of test run order
     _resetMergedEPGForTesting();
 
-    // Persist any existing channels.json so we can restore it afterwards
-    try {
-      originalChannels = await fs.readFile(channelsFile, 'utf8');
-      hadOriginalChannelsFile = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-    }
-
-    // Write test channels
+    // Write test channels to the isolated temp data dir
+    const channelsFile = getDataPath('channels.json');
     await fs.mkdir(path.dirname(channelsFile), { recursive: true });
     const testChannels = [
       { name: 'CNN', tvg_id: 'cnn.us', source: 'TestProvider', group: 'News' },
@@ -89,7 +92,6 @@ describe('MCP Route Integration', () => {
     await initChannelsCache();
 
     // Minimal config directory (no admin_auth so requireAuth passes through)
-    tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-mcp-test-'));
     await fs.writeFile(
       path.join(tmpConfigDir, 'providers.yaml'),
       [
@@ -101,7 +103,6 @@ describe('MCP Route Integration', () => {
       ].join('\n')
     );
     await fs.writeFile(path.join(tmpConfigDir, 'app.yaml'), '{}\n');
-    process.env.CONFIG_PATH = tmpConfigDir;
 
     const app = express();
     app.use(express.json());
@@ -112,15 +113,11 @@ describe('MCP Route Integration', () => {
 
   after(async () => {
     if (server) await new Promise(resolve => server.close(resolve));
-    cleanupCache();
+    if (cleanupCache) cleanupCache();
 
-    if (hadOriginalChannelsFile && originalChannels !== null) {
-      await fs.writeFile(channelsFile, originalChannels);
-    } else {
-      await fs.unlink(channelsFile).catch(() => {});
-    }
-
+    await fs.rm(tmpDataDir, { recursive: true, force: true });
     await fs.rm(tmpConfigDir, { recursive: true, force: true });
+    delete process.env.DATA_PATH;
     delete process.env.CONFIG_PATH;
   });
 

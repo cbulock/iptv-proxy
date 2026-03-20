@@ -69,7 +69,7 @@ export function getSourceStatus() {
   return {
     lastUpdate: sourceStatus.lastUpdate,
     sources: { ...sourceStatus.sources },
-    errors: sourceStatus.errors.slice(-10),
+    errors: sourceStatus.errors.slice(-RECENT_ERROR_LIMIT),
   };
 }
 
