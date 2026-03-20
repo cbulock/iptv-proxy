@@ -13,6 +13,7 @@ import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes, invalidateLineupCaches } from './server/lineup.js';
 import { setupEPGRoutes } from './server/epg.js';
 import { imageProxyRoute } from './libs/proxy-image.js';
+import { setupMCPRoutes } from './server/mcp.js';
 import channelsRoute from './server/channels.js';
 import configRoute from './server/config.js';
 import healthRouter from './server/health.js';
@@ -255,6 +256,7 @@ imageProxyRoute(app);
 setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
 await setupEPGRoutes(app);
+setupMCPRoutes(app);
 
 // Initialize and start scheduled jobs (health checks, EPG refresh, etc.)
 import { initDefaultJobs, startScheduler, schedulerRouter } from './server/scheduler.js';
@@ -276,5 +278,6 @@ app.listen(port, () => {
   console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
   console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/lineup.m3u`));
   console.log(chalk.cyan(`  XMLTV Guide:`), chalk.yellow(`${base}/xmltv.xml`));
+  console.log(chalk.cyan('  MCP Endpoint:'), chalk.yellow(`${base}/mcp`));
   console.log(chalk.cyan(`  Admin UI:`), chalk.yellow(adminUrl));
 });

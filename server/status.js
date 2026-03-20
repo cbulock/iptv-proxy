@@ -62,6 +62,18 @@ export function resetSourceStatus() {
 }
 
 /**
+ * Return the current source status snapshot (last update time and per-source state).
+ * @returns {{ lastUpdate: string|null, sources: object, errors: Array }}
+ */
+export function getSourceStatus() {
+  return {
+    lastUpdate: sourceStatus.lastUpdate,
+    sources: { ...sourceStatus.sources },
+    errors: sourceStatus.errors.slice(-10),
+  };
+}
+
+/**
  * GET /status - Comprehensive diagnostics endpoint
  */
 router.get('/status', statusLimiter, async (req, res) => {

@@ -42,6 +42,12 @@ const builder = new XMLBuilder({
 // EPG cache (replaces rewrittenXMLCache)
 let epgCache = null;
 
+// Module-level merged EPG XML string (set by setupEPGRoutes)
+let mergedEPG = null;
+
+// Maximum number of programmes returned per guide query (matches /api/guide behaviour)
+const MAX_GUIDE_PROGRAMMES = 20;
+
 /**
  * Extract a plain string from an XMLTV text field which may be a raw string,
  * a fast-xml-parser object `{ '#text': '...', '@_lang': '...' }`, an array
@@ -130,6 +136,61 @@ function rewriteImageUrls(xmlString, req) {
   return result;
 }
 
+/**
+ * Return EPG guide programmes for a specific channel (or all channels).
+ * Mirrors the logic of the /api/guide endpoint.
+ *
+ * @param {string|null} tvgId  - TVG ID to filter by, or null for all channels.
+ * @param {number} [hours=24] - How many hours ahead to include (max 48).
+ * @returns {{ programmes: Array, total: number }|null} null when EPG is not loaded yet.
+ */
+export function getGuideData(tvgId, hours = 24) {
+  if (!mergedEPG) return null;
+
+  const clampedHours = Math.min(48, Math.max(1, hours));
+  const parsed = parser.parse(mergedEPG);
+  const now = Date.now();
+  const cutoff = now + clampedHours * 60 * 60 * 1000;
+
+  let programmes = [].concat(parsed.tv?.programme || []);
+
+  if (tvgId) {
+    programmes = programmes.filter(p => p && p['@_channel'] === tvgId);
+  }
+
+  programmes = programmes.filter(p => {
+    const start = parseXMLTVDate(p['@_start']);
+    const stop = p['@_stop'] ? parseXMLTVDate(p['@_stop']) : null;
+    if (!start) return false;
+    const startMs = start.getTime();
+    const stopMs = stop ? stop.getTime() : startMs + 30 * 60 * 1000;
+    p._startMs = startMs;
+    return stopMs > now - 60 * 1000 && startMs < cutoff;
+  });
+
+  programmes.sort((a, b) => (a._startMs || 0) - (b._startMs || 0));
+  programmes = programmes.slice(0, MAX_GUIDE_PROGRAMMES);
+
+  const result = programmes.map(p => ({
+    title: extractTextField(p.title),
+    desc: extractTextField(p.desc),
+    start: p['@_start'] || '',
+    stop: p['@_stop'] || '',
+    channel: p['@_channel'] || '',
+  }));
+
+  return { programmes: result, total: result.length };
+}
+
+/**
+ * Reset the in-memory merged EPG data.
+ * Intended for use in tests only.
+ * @internal
+ */
+export function _resetMergedEPGForTesting() {
+  mergedEPG = null;
+}
+
 export async function setupEPGRoutes(app) {
   const appConfig = loadConfig('app');
 
@@ -144,8 +205,6 @@ export async function setupEPGRoutes(app) {
   const epgTTL = (appConfig.cache?.epg_ttl ?? 21600) * 1000; // Convert seconds to milliseconds
   epgCache = cacheManager.createCache('epg', epgTTL);
   console.log(`EPG cache initialized with TTL: ${epgTTL / 1000}s`);
-
-  let mergedEPG = null;
 
   async function fetchAndMergeEPGs() {
     const startTime = Date.now();
@@ -465,8 +524,8 @@ export async function setupEPGRoutes(app) {
       // Sort by start time ascending using the cached timestamp
       programmes.sort((a, b) => (a._startMs || 0) - (b._startMs || 0));
 
-      // Limit to 20 entries
-      programmes = programmes.slice(0, 20);
+      // Limit to MAX_GUIDE_PROGRAMMES entries
+      programmes = programmes.slice(0, MAX_GUIDE_PROGRAMMES);
 
       // Flatten to a simple shape
       const result = programmes.map(p => ({
