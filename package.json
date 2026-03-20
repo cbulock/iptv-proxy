@@ -28,6 +28,7 @@
     "dev": "concurrently \"npm:serve\" \"npm:admin:dev\""
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "archiver": "^7.0.1",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
