@@ -56,6 +56,12 @@ describe('Lineup Route Integration', () => {
         source: 'Antenna',
         hdhomerun: { deviceID: '1234' },
         original_url: 'http://antenna.example/auto/v6.1'
+      },
+      {
+        name: 'Octet Stream Channel',
+        tvg_id: 'octet.1',
+        source: 'OctetSource',
+        original_url: 'http://octet.example/stream.m3u8'
       }
     ];
 
@@ -164,6 +170,23 @@ describe('Lineup Route Integration', () => {
     // Content-type must be forwarded as-is, NOT overwritten with application/x-mpegURL
     expect(streamResponse.headers['content-type']).to.include('video/mp2t');
     expect(Buffer.from(streamResponse.data).toString()).to.equal('mpegts-bytes');
+  });
+
+  it('returns 502 when a generic content-type response exceeds the 1 MB playlist size cap', async () => {
+    // When content-type is absent or generic (e.g. application/octet-stream) the proxy falls
+    // back to URL-based heuristics and may attempt to buffer the response as an HLS playlist.
+    // If the stream exceeds 1 MB the proxy must abort and return 502 instead of hanging.
+    const bigPayload = Buffer.alloc(1.1 * 1024 * 1024, 0xff); // 1.1 MB of binary data
+
+    nock('http://octet.example')
+      .get('/stream.m3u8')
+      .reply(200, bigPayload, { 'Content-Type': 'application/octet-stream' });
+
+    const response = await axios.get(`${baseUrl}/stream/OctetSource/Octet%20Stream%20Channel`, {
+      validateStatus: () => true
+    });
+
+    expect(response.status).to.equal(502);
   });
 
   it('falls back to MPEG-TS when HDHomeRun HLS mode returns 503', async () => {
