@@ -56,6 +56,13 @@ describe('Lineup Route Integration', () => {
         source: 'Antenna',
         hdhomerun: { deviceID: '1234' },
         original_url: 'http://antenna.example/auto/v6.1'
+      },
+      {
+        name: 'Redirect Channel',
+        tvg_id: 'redirect.1',
+        source: 'TunarrInternal',
+        logo: 'http://example.com/logo4.png',
+        original_url: 'http://tunarr-internal.example:8000/stream/channels/redirect-uuid'
       }
     ];
 
@@ -230,5 +237,47 @@ describe('Lineup Route Integration', () => {
       responseType: 'arraybuffer'
     });
     expect(response.status).to.equal(200);
+  });
+
+  it('allows segment requests after manifest redirect to different origin', async () => {
+    // Verify that ?upstream= segment validation works when the channel's original_url
+    // redirects to a different origin (e.g., internal HTTP → external HTTPS via reverse proxy).
+    nock('http://tunarr-internal.example:8000')
+      .get('/stream/channels/redirect-uuid')
+      .reply(302, '', { Location: 'https://tunarr-external.example/stream/channels/redirect-uuid' });
+
+    nock('https://tunarr-external.example')
+      .get('/stream/channels/redirect-uuid')
+      .reply(
+        200,
+        '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/stream/channels/redirect-uuid/hls/data000000.ts\n',
+        { 'Content-Type': 'application/vnd.apple.mpegurl' }
+      );
+
+    // Step 1: fetch the manifest via the proxy. The proxy follows the redirect internally
+    // and caches the redirected origin for subsequent ?upstream= validation.
+    const manifestResponse = await axios.get(`${baseUrl}/stream/TunarrInternal/Redirect%20Channel`);
+    expect(manifestResponse.status).to.equal(200);
+    expect(manifestResponse.data).to.include('/stream/TunarrInternal/Redirect%20Channel?upstream=');
+
+    // The rewritten segment URL must reference the redirected origin.
+    // rewriteUriToProxy produces absolute URLs (it includes getBaseUrl(req) as the prefix).
+    const segmentLine = manifestResponse.data.split('\n').find(l => l.includes('?upstream='));
+    expect(segmentLine).to.be.a('string');
+    expect(decodeURIComponent(segmentLine)).to.include('tunarr-external.example');
+
+    // Step 2: request the rewritten segment URL. Without the fix this would return 403
+    // because "tunarr-external.example" doesn't match the origin in channel.original_url
+    // ("tunarr-internal.example:8000").
+    nock('https://tunarr-external.example')
+      .get('/stream/channels/redirect-uuid/hls/data000000.ts')
+      .reply(200, 'segment-bytes', { 'Content-Type': 'video/mp2t' });
+
+    // segmentLine is already an absolute URL produced by rewriteUriToProxy
+    const segmentResponse = await axios.get(segmentLine, {
+      responseType: 'arraybuffer'
+    });
+    expect(segmentResponse.status).to.equal(200);
+    expect(Buffer.from(segmentResponse.data).toString()).to.equal('segment-bytes');
   });
 });
