@@ -22,6 +22,13 @@ let jsonCache = null;
 // Invalidate caches when channels are updated
 let lastChannelsUpdate = Date.now();
 
+// Cache the most-recently-served HLS manifest response URL for each channel.
+// When a channel's configured URL redirects to a different origin (e.g., http://host:8000 →
+// https://host via a reverse proxy), HLS segment URLs are resolved against the redirected
+// URL. This cache lets the ?upstream= origin validator accept those segment URLs even though
+// they don't share an origin with channel.original_url.
+const hlsManifestOriginCache = new Map();
+
 function invalidateCaches() {
   if (m3uCache) m3uCache.clear();
   if (jsonCache) jsonCache.clear();
@@ -326,8 +333,21 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
     // HTTP(S) origin (protocol + hostname + port) as the channel's configured upstream URL.
+    // We also accept the origin of the last-known HLS manifest response URL for this channel
+    // (see hlsManifestOriginCache) to handle cases where channel.original_url redirects to a
+    // different origin (e.g., http://host:8000 → https://host via a reverse proxy).
     if (upstreamOverride) {
-      const result = isSameOriginHttpUrl(upstreamOverride, channel.original_url);
+      let result = isSameOriginHttpUrl(upstreamOverride, channel.original_url);
+
+      // When the origin doesn't match the configured URL, fall back to the cached redirect
+      // target. Only attempt this for origin-mismatch (not parse/protocol errors).
+      if (!result.ok && result.reason === 'origin-mismatch') {
+        const cachedResponseUrl = hlsManifestOriginCache.get(`${source}/${name}`);
+        if (cachedResponseUrl) {
+          result = isSameOriginHttpUrl(upstreamOverride, cachedResponseUrl);
+        }
+      }
+
       if (!result.ok) {
         if (result.reason === 'parse-error') {
           return res.status(400).send('Invalid upstream URL');
@@ -428,6 +448,15 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         const headers = { ...response.headers };
         delete headers['content-length'];
         delete headers['transfer-encoding'];
+
+        // Remember the effective origin of this manifest so that segment ?upstream= requests
+        // can be validated against it.  This is necessary when channel.original_url redirects
+        // to a different origin (e.g., http://host:8000 → https://host via a reverse proxy):
+        // the rewritten segment URLs will carry the redirected origin, not original_url's.
+        if (!isUpstreamOverride) {
+          hlsManifestOriginCache.set(`${source}/${name}`, responseUrl);
+        }
+
         res.set(headers);
         res.set('content-type', 'application/x-mpegURL');
         res.send(rewrittenBody);
