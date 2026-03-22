@@ -148,6 +148,7 @@ describe('Lineup Route Integration', () => {
     // text playlist.  The admin preview handles MPEG-TS via its mpegts.js fallback.
     nock('http://antenna.example')
       .get('/auto/v6.1')
+      .query((query) => !query.streamMode)
       .reply(200, 'mpegts-bytes', { 'Content-Type': 'video/mp2t' });
 
     const streamResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV`, {
