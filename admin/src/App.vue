@@ -1092,8 +1092,24 @@ function setupMpegtsPlayer(video, streamUrl) {
   mpegtsInstance.attachMediaElement(video);
   mpegtsInstance.load();
   mpegtsInstance.play().catch((err) => {
+    // Distinguish autoplay-blocked rejections from real playback/decoding failures.
+    const errorName = err && err.name;
+    const errorMessage = err && err.message ? String(err.message) : '';
+    const isAutoplayBlocked =
+      errorName === 'NotAllowedError' ||
+      errorMessage.includes("play() failed because the user didn't interact with the document first") ||
+      errorMessage.includes("user didn't interact with the document first") ||
+      errorMessage.includes('must be user-initiated');
+
+    if (isAutoplayBlocked) {
+      // Autoplay was blocked by the browser. Keep the mpegts instance attached so the
+      // user can start playback manually (e.g. by clicking the video element).
+      console.warn('[player] mpegts.js autoplay blocked by browser policy:', err);
+      return;
+    }
+
     console.warn('[player] mpegts.js playback failed:', err);
-    // Final fallback to native src
+    // Final fallback to native src for real playback/decoding errors
     if (mpegtsInstance) { mpegtsInstance.destroy(); mpegtsInstance = null; }
     video.src = streamUrl;
   });
@@ -1123,10 +1139,28 @@ async function setupVideoPlayer() {
     hlsInstance.attachMedia(video);
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
     hlsInstance.on(Hls.Events.ERROR, (_evt, data) => {
-      if (data.fatal) {
-        hlsInstance.destroy(); hlsInstance = null;
+      if (!data || !data.fatal) {
+        return;
+      }
+
+      const manifestFormatErrorDetails = [
+        Hls.ErrorDetails.MANIFEST_PARSING_ERROR,
+        Hls.ErrorDetails.MANIFEST_INCOMPATIBLE_CODECS_ERROR,
+        Hls.ErrorDetails.LEVEL_PARSING_ERROR
+      ];
+
+      // Only fall back to mpegts.js when the response is not a valid HLS playlist
+      const isManifestFormatError = manifestFormatErrorDetails.includes(data.details);
+
+      hlsInstance.destroy();
+      hlsInstance = null;
+
+      if (isManifestFormatError) {
         // Stream is not HLS (e.g. raw MPEG-TS from HDHomeRun); try mpegts.js
         setupMpegtsPlayer(video, streamUrl);
+      } else {
+        // Network/CORS/404 or other fatal error; fall back to native src
+        video.src = streamUrl;
       }
     });
     return;
