@@ -360,29 +360,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       }
     }
 
-    let upstreamUrl = upstreamOverride || channel.original_url;
-    const baseUpstreamUrl = upstreamUrl; // Pre-HLS URL for use as fallback
-
-    // HDHomeRun supports HLS via ?streamMode=hls; request it so browsers can play the stream
-    // via HLS.js instead of receiving raw MPEG-TS which browsers cannot decode natively.
-    let hlsApplied = false;
-    if (!upstreamOverride && channel.hdhomerun) {
-      try {
-        const u = new URL(upstreamUrl);
-        u.searchParams.set('streamMode', 'hls');
-        upstreamUrl = u.toString();
-        hlsApplied = true;
-      } catch (err) {
-        // If the URL is unparseable, fall through and let the upstream decide.
-        console.warn(
-          '[stream] failed to apply streamMode=hls for %s/%s (invalid URL: %s): %s',
-          source,
-          name,
-          upstreamUrl,
-          err && err.message ? err.message : String(err)
-        );
-      }
-    }
+    const upstreamUrl = upstreamOverride || channel.original_url;
 
     const startTime = Date.now();
     console.info('[stream] %s/%s -> %s', source, name, upstreamUrl);
@@ -482,8 +460,6 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     };
 
     try {
-      let response;
-      let resolvedUrl = upstreamUrl;
       // When an ?upstream= override is in use, disable redirects to prevent SSRF via open
       // redirects: the origin check above validates the initial URL but can't guard against
       // a server-side redirect to a different host.
@@ -492,27 +468,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         timeout: 15000,
         ...(upstreamOverride ? { maxRedirects: 0 } : {})
       };
-      try {
-        response = await axios.get(upstreamUrl, axiosOptions);
-      } catch (err) {
-        // If HLS mode was applied and the upstream returned 503, fall back to non-HLS (MPEG-TS).
-        if (hlsApplied && err.response?.status === 503) {
-          console.info(
-            '[stream] %s/%s HLS mode returned 503, falling back to MPEG-TS: %s',
-            source,
-            name,
-            baseUpstreamUrl
-          );
-          // Fall back to the validated baseUpstreamUrl (either the trusted channel URL or the
-          // same-origin override that has already passed isSameOriginHttpUrl checks).
-          resolvedUrl = baseUpstreamUrl;
-          response = await axios.get(resolvedUrl, axiosOptions);
-        } else {
-          throw err;
-        }
-      }
+      const response = await axios.get(upstreamUrl, axiosOptions);
 
-      await handleStreamResponse(response, resolvedUrl, !!upstreamOverride);
+      await handleStreamResponse(response, upstreamUrl, !!upstreamOverride);
     } catch (err) {
       if (usageKey && !upstreamOverride) unregisterUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
