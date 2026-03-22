@@ -141,6 +141,27 @@ describe('Lineup Route Integration', () => {
     expect(wlns.GuideNumber).to.equal('6.1');
   });
 
+  it('includes HDHomeRun channels in /lineup.json without include_unmapped', async () => {
+    // HDHomeRun channels come from a hardware tuner and should always appear in the
+    // lineup without requiring an explicit channel-map entry.
+    const response = await axios.get(`${baseUrl}/lineup.json`);
+    expect(response.status).to.equal(200);
+
+    const wlns = response.data.find(ch => ch.GuideName === 'WLNS-TV');
+    expect(wlns).to.exist;
+    expect(wlns.GuideNumber).to.equal('6.1');
+  });
+
+  it('includes HDHomeRun channels in /lineup.m3u without include_unmapped', async () => {
+    // HDHomeRun channels come from a hardware tuner and should always appear in the
+    // M3U playlist without requiring an explicit channel-map entry.
+    const response = await axios.get(`${baseUrl}/lineup.m3u`);
+    const body = response.data;
+
+    expect(response.status).to.equal(200);
+    expect(body).to.include('WLNS-TV');
+  });
+
   it('proxies HDHomeRun MPEG-TS streams directly without adding ?streamMode=hls', async () => {
     // The proxy must NOT append ?streamMode=hls to HDHomeRun stream URLs.
     // Serving an HLS playlist instead of raw MPEG-TS breaks IPTV clients (Plex, Jellyfin, etc.)

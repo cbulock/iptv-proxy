@@ -132,6 +132,10 @@ function resolveGuideNumberForLineup(channel) {
 }
 
 function isChannelMapped(channel, map, mapKeys) {
+  // HDHomeRun channels come from a hardware tuner and are always included
+  // without requiring an explicit channel-map entry.
+  if (channel?.hdhomerun) return true;
+
   const name = channel?.name || '';
   const tvgId = channel?.tvg_id || '';
 
