@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "hls.js": "^1.5.15",
+    "mpegts.js": "^1.8.0",
     "naive-ui": "^2.39.0",
     "vue": "^3.5.11"
   },
