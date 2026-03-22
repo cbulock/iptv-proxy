@@ -331,6 +331,7 @@
 <script setup>
 import { reactive, toRefs, h, watch, computed, ref, nextTick } from 'vue';
 import Hls from 'hls.js';
+import mpegts from 'mpegts.js';
 import { darkTheme, NInput, NSelect, NButton, NForm, NFormItem, NSpace, NTabs, NTabPane, NLayout, NLayoutContent, NLayoutHeader, NConfigProvider, NDataTable, NCollapse, NCollapseItem, NSwitch, NBadge, NModal, NTooltip, createDiscreteApi } from 'naive-ui';
 const { message, dialog } = createDiscreteApi(['message', 'dialog']);
 
@@ -1074,6 +1075,29 @@ async function loadGuide(tvgId) {
 // Video player DOM ref (bound with ref="videoPlayerEl" in the template)
 const videoPlayerEl = ref(null);
 let hlsInstance = null;
+let mpegtsInstance = null;
+
+/**
+ * Set up mpegts.js player for raw MPEG-TS streams (e.g. HDHomeRun that returns
+ * video/mpeg instead of HLS). Used as a fallback when hls.js fails to parse the stream.
+ */
+function setupMpegtsPlayer(video, streamUrl) {
+  if (mpegtsInstance) { mpegtsInstance.destroy(); mpegtsInstance = null; }
+  if (!mpegts.getFeatureList().mseLivePlayback) {
+    // MSE not supported; fall back to native src
+    video.src = streamUrl;
+    return;
+  }
+  mpegtsInstance = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: streamUrl });
+  mpegtsInstance.attachMediaElement(video);
+  mpegtsInstance.load();
+  mpegtsInstance.play().catch((err) => {
+    console.warn('[player] mpegts.js playback failed:', err);
+    // Final fallback to native src
+    if (mpegtsInstance) { mpegtsInstance.destroy(); mpegtsInstance = null; }
+    video.src = streamUrl;
+  });
+}
 
 async function setupVideoPlayer() {
   await nextTick();
@@ -1082,8 +1106,9 @@ async function setupVideoPlayer() {
 
   const streamUrl = previewStreamUrl.value;
 
-  // Destroy any previous HLS instance
+  // Destroy any previous instances
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  if (mpegtsInstance) { mpegtsInstance.destroy(); mpegtsInstance = null; }
 
   // Safari / iOS — native HLS support
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -1100,8 +1125,8 @@ async function setupVideoPlayer() {
     hlsInstance.on(Hls.Events.ERROR, (_evt, data) => {
       if (data.fatal) {
         hlsInstance.destroy(); hlsInstance = null;
-        // Fall back to native src
-        video.src = streamUrl;
+        // Stream is not HLS (e.g. raw MPEG-TS from HDHomeRun); try mpegts.js
+        setupMpegtsPlayer(video, streamUrl);
       }
     });
     return;
@@ -1113,6 +1138,7 @@ async function setupVideoPlayer() {
 
 function stopVideoPlayer() {
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  if (mpegtsInstance) { mpegtsInstance.destroy(); mpegtsInstance = null; }
   const video = videoPlayerEl.value;
   if (video) { video.pause(); video.src = ''; video.load(); }
 }
