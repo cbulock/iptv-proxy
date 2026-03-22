@@ -358,6 +358,20 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         // origin-mismatch or any other reason
         return res.status(403).send('Upstream URL not allowed');
       }
+
+      // Additional defense-in-depth: ensure the override hostname exactly matches the
+      // hostname of the configured (or cached) URL we validated against.
+      try {
+        const overrideUrl = new URL(upstreamOverride);
+        const expectedUrl = hlsManifestOriginCache.get(`${source}/${name}`) || channel.original_url;
+        const expectedParsed = new URL(expectedUrl);
+
+        if (overrideUrl.hostname !== expectedParsed.hostname) {
+          return res.status(403).send('Upstream URL not allowed');
+        }
+      } catch (e) {
+        return res.status(400).send('Invalid upstream URL');
+      }
     }
 
     const upstreamUrl = upstreamOverride || channel.original_url;
