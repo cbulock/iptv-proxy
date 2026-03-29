@@ -84,4 +84,10 @@ router.get('/', limiter, async (req, res) => {
   }
 });
 
+export function invalidateChannelMapCache() {
+  channelMapCache = null;
+  channelMapKeySet = null;
+  mappedTvgIdSet = null;
+}
+
 export default router;
