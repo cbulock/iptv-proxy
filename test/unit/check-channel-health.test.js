@@ -11,17 +11,21 @@ const STATUS_FILE = getDataPath('lineup_status.json');
 const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
 
 describe('check-channel-health', () => {
-  let originalChannels = null;
-  let hadOriginalChannelsFile = false;
+  // Track original content (or absence) of every file the health check touches,
+  // so we can restore them exactly — avoiding data loss if tests run against a
+  // real data directory.
+  const trackedFiles = [CHANNELS_FILE, STATUS_FILE, LAST_LOG_FILE];
+  const originalContents = new Map(); // path → string | null (null = did not exist)
 
   before(async () => {
-    // Save any existing channels.json so we can restore it after the suite
     await fs.mkdir(path.dirname(CHANNELS_FILE), { recursive: true });
-    try {
-      originalChannels = await fs.readFile(CHANNELS_FILE, 'utf8');
-      hadOriginalChannelsFile = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
+    for (const f of trackedFiles) {
+      try {
+        originalContents.set(f, await fs.readFile(f, 'utf8'));
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+        originalContents.set(f, null);
+      }
     }
   });
 
@@ -29,14 +33,13 @@ describe('check-channel-health', () => {
     nock.cleanAll();
     nock.enableNetConnect();
 
-    if (hadOriginalChannelsFile && originalChannels !== null) {
-      await fs.writeFile(CHANNELS_FILE, originalChannels, 'utf8');
-    } else {
-      try { await fs.unlink(CHANNELS_FILE); } catch (_) { /* ignore */ }
-    }
-    // Clean up health check output files written during tests
-    for (const f of [STATUS_FILE, LAST_LOG_FILE]) {
-      try { await fs.unlink(f); } catch (_) { /* ignore */ }
+    for (const f of trackedFiles) {
+      const original = originalContents.get(f);
+      if (original !== null) {
+        await fs.writeFile(f, original, 'utf8');
+      } else {
+        try { await fs.unlink(f); } catch (_) { /* ignore */ }
+      }
     }
   });
 
