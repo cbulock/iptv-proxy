@@ -1121,10 +1121,18 @@ async function setupVideoPlayer() {
   if (!video || !state.previewWatchingChannel) return;
 
   const streamUrl = previewStreamUrl.value;
+  const channel = state.previewWatchingChannel;
 
   // Destroy any previous instances
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
   if (mpegtsInstance) { mpegtsInstance.destroy(); mpegtsInstance = null; }
+
+  // HDHomeRun channels serve raw MPEG-TS; skip hls.js (which would hang waiting for an
+  // HLS manifest that never completes) and go directly to mpegts.js.
+  if (channel.hdhomerun) {
+    setupMpegtsPlayer(video, streamUrl);
+    return;
+  }
 
   // Safari / iOS — native HLS support
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
