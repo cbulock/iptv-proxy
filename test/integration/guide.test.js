@@ -107,7 +107,7 @@ describe('GET /api/guide', () => {
     await fs.writeFile(epgFilePath, buildFutureXMLTV(TVG_ID), 'utf8');
     await fs.writeFile(
       path.join(tmpConfigDir, 'providers.yaml'),
-      `providers:\n  - name: GuideProvider\n    url: "http://placeholder"\n    epg: "file://${epgFilePath}"\n`,
+      `providers:\n  - name: GuideProvider\n    url: "http://placeholder"\n    epg: "file://${epgFilePath.replace(/\\/g, '/')}"\n`,
       'utf8'
     );
     // app.yaml with no admin_auth so requireAuth passes through
