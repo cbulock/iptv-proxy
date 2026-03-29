@@ -422,7 +422,11 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     const handleStreamResponse = async (response, resolvedUrl, isUpstreamOverride) => {
       const responseUrl = response.request?.res?.responseUrl || resolvedUrl;
       const contentType = response.headers?.['content-type'] || '';
-      if (isLikelyHlsPlaylist(contentType, responseUrl)) {
+      // HDHomeRun channels are hardware MPEG-TS tuners. Never attempt HLS buffering for
+      // them, even if the response URL ends with .m3u8 or the device returns a generic
+      // content-type — both can happen on firmware that serves MPEG-TS at HLS-named
+      // endpoints, and would cause readStreamToUtf8 to hit the 1 MB cap and return 502.
+      if (!channel.hdhomerun && isLikelyHlsPlaylist(contentType, responseUrl)) {
         // HLS playlist/key/segment requests are short-lived; keep session alive via touch + idle TTL.
         await touchViewer();
         const playlistBody = await readStreamToUtf8(response.data);
