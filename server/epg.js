@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import axios from 'axios';
 import RateLimit from 'express-rate-limit';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
@@ -232,7 +233,7 @@ export async function setupEPGRoutes(app) {
         let xmlData;
 
         if (sourceUrl.startsWith('file://')) {
-          const path = sourceUrl.replace('file://', '');
+          const path = fileURLToPath(sourceUrl);
           try {
             xmlData = fs.readFileSync(path, 'utf-8');
           } catch (fileErr) {
@@ -295,7 +296,7 @@ export async function setupEPGRoutes(app) {
                 
         // Provide actionable error messages
         if (sourceUrl.startsWith('file://')) {
-          const path = sourceUrl.replace('file://', '');
+          const path = fileURLToPath(sourceUrl);
           console.log('   💡 Fix: Local file error');
           console.log(`      • Verify the file exists at: ${path}`);
           console.log('      • Check file permissions (must be readable)');
