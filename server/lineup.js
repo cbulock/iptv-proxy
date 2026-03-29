@@ -363,8 +363,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         return res.status(403).send('Upstream URL not allowed');
       }
 
-      // Additional SSRF hardening: even if same-origin, ensure the override does not
-      // target localhost or private/internal network ranges.
+      // Additional SSRF hardening: ensure the override uses a permitted scheme.
       if (!isSafePublicHttpUrl(upstreamOverride)) {
         return res.status(403).send('Upstream URL not allowed');
       }
@@ -513,44 +512,6 @@ function isSafePublicHttpUrl(urlString) {
 
   const protocol = url.protocol.toLowerCase();
   if (protocol !== 'http:' && protocol !== 'https:') {
-    return false;
-  }
-
-  const hostname = url.hostname.toLowerCase();
-
-  // Disallow obvious local hostnames.
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.lan')
-  ) {
-    return false;
-  }
-
-  // Simple IPv4 private range checks.
-  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4Match) {
-    const [ , aStr, bStr ] = ipv4Match;
-    const a = Number(aStr);
-    const b = Number(bStr);
-
-    if (a === 10) return false; // 10.0.0.0/8
-    if (a === 127) return false; // 127.0.0.0/8
-    if (a === 192 && b === 168) return false; // 192.168.0.0/16
-    if (a === 172 && b >= 16 && b <= 31) return false; // 172.16.0.0/12
-  }
-
-  // Basic IPv6 localhost / unique-local / link-local checks.
-  const ipv6 = hostname;
-  if (
-    ipv6 === '::1' ||
-    ipv6.startsWith('fc') || // fc00::/7 (unique local)
-    ipv6.startsWith('fd') ||
-    ipv6.startsWith('fe80') // fe80::/10 (link-local)
-  ) {
     return false;
   }
 

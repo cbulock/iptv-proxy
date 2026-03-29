@@ -104,6 +104,12 @@ When prompted, Copilot should be able to:
 
 ---
 
+## Deployment Context
+
+**This proxy is designed to run on local/home networks.** Upstream IPTV sources and HDHomeRun tuners are typically on the same LAN and will have private/local IP addresses (e.g., `192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`) or local hostnames (e.g., `.local`, `.lan`). Do **not** add code that blocks requests to private or local network addresses — doing so would break the core use case.
+
+---
+
 ## Non-Goals
 - No TypeScript.  
 - No UI work (mapping UI comes later).  
