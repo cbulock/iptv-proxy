@@ -15,9 +15,9 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "mocha 'test/**/*.test.js' --timeout 5000",
-    "test:watch": "mocha 'test/**/*.test.js' --watch",
-    "test:coverage": "c8 mocha 'test/**/*.test.js'",
+    "test": "mocha \"test/**/*.test.js\" --timeout 5000",
+    "test:watch": "mocha \"test/**/*.test.js\" --watch",
+    "test:coverage": "c8 mocha \"test/**/*.test.js\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
