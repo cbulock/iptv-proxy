@@ -181,6 +181,36 @@ describe('Lineup Route Integration', () => {
     expect(Buffer.from(streamResponse.data).toString()).to.equal('mpegts-bytes');
   });
 
+  it('pipes HDHomeRun streams directly even when the device redirects to an .m3u8 URL', async () => {
+    // Some HDHomeRun firmware versions redirect /auto/vX.Y to an .m3u8-named URL while
+    // still streaming raw MPEG-TS data.  Without the !channel.hdhomerun guard,
+    // isLikelyHlsPlaylist() sees the redirected URL ending in .m3u8 and returns true
+    // via URL heuristics, readStreamToUtf8 buffers the stream, exceeds the 1 MB cap,
+    // and the proxy returns 502 instead of piping the stream through.
+    const bigPayload = Buffer.alloc(Math.ceil(1.1 * 1024 * 1024), 0xff); // > 1 MB MPEG-TS
+
+    // Simulate firmware redirect: /auto/v6.1 → /auto/v6.1.m3u8 (same origin).
+    nock('http://antenna.example')
+      .get('/auto/v6.1')
+      .query((query) => !query.streamMode)
+      .reply(302, '', { Location: 'http://antenna.example/auto/v6.1.m3u8' });
+
+    // The redirected URL has no content-type, so isLikelyHlsPlaylist() falls back to
+    // the URL heuristic (.m3u8 suffix → true) and would hit the 1 MB buffer cap.
+    nock('http://antenna.example')
+      .get('/auto/v6.1.m3u8')
+      .reply(200, bigPayload, {});
+
+    const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV`, {
+      validateStatus: () => true,
+      responseType: 'arraybuffer'
+    });
+
+    // Must NOT be 502 — the !channel.hdhomerun guard bypasses HLS buffering entirely.
+    expect(response.status).to.equal(200);
+    expect(Buffer.from(response.data).length).to.equal(bigPayload.length);
+  });
+
   it('returns 502 when a generic content-type response exceeds the 1 MB playlist size cap', async () => {
     // When content-type is absent or generic (e.g. application/octet-stream) the proxy falls
     // back to URL-based heuristics and may attempt to buffer the response as an HLS playlist.
