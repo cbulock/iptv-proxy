@@ -97,7 +97,7 @@ async function checkStream(url) {
  * This avoids opening individual stream URLs (which starts video transcoding
  * on the device and spawns ffmpeg processes).
  * @param {string} baseURL - Device base URL, e.g. "http://192.168.1.100:5004"
- * @returns {Promise<boolean>}
+ * @returns {Promise<{healthy: boolean, ms: number}>}
  */
 async function checkHDHomeRunDevice(baseURL) {
     try {
