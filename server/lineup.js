@@ -369,7 +369,30 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       }
     }
 
-    const upstreamUrl = upstreamOverride || channel.original_url;
+    let upstreamUrl = upstreamOverride || channel.original_url;
+
+    // When the client explicitly requests HLS mode (e.g. browser preview with
+    // ?streamMode=hls) and the channel comes from an HDHomeRun tuner, ask the
+    // device to transcode the over-the-air MPEG-TS to an HLS stream.  Without
+    // this, OTA broadcasts typically use MPEG-2 video and AC-3 audio — codecs
+    // that browser MSE does not support — so the player receives data but cannot
+    // decode any frames.  Do not apply this for ?upstream= segment requests;
+    // those are already resolved segment URLs that must be fetched as-is.
+    const requestedHlsMode =
+      !upstreamOverride &&
+      Boolean(channel.hdhomerun) &&
+      String(req.query.streamMode || '').toLowerCase() === 'hls';
+
+    if (requestedHlsMode) {
+      try {
+        const hdUrl = new URL(upstreamUrl);
+        hdUrl.searchParams.set('streamMode', 'hls');
+        upstreamUrl = hdUrl.toString();
+      } catch (_err) {
+        // URL parse error; proceed with original URL without modification
+        console.warn('[stream] %s/%s: could not append ?streamMode=hls to upstream URL: %s', source, name, channel.original_url);
+      }
+    }
 
     const startTime = Date.now();
     console.info('[stream] %s/%s -> %s', source, name, upstreamUrl);
@@ -427,11 +450,25 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     const handleStreamResponse = async (response, resolvedUrl, isUpstreamOverride) => {
       const responseUrl = response.request?.res?.responseUrl || resolvedUrl;
       const contentType = response.headers?.['content-type'] || '';
-      // HDHomeRun channels are hardware MPEG-TS tuners. Never attempt HLS buffering for
-      // them, even if the response URL ends with .m3u8 or the device returns a generic
-      // content-type — both can happen on firmware that serves MPEG-TS at HLS-named
-      // endpoints, and would cause readStreamToUtf8 to hit the 1 MB cap and return 502.
-      if (!channel.hdhomerun && isLikelyHlsPlaylist(contentType, responseUrl)) {
+      // Determine whether the upstream response is an HLS playlist:
+      //
+      // • requestedHlsMode (HDHomeRun + client sent ?streamMode=hls): check only the
+      //   Content-Type header — never URL hints.  We appended ?streamMode=hls to the
+      //   upstream URL, so isLikelyHlsPlaylist's URL-based heuristic would always fire,
+      //   even when older firmware returns raw MPEG-TS at that URL and hits the 1 MB cap.
+      //
+      // • All other cases (including default HDHomeRun pass-through): preserve the
+      //   existing !channel.hdhomerun guard that bypasses HLS detection entirely for
+      //   HDHomeRun channels, preventing readStreamToUtf8 from buffering a continuous
+      //   MPEG-TS feed when firmware redirects to an .m3u8-named URL.
+      const isHlsResponse = requestedHlsMode
+        // Content-type only (empty URL disables the URL-hint path inside isLikelyHlsPlaylist).
+        // URL hints are intentionally skipped here: we appended ?streamMode=hls to the
+        // upstream URL, so those hints would always match regardless of the actual format.
+        ? isLikelyHlsPlaylist(contentType, '')
+        : !channel.hdhomerun && isLikelyHlsPlaylist(contentType, responseUrl);
+
+      if (isHlsResponse) {
         // HLS playlist/key/segment requests are short-lived; keep session alive via touch + idle TTL.
         await touchViewer();
         const playlistBody = await readStreamToUtf8(response.data);

@@ -162,11 +162,10 @@ describe('Lineup Route Integration', () => {
     expect(body).to.include('WLNS-TV');
   });
 
-  it('proxies HDHomeRun MPEG-TS streams directly without adding ?streamMode=hls', async () => {
-    // The proxy must NOT append ?streamMode=hls to HDHomeRun stream URLs.
-    // Serving an HLS playlist instead of raw MPEG-TS breaks IPTV clients (Plex, Jellyfin, etc.)
-    // that expect binary MPEG-TS data and report "200 but no video data" when they receive a
-    // text playlist.  The admin preview handles MPEG-TS via its mpegts.js fallback.
+  it('proxies HDHomeRun MPEG-TS streams directly without adding ?streamMode=hls by default', async () => {
+    // The proxy must NOT append ?streamMode=hls to HDHomeRun stream URLs for ordinary
+    // requests.  Regular IPTV clients (Plex, Jellyfin, etc.) expect binary MPEG-TS data
+    // and report "200 but no video" when they receive a text HLS playlist instead.
     nock('http://antenna.example')
       .get('/auto/v6.1')
       .query((query) => !query.streamMode)
@@ -179,6 +178,44 @@ describe('Lineup Route Integration', () => {
     expect(streamResponse.status).to.equal(200);
     expect(streamResponse.headers['content-type']).to.include('video/mp2t');
     expect(Buffer.from(streamResponse.data).toString()).to.equal('mpegts-bytes');
+  });
+
+  it('requests HLS from HDHomeRun and rewrites the playlist when ?streamMode=hls is in the client request', async () => {
+    // Browser preview appends ?streamMode=hls to stream URLs for HDHomeRun channels.
+    // OTA broadcasts use MPEG-2 video / AC-3 audio which browser MSE cannot decode;
+    // requesting HLS makes the HDHomeRun transcode to browser-compatible H.264+AAC.
+    nock('http://antenna.example')
+      .get('/auto/v6.1')
+      .query({ streamMode: 'hls' })
+      .reply(
+        200,
+        '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/auto/v6.1/hls/seg000001.ts\n',
+        { 'Content-Type': 'application/vnd.apple.mpegurl' }
+      );
+
+    const playlistResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?streamMode=hls`);
+    expect(playlistResponse.status).to.equal(200);
+    expect(playlistResponse.data).to.include('#EXTM3U');
+    expect(playlistResponse.data).to.include('/stream/Antenna/WLNS-TV?upstream=');
+    expect(playlistResponse.data).not.to.include('\n/auto/v6.1/hls/seg000001.ts\n');
+  });
+
+  it('pipes HDHomeRun MPEG-TS directly when device ignores ?streamMode=hls (content-type video/mp2t)', async () => {
+    // Some older HDHomeRun firmware may return raw MPEG-TS even when ?streamMode=hls is
+    // requested.  The proxy must detect this via the explicit video/mp2t Content-Type and
+    // pipe the stream through rather than trying to buffer it as an HLS playlist.
+    nock('http://antenna.example')
+      .get('/auto/v6.1')
+      .query({ streamMode: 'hls' })
+      .reply(200, 'mpegts-fallback', { 'Content-Type': 'video/mp2t' });
+
+    const streamResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?streamMode=hls`, {
+      responseType: 'arraybuffer'
+    });
+
+    expect(streamResponse.status).to.equal(200);
+    expect(streamResponse.headers['content-type']).to.include('video/mp2t');
+    expect(Buffer.from(streamResponse.data).toString()).to.equal('mpegts-fallback');
   });
 
   it('pipes HDHomeRun streams directly even when the device redirects to an .m3u8 URL', async () => {
