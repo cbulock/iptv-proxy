@@ -362,6 +362,11 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         // origin-mismatch or any other reason
         return res.status(403).send('Upstream URL not allowed');
       }
+
+      // Additional SSRF hardening: ensure the override uses a permitted scheme.
+      if (!isSafePublicHttpUrl(upstreamOverride)) {
+        return res.status(403).send('Upstream URL not allowed');
+      }
     }
 
     const upstreamUrl = upstreamOverride || channel.original_url;
@@ -495,6 +500,22 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       res.status(502).send('Failed to fetch stream');
     }
   });
+}
+
+function isSafePublicHttpUrl(urlString) {
+  let url;
+  try {
+    url = new URL(urlString);
+  } catch {
+    return false;
+  }
+
+  const protocol = url.protocol.toLowerCase();
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    return false;
+  }
+
+  return true;
 }
 
 // Export cache invalidation function
