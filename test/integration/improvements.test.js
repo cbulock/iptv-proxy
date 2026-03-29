@@ -528,3 +528,149 @@ describe('GET /channels?mapped_only=true', () => {
     expect(names).to.not.include('Unmapped Channel');
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 7. GET /channels?mapped_only=true — HDHomeRun channel filtering
+// ──────────────────────────────────────────────────────────────────────────────
+describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
+  let tmpDir;
+  let server;
+  let baseUrl;
+  let originalConfigPath;
+  let originalChannels;
+  let hadOriginalChannels;
+
+  before(async () => {
+    originalConfigPath = process.env.CONFIG_PATH;
+
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-channels-hdhr-test-'));
+
+    // Channel map only contains the M3U channel, not the HDHomeRun channel
+    await fs.writeFile(
+      path.join(tmpDir, 'channel-map.yaml'),
+      [
+        '"Mapped M3U Channel":',
+        '  number: "5"',
+        '  tvg_id: m3u.1',
+      ].join('\n') + '\n',
+      'utf8'
+    );
+
+    process.env.CONFIG_PATH = tmpDir;
+
+    const { getDataPath } = await import('../../libs/paths.js');
+    const channelsFile = getDataPath('channels.json');
+    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
+
+    try {
+      originalChannels = await fs.readFile(channelsFile, 'utf8');
+      hadOriginalChannels = true;
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      hadOriginalChannels = false;
+    }
+
+    const testChannels = [
+      { name: 'Mapped M3U Channel', tvg_id: 'm3u.1', source: 'TestSource', guideNumber: '5' },
+      { name: 'Unmapped M3U Channel', tvg_id: 'm3u.2', source: 'TestSource', guideNumber: '' },
+      {
+        name: 'WLNS-TV',
+        tvg_id: '6.1',
+        guideNumber: '6',
+        source: 'Antenna',
+        original_url: 'http://antenna.example/auto/v6.1',
+        hdhomerun: { deviceID: '1234', baseURL: 'http://antenna.example', model: 'HDHR3-US' },
+      },
+    ];
+    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+
+    const { initChannelsCache, cleanupCache } = await import('../../libs/channels-cache.js');
+    cleanupCache();
+    await initChannelsCache();
+
+    // Invalidate the channel-map cache so this suite reads the new channel map
+    const { invalidateChannelMapCache } = await import('../../server/channels.js');
+    invalidateChannelMapCache();
+
+    const channelsRouter = (await import('../../server/channels.js')).default;
+    const app = express();
+    app.use('/channels', channelsRouter);
+
+    ({ server, baseUrl } = await startServer(app));
+  });
+
+  after(async () => {
+    await stopServer(server);
+    await fs.rm(tmpDir, { recursive: true, force: true });
+
+    const { cleanupCache } = await import('../../libs/channels-cache.js');
+    cleanupCache();
+
+    // Reset channel-map cache so it doesn't bleed into subsequent suites
+    const { invalidateChannelMapCache } = await import('../../server/channels.js');
+    invalidateChannelMapCache();
+
+    const { getDataPath } = await import('../../libs/paths.js');
+    const channelsFile = getDataPath('channels.json');
+    if (hadOriginalChannels) {
+      await fs.writeFile(channelsFile, originalChannels, 'utf8');
+    } else {
+      try { await fs.unlink(channelsFile); } catch (_) { /* ignore */ }
+    }
+
+    if (originalConfigPath === undefined) {
+      delete process.env.CONFIG_PATH;
+    } else {
+      process.env.CONFIG_PATH = originalConfigPath;
+    }
+  });
+
+  it('returns all 3 channels when mapped_only is not set', async () => {
+    const res = await axios.get(`${baseUrl}/channels`);
+    expect(res.status).to.equal(200);
+    expect(res.data).to.be.an('array').with.lengthOf(3);
+  });
+
+  it('excludes HDHomeRun channels that are not in the channel map when mapped_only=true', async () => {
+    const res = await axios.get(`${baseUrl}/channels?mapped_only=true`);
+    expect(res.status).to.equal(200);
+    const names = res.data.map(c => c.name);
+    expect(names).to.not.include('WLNS-TV');
+  });
+
+  it('excludes unmapped M3U channels when mapped_only=true', async () => {
+    const res = await axios.get(`${baseUrl}/channels?mapped_only=true`);
+    const names = res.data.map(c => c.name);
+    expect(names).to.not.include('Unmapped M3U Channel');
+  });
+
+  it('returns only the mapped M3U channel when mapped_only=true', async () => {
+    const res = await axios.get(`${baseUrl}/channels?mapped_only=true`);
+    expect(res.data).to.be.an('array').with.lengthOf(1);
+    expect(res.data[0].name).to.equal('Mapped M3U Channel');
+  });
+
+  it('includes an HDHomeRun channel when it is explicitly added to the channel map', async () => {
+    // Write a new channel map that also includes the HDHomeRun channel
+    await fs.writeFile(
+      path.join(tmpDir, 'channel-map.yaml'),
+      [
+        '"Mapped M3U Channel":',
+        '  number: "5"',
+        '  tvg_id: m3u.1',
+        '"WLNS-TV":',
+        '  number: "6"',
+        '  tvg_id: "6.1"',
+      ].join('\n') + '\n',
+      'utf8'
+    );
+
+    // Bust the channel-map cache so the new map is picked up
+    const { invalidateChannelMapCache } = await import('../../server/channels.js');
+    invalidateChannelMapCache();
+
+    const res = await axios.get(`${baseUrl}/channels?mapped_only=true`);
+    const names = res.data.map(c => c.name);
+    expect(names).to.include('WLNS-TV');
+  });
+});

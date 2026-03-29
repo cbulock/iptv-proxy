@@ -1079,7 +1079,8 @@ let mpegtsInstance = null;
 
 /**
  * Set up mpegts.js player for raw MPEG-TS streams (e.g. HDHomeRun that returns
- * video/mpeg instead of HLS). Used as a fallback when hls.js fails to parse the stream.
+ * video/mpeg instead of HLS). Called directly for HDHomeRun channels, or as a
+ * fallback when hls.js cannot parse the stream.
  */
 function setupMpegtsPlayer(video, streamUrl) {
   if (mpegtsInstance) { mpegtsInstance.destroy(); mpegtsInstance = null; }
