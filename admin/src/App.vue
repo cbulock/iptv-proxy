@@ -1128,20 +1128,17 @@ async function setupVideoPlayer() {
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
   if (mpegtsInstance) { mpegtsInstance.destroy(); mpegtsInstance = null; }
 
-  // HDHomeRun channels serve raw MPEG-TS; skip hls.js (which would hang waiting for an
-  // HLS manifest that never completes) and go directly to mpegts.js.
-  if (channel.hdhomerun) {
-    setupMpegtsPlayer(video, streamUrl);
-    return;
-  }
-
   // Safari / iOS — native HLS support
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = streamUrl;
     return;
   }
 
-  // Use bundled HLS.js for other browsers
+  // Use bundled HLS.js for other browsers.
+  // For HDHomeRun channels the stream URL includes ?streamMode=hls (see previewStreamUrl),
+  // so HLS.js receives the server-proxied HLS playlist from the device.  If the device
+  // returns raw MPEG-TS instead (older firmware that ignores ?streamMode=hls), HLS.js
+  // will fire a MANIFEST_PARSING_ERROR and the error handler below falls back to mpegts.js.
   if (Hls.isSupported()) {
     hlsInstance = new Hls();
     hlsInstance.loadSource(streamUrl);
@@ -1458,7 +1455,11 @@ const filteredPreviewChannels = computed(() => {
 const previewStreamUrl = computed(() => {
   const ch = state.previewWatchingChannel;
   if (!ch) return '';
-  return `/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+  const base = `/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+  // HDHomeRun OTA broadcasts use MPEG-2 video and AC-3 audio — codecs not supported
+  // by browser MSE.  Append ?streamMode=hls so the server requests the HLS variant
+  // from the HDHomeRun device, which re-encodes to browser-compatible H.264+AAC.
+  return ch.hdhomerun ? `${base}?streamMode=hls` : base;
 });
 
 const previewColumns = [
