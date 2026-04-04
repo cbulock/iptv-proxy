@@ -1,23 +1,38 @@
 import { loadConfig } from '../libs/config-loader.js';
 import bcrypt from 'bcryptjs';
 
+// Cache auth config to avoid reading disk on every request.
+// undefined = not yet loaded; null = loaded but auth is disabled.
+let _authConfigCache = undefined;
+
 /**
  * Load admin authentication configuration
  * Returns null if authentication is not configured
  */
 function getAuthConfig() {
+  if (_authConfigCache !== undefined) return _authConfigCache;
   try {
     const appConfig = loadConfig('app');
     if (appConfig && appConfig.admin_auth) {
       const { username, password } = appConfig.admin_auth;
       if (username && password) {
-        return { username, password };
+        _authConfigCache = { username, password };
+        return _authConfigCache;
       }
     }
   } catch (error) {
     // Config file doesn't exist or is invalid - authentication is disabled
   }
+  _authConfigCache = null;
   return null;
+}
+
+/**
+ * Invalidate the cached auth config so the next request re-reads app.yaml.
+ * Call this after writing app.yaml.
+ */
+export function invalidateAuthCache() {
+  _authConfigCache = undefined;
 }
 
 /**

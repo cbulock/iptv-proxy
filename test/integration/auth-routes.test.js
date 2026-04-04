@@ -20,6 +20,7 @@ const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === 'true';
 // ─────────────────────────────────────────────────────────────────────────────
 
 import authRouter from '../../server/auth-routes.js';
+import { invalidateAuthCache } from '../../server/auth.js';
 import { csrfMiddleware } from '../../server/csrf.js';
 
 function buildApp() {
@@ -106,9 +107,17 @@ describe('Auth Routes Integration', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  // Reset app.yaml to empty before each test so each test starts unconfigured
+  // Reset app.yaml to empty before and after each test so every test starts
+  // unconfigured and does not leave stale credentials for subsequent test suites.
+  // Also invalidate the in-process auth config cache so the file reset takes effect.
   beforeEach(async () => {
     await fs.writeFile(path.join(tmpDir, 'app.yaml'), '{}\n', 'utf8');
+    invalidateAuthCache();
+  });
+
+  afterEach(async () => {
+    await fs.writeFile(path.join(tmpDir, 'app.yaml'), '{}\n', 'utf8');
+    invalidateAuthCache();
   });
 
   // ── GET /api/auth/status ───────────────────────────────────────────────────

@@ -516,6 +516,28 @@
                     style="width: 100%; max-height: 360px; display: block"
                     preload="auto"
                   />
+                  <div
+                    v-if="state.playerError"
+                    style="
+                      position: absolute;
+                      inset: 0;
+                      display: flex;
+                      flex-direction: column;
+                      align-items: center;
+                      justify-content: center;
+                      background: rgba(0, 0, 0, 0.85);
+                      color: #fff;
+                      padding: 1.5rem;
+                      text-align: center;
+                      gap: 0.5rem;
+                    "
+                  >
+                    <div style="font-size: 1.5rem">⚠️</div>
+                    <div style="font-weight: 600">{{ state.playerError }}</div>
+                    <div style="font-size: 0.8em; opacity: 0.7">
+                      Try opening the stream URL directly in VLC or another IPTV player.
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Stream URL row -->
@@ -801,6 +823,7 @@ const state = reactive({
   showVideoModal: false,
   previewGuide: [],
   loadingGuide: false,
+  playerError: null,
 });
 
 function setStatus(msg, ok = true) {
@@ -1543,18 +1566,37 @@ let mpegtsInstance = null;
  * video/mpeg instead of HLS). Called directly for HDHomeRun channels, or as a
  * fallback when hls.js cannot parse the stream.
  */
+function showPlayerError(msg) {
+  if (state.playerError) return; // already showing an error; don't overwrite
+  console.warn('[player] error:', msg);
+  state.playerError = msg;
+}
+
 function setupMpegtsPlayer(video, streamUrl) {
   if (mpegtsInstance) {
     mpegtsInstance.destroy();
     mpegtsInstance = null;
   }
   if (!mpegts.getFeatureList().mseLivePlayback) {
-    // MSE not supported; fall back to native src
-    video.src = streamUrl;
+    // MSE not supported in this browser; nothing more we can try
+    showPlayerError('Browser does not support media streaming (MSE unavailable).');
     return;
   }
   mpegtsInstance = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: streamUrl });
   mpegtsInstance.attachMediaElement(video);
+  mpegtsInstance.on(mpegts.Events.ERROR, (_type, detail) => {
+    // Codec/decode errors mean the stream format isn't browser-playable
+    if (detail && (detail.type === 'MediaError' || detail.type === 'NetworkError')) {
+      console.warn('[player] mpegts.js error:', detail);
+      if (mpegtsInstance) {
+        mpegtsInstance.destroy();
+        mpegtsInstance = null;
+      }
+      showPlayerError(
+        'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
+      );
+    }
+  });
   mpegtsInstance.load();
   mpegtsInstance.play().catch(err => {
     // Distinguish autoplay-blocked rejections from real playback/decoding failures.
@@ -1576,12 +1618,13 @@ function setupMpegtsPlayer(video, streamUrl) {
     }
 
     console.warn('[player] mpegts.js playback failed:', err);
-    // Final fallback to native src for real playback/decoding errors
     if (mpegtsInstance) {
       mpegtsInstance.destroy();
       mpegtsInstance = null;
     }
-    video.src = streamUrl;
+    showPlayerError(
+      'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
+    );
   });
 }
 
@@ -1590,8 +1633,10 @@ async function setupVideoPlayer() {
   const video = videoPlayerEl.value;
   if (!video || !state.previewWatchingChannel) return;
 
+  // Clear any previous error
+  state.playerError = null;
+
   const streamUrl = previewStreamUrl.value;
-  const channel = state.previewWatchingChannel;
 
   // Destroy any previous instances
   if (hlsInstance) {
@@ -1642,8 +1687,7 @@ async function setupVideoPlayer() {
         // Stream is not HLS (e.g. raw MPEG-TS from HDHomeRun); try mpegts.js
         setupMpegtsPlayer(video, streamUrl);
       } else {
-        // Network/CORS/404 or other fatal error; fall back to native src
-        video.src = streamUrl;
+        showPlayerError('Stream unavailable. The channel may be offline or unreachable.');
       }
     });
     return;
@@ -1668,6 +1712,7 @@ function stopVideoPlayer() {
     video.src = '';
     video.load();
   }
+  state.playerError = null;
 }
 
 function watchChannel(channel) {

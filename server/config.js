@@ -9,7 +9,7 @@ import { refreshEPG } from './epg.js';
 import { loadConfig, validateConfigData } from '../libs/config-loader.js';
 import { invalidateCache, getChannels } from '../libs/channels-cache.js';
 import { getConfigPath } from '../libs/paths.js';
-import { requireAuth } from './auth.js';
+import { requireAuth, invalidateAuthCache } from './auth.js';
 import { notifyWebhooks } from '../libs/webhooks.js';
 
 const router = express.Router();
@@ -225,6 +225,7 @@ router.put('/api/config/app', requireAuth, configWriteLimiter, (req, res) => {
     }
     const yamlText = yaml.stringify(updated);
     fs.writeFileSync(APP_PATH, yamlText, 'utf8');
+    invalidateAuthCache();
     res.json({ status: 'saved' });
   } catch (e) {
     console.error('Error writing app.yaml:', e);
