@@ -3,7 +3,6 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import RateLimit from 'express-rate-limit';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
-import escapeHtml from 'escape-html';
 import { loadConfig } from '../libs/config-loader.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
@@ -430,35 +429,6 @@ export async function setupEPGRoutes(app) {
 
       res.set('Content-Type', 'application/xml');
       res.send(rewritten);
-    })
-  );
-
-  app.get(
-    '/images/:source/:url',
-    asyncHandler(async (req, res) => {
-      const decodedUrl = decodeURIComponent(req.params.url);
-
-      // Validate URL format
-      if (!decodedUrl.startsWith('http://') && !decodedUrl.startsWith('https://')) {
-        throw new AppError('Invalid image URL', 400, 'URL must start with http:// or https://');
-      }
-
-      try {
-        const response = await axios.get(decodedUrl, {
-          responseType: 'stream',
-          timeout: 10000,
-          maxRedirects: 5,
-        });
-        res.set(response.headers);
-        response.data.pipe(res);
-      } catch (err) {
-        const statusCode = err.response?.status || 502;
-        throw new AppError(
-          'Failed to fetch image',
-          statusCode,
-          `Could not retrieve image from ${escapeHtml(decodedUrl)}`
-        );
-      }
     })
   );
 
