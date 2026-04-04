@@ -21,7 +21,10 @@ function getAuthConfig() {
       }
     }
   } catch (error) {
-    // Config file doesn't exist or is invalid - authentication is disabled
+    // Config read/parse failures may be transient (e.g. partially-written file),
+    // so do not cache the result — leave _authConfigCache as undefined so the
+    // next request retries loading rather than permanently disabling auth.
+    return null;
   }
   _authConfigCache = null;
   return null;

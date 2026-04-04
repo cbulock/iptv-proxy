@@ -518,6 +518,8 @@
                   />
                   <div
                     v-if="state.playerError"
+                    role="alert"
+                    aria-live="assertive"
                     style="
                       position: absolute;
                       inset: 0;
@@ -532,7 +534,7 @@
                       gap: 0.5rem;
                     "
                   >
-                    <div style="font-size: 1.5rem">⚠️</div>
+                    <div aria-hidden="true" style="font-size: 1.5rem">⚠️</div>
                     <div style="font-weight: 600">{{ state.playerError }}</div>
                     <div style="font-size: 0.8em; opacity: 0.7">
                       Try opening the stream URL directly in VLC or another IPTV player.

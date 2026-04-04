@@ -4,7 +4,7 @@ import fsSync from 'fs';
 import path from 'path';
 import archiver from 'archiver';
 import { getConfigPath, getDataPath } from '../libs/paths.js';
-import { requireAuth } from './auth.js';
+import { requireAuth, invalidateAuthCache } from './auth.js';
 
 const router = express.Router();
 
@@ -119,6 +119,11 @@ router.post('/api/config/backups/:name/restore', requireAuth, async (req, res) =
         await fs.copyFile(src, getConfigPath(file));
         restored.push(file);
       }
+    }
+
+    // If app.yaml was restored, the in-process auth config cache may now be stale.
+    if (restored.includes('app.yaml')) {
+      invalidateAuthCache();
     }
 
     res.json({ status: 'restored', name, files: restored });
