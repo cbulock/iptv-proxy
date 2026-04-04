@@ -1563,6 +1563,11 @@ const videoPlayerEl = ref(null);
 let hlsInstance = null;
 let mpegtsInstance = null;
 
+const ERR_UNSUPPORTED_CODEC =
+  'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.';
+const ERR_STREAM_UNAVAILABLE =
+  'Stream unavailable. The channel may be offline or unreachable.';
+
 /**
  * Set up mpegts.js player for raw MPEG-TS streams (e.g. HDHomeRun that returns
  * video/mpeg instead of HLS). Called directly for HDHomeRun channels, or as a
@@ -1594,10 +1599,7 @@ function setupMpegtsPlayer(video, streamUrl) {
     console.warn('[player] mpegts.js error:', errorType, errorDetail);
     mpegtsInstance.destroy();
     mpegtsInstance = null;
-    const msg =
-      errorType === 'MediaError'
-        ? 'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
-        : 'Stream unavailable. The channel may be offline or unreachable.';
+    const msg = errorType === 'MediaError' ? ERR_UNSUPPORTED_CODEC : ERR_STREAM_UNAVAILABLE;
     showPlayerError(msg);
   });
   player.load();
@@ -1624,9 +1626,7 @@ function setupMpegtsPlayer(video, streamUrl) {
     console.warn('[player] mpegts.js playback failed:', err);
     mpegtsInstance.destroy();
     mpegtsInstance = null;
-    showPlayerError(
-      'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
-    );
+    showPlayerError(ERR_UNSUPPORTED_CODEC);
   });
 }
 
@@ -1695,9 +1695,7 @@ async function setupVideoPlayer() {
 
         video.removeAttribute('src');
         video.load();
-        showPlayerError(
-          'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
-        );
+        showPlayerError(ERR_UNSUPPORTED_CODEC);
       })
       .catch(() => {
         // HEAD failed — fall through to normal player logic.
@@ -1737,7 +1735,7 @@ async function setupVideoPlayer() {
         // Stream is not HLS (e.g. raw MPEG-TS from HDHomeRun); try mpegts.js
         setupMpegtsPlayer(video, streamUrl);
       } else {
-        showPlayerError('Stream unavailable. The channel may be offline or unreachable.');
+        showPlayerError(ERR_STREAM_UNAVAILABLE);
       }
     });
     return;
