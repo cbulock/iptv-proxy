@@ -1635,12 +1635,9 @@ async function setupVideoPlayer() {
   const video = videoPlayerEl.value;
   if (!video || !state.previewWatchingChannel) return;
 
-  // Clear any previous error
-  state.playerError = null;
-
   const streamUrl = previewStreamUrl.value;
 
-  // Destroy any previous instances
+  // Destroy any previous instances before resetting state
   if (hlsInstance) {
     hlsInstance.destroy();
     hlsInstance = null;
@@ -1649,6 +1646,9 @@ async function setupVideoPlayer() {
     mpegtsInstance.destroy();
     mpegtsInstance = null;
   }
+
+  // Clear any error from the previous player session
+  state.playerError = null;
 
   // Safari / iOS — native HLS support
   if (video.canPlayType('application/vnd.apple.mpegurl')) {

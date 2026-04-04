@@ -11,20 +11,17 @@ let _authConfigCache = undefined;
  */
 function getAuthConfig() {
   if (_authConfigCache !== undefined) return _authConfigCache;
-  try {
-    const appConfig = loadConfig('app');
-    if (appConfig && appConfig.admin_auth) {
-      const { username, password } = appConfig.admin_auth;
-      if (username && password) {
-        _authConfigCache = { username, password };
-        return _authConfigCache;
-      }
+  // loadConfig never throws — it returns {} on missing/invalid files.
+  // If no valid admin_auth is found, null is cached and auth stays disabled
+  // until invalidateAuthCache() is called (which happens at every API write
+  // path that modifies app.yaml) or the process restarts.
+  const appConfig = loadConfig('app');
+  if (appConfig && appConfig.admin_auth) {
+    const { username, password } = appConfig.admin_auth;
+    if (username && password) {
+      _authConfigCache = { username, password };
+      return _authConfigCache;
     }
-  } catch (error) {
-    // Config read/parse failures may be transient (e.g. partially-written file),
-    // so do not cache the result — leave _authConfigCache as undefined so the
-    // next request retries loading rather than permanently disabling auth.
-    return null;
   }
   _authConfigCache = null;
   return null;
