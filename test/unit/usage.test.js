@@ -43,7 +43,11 @@ describe('parseClientName', () => {
   });
 
   it('detects IPTV Pro', () => {
-    expect(parseClientName('Mozilla/5.0 (Linux; Android 16; samsung SM-F966U1 Build/BP2A.250605.031.A3) IPTV Pro/9.1.15')).to.equal('IPTV Pro');
+    expect(
+      parseClientName(
+        'Mozilla/5.0 (Linux; Android 16; samsung SM-F966U1 Build/BP2A.250605.031.A3) IPTV Pro/9.1.15'
+      )
+    ).to.equal('IPTV Pro');
   });
 
   it('detects GSE IPTV', () => {

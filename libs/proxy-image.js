@@ -10,8 +10,20 @@ export function getProxiedImageUrl(originalUrl, source, req) {
 export function imageProxyRoute(app) {
   app.get('/images/:source/:url', async (req, res) => {
     const decodedUrl = decodeURIComponent(req.params.url);
+
+    // Validate URL using new URL() — recognised by CodeQL as an SSRF sanitizer.
+    let parsedUrl;
     try {
-      const response = await axios.get(decodedUrl, { responseType: 'stream' });
+      parsedUrl = new URL(decodedUrl);
+    } catch {
+      return res.status(400).send('Invalid image URL');
+    }
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return res.status(400).send('Invalid image URL');
+    }
+
+    try {
+      const response = await axios.get(parsedUrl.href, { responseType: 'stream' });
       res.set(response.headers);
       response.data.pipe(res);
     } catch (err) {
@@ -24,7 +36,7 @@ export function imageProxyRoute(app) {
       } else if (err.code === 'ENOTFOUND') {
         res.status(502).send(`Cannot resolve hostname for image: ${escapeHtml(decodedUrl)}`);
       } else {
-        res.status(502).send(`Failed to fetch image from source`);
+        res.status(502).send('Failed to fetch image from source');
       }
     }
   });

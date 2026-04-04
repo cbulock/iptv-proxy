@@ -33,21 +33,21 @@ describe('Lineup Route Integration', () => {
         tvg_id: 'test.1',
         source: 'TestSource',
         logo: 'http://example.com/logo1.png',
-        original_url: 'http://example.com/stream1'
+        original_url: 'http://example.com/stream1',
       },
       {
         name: 'Test Channel Two',
         tvg_id: 'test.2',
         source: 'TestSource',
         logo: 'http://example.com/logo2.png',
-        original_url: 'http://example.com/stream2'
+        original_url: 'http://example.com/stream2',
       },
       {
         name: 'HLS Channel',
         tvg_id: 'hls.1',
         source: 'Tunarr',
         logo: 'http://example.com/logo3.png',
-        original_url: 'http://tunarr.example/stream/channels/channel-1?streamMode=hls'
+        original_url: 'http://tunarr.example/stream/channels/channel-1?streamMode=hls',
       },
       {
         name: 'WLNS-TV',
@@ -55,21 +55,21 @@ describe('Lineup Route Integration', () => {
         guideNumber: '6',
         source: 'Antenna',
         hdhomerun: { deviceID: '1234' },
-        original_url: 'http://antenna.example/auto/v6.1'
+        original_url: 'http://antenna.example/auto/v6.1',
       },
       {
         name: 'Redirect Channel',
         tvg_id: 'redirect.1',
         source: 'TunarrInternal',
         logo: 'http://example.com/logo4.png',
-        original_url: 'http://tunarr-internal.example:8000/stream/channels/redirect-uuid'
+        original_url: 'http://tunarr-internal.example:8000/stream/channels/redirect-uuid',
       },
       {
         name: 'Octet Stream Channel',
         tvg_id: 'octet.1',
         source: 'OctetSource',
-        original_url: 'http://octet.example/stream.m3u8'
-      }
+        original_url: 'http://octet.example/stream.m3u8',
+      },
     ];
 
     await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
@@ -119,7 +119,9 @@ describe('Lineup Route Integration', () => {
     expect(body).to.include('Test Channel Two');
     expect(body).to.include('tvg-id="test.1"');
     expect(body).to.include('tvg-id="test.2"');
-    expect(body).to.include(`tvg-logo="${baseUrl}/images/TestSource/http%3A%2F%2Fexample.com%2Flogo1.png"`);
+    expect(body).to.include(
+      `tvg-logo="${baseUrl}/images/TestSource/http%3A%2F%2Fexample.com%2Flogo1.png"`
+    );
     expect(body).to.include('tvg-chno="6"');
   });
 
@@ -168,11 +170,11 @@ describe('Lineup Route Integration', () => {
     // and report "200 but no video" when they receive a text HLS playlist instead.
     nock('http://antenna.example')
       .get('/auto/v6.1')
-      .query((query) => !query.streamMode)
+      .query(query => !query.streamMode)
       .reply(200, 'mpegts-bytes', { 'Content-Type': 'video/mp2t' });
 
     const streamResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV`, {
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
     });
 
     expect(streamResponse.status).to.equal(200);
@@ -229,18 +231,16 @@ describe('Lineup Route Integration', () => {
     // Simulate firmware redirect: /auto/v6.1 → /auto/v6.1.m3u8 (same origin).
     nock('http://antenna.example')
       .get('/auto/v6.1')
-      .query((query) => !query.streamMode)
+      .query(query => !query.streamMode)
       .reply(302, '', { Location: 'http://antenna.example/auto/v6.1.m3u8' });
 
     // The redirected URL has no content-type, so isLikelyHlsPlaylist() falls back to
     // the URL heuristic (.m3u8 suffix → true) and would hit the 1 MB buffer cap.
-    nock('http://antenna.example')
-      .get('/auto/v6.1.m3u8')
-      .reply(200, bigPayload, {});
+    nock('http://antenna.example').get('/auto/v6.1.m3u8').reply(200, bigPayload, {});
 
     const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV`, {
       validateStatus: () => true,
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
     });
 
     // Must NOT be 502 — the !channel.hdhomerun guard bypasses HLS buffering entirely.
@@ -259,7 +259,7 @@ describe('Lineup Route Integration', () => {
       .reply(200, bigPayload, { 'Content-Type': 'application/octet-stream' });
 
     const response = await axios.get(`${baseUrl}/stream/OctetSource/Octet%20Stream%20Channel`, {
-      validateStatus: () => true
+      validateStatus: () => true,
     });
 
     expect(response.status).to.equal(502);
@@ -300,7 +300,7 @@ describe('Lineup Route Integration', () => {
   it('rejects ?upstream= URLs pointing to a different origin (SSRF protection)', async () => {
     const maliciousUrl = encodeURIComponent('http://internal-server.local/secret');
     const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${maliciousUrl}`, {
-      validateStatus: () => true
+      validateStatus: () => true,
     });
     expect(response.status).to.equal(403);
   });
@@ -312,7 +312,7 @@ describe('Lineup Route Integration', () => {
 
     const segmentUrl = encodeURIComponent('http://antenna.example/auto/v6.1/hls/seg000001.ts');
     const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${segmentUrl}`, {
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
     });
     expect(response.status).to.equal(200);
   });
@@ -326,7 +326,7 @@ describe('Lineup Route Integration', () => {
     // A ?upstream= with the explicit :80 port should be treated as the same origin.
     const segmentUrl = encodeURIComponent('http://antenna.example:80/auto/v6.1/hls/seg000002.ts');
     const response = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?upstream=${segmentUrl}`, {
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
     });
     expect(response.status).to.equal(200);
   });
@@ -336,7 +336,9 @@ describe('Lineup Route Integration', () => {
     // redirects to a different origin (e.g., internal HTTP → external HTTPS via reverse proxy).
     nock('http://tunarr-internal.example:8000')
       .get('/stream/channels/redirect-uuid')
-      .reply(302, '', { Location: 'https://tunarr-external.example/stream/channels/redirect-uuid' });
+      .reply(302, '', {
+        Location: 'https://tunarr-external.example/stream/channels/redirect-uuid',
+      });
 
     nock('https://tunarr-external.example')
       .get('/stream/channels/redirect-uuid')
@@ -367,7 +369,7 @@ describe('Lineup Route Integration', () => {
 
     // segmentLine is already an absolute URL produced by rewriteUriToProxy
     const segmentResponse = await axios.get(segmentLine, {
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
     });
     expect(segmentResponse.status).to.equal(200);
     expect(Buffer.from(segmentResponse.data).toString()).to.equal('segment-bytes');

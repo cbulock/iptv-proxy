@@ -34,8 +34,8 @@ function isPrivateOrLoopback(ip) {
 const authLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20,
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
   message: { error: 'Too many authentication requests, please try again later.' },
 });
 
@@ -84,7 +84,8 @@ router.get('/api/auth/csrf-token', requireAuth, (req, res) => {
  * lgtm[js/missing-csrf-middleware] - Pre-auth endpoint; no session exists yet to protect via CSRF.
  *   Custom CSRF protection (server/csrf.js) is applied globally and exempts this endpoint by design.
  */
-router.post('/api/auth/login', authLimiter, (req, res) => { // lgtm[js/missing-csrf-middleware]
+router.post('/api/auth/login', authLimiter, (req, res) => {
+  // lgtm[js/missing-csrf-middleware]
   if (!isAuthEnabled()) {
     // No auth configured — treat as open access
     return res.json({ status: 'ok' });
@@ -101,7 +102,7 @@ router.post('/api/auth/login', authLimiter, (req, res) => { // lgtm[js/missing-c
   }
 
   // Regenerate the session to prevent fixation attacks
-  req.session.regenerate((err) => {
+  req.session.regenerate(err => {
     if (err) {
       console.error('Session regenerate error:', err);
       return res.status(500).json({ error: 'Login failed' });
@@ -119,7 +120,7 @@ router.post('/api/auth/login', authLimiter, (req, res) => { // lgtm[js/missing-c
  * Destroy the current session.
  */
 router.post('/api/auth/logout', (req, res) => {
-  req.session.destroy((err) => {
+  req.session.destroy(err => {
     if (err) {
       console.error('Session destroy error:', err);
       return res.status(500).json({ error: 'Logout failed' });
@@ -145,16 +146,20 @@ router.get('/admin/login', authLimiter, (req, res) => {
  *   No session exists yet, so CSRF is not applicable. Custom CSRF middleware (server/csrf.js)
  *   exempts this path by design.
  */
-router.post('/api/auth/setup', authLimiter, (req, res) => { // lgtm[js/missing-csrf-middleware]
+router.post('/api/auth/setup', authLimiter, (req, res) => {
+  // lgtm[js/missing-csrf-middleware]
   // Restrict setup to loopback and private-network clients only
   if (!isPrivateOrLoopback(req.ip)) {
-    return res.status(403).json({ error: 'Setup can only be performed from a local or private network.' });
+    return res
+      .status(403)
+      .json({ error: 'Setup can only be performed from a local or private network.' });
   }
 
   if (isAuthEnabled()) {
-    return res
-      .status(403)
-      .json({ error: 'Authentication is already configured. Use the password update endpoint to change credentials.' });
+    return res.status(403).json({
+      error:
+        'Authentication is already configured. Use the password update endpoint to change credentials.',
+    });
   }
 
   const { username, password } = req.body || {};
@@ -169,7 +174,9 @@ router.post('/api/auth/setup', authLimiter, (req, res) => { // lgtm[js/missing-c
   }
 
   if (!/^[a-zA-Z0-9_\-.@]+$/.test(trimmedUsername)) {
-    return res.status(400).json({ error: 'Username may only contain letters, numbers, underscores, hyphens, dots, and @ signs' });
+    return res.status(400).json({
+      error: 'Username may only contain letters, numbers, underscores, hyphens, dots, and @ signs',
+    });
   }
 
   if (!password || typeof password !== 'string' || password.length < 8) {
@@ -181,15 +188,18 @@ router.post('/api/auth/setup', authLimiter, (req, res) => { // lgtm[js/missing-c
   }
 
   if (!acquireLock()) {
-    return res.status(409).json({ error: 'Another credential operation is in progress. Please try again.' });
+    return res
+      .status(409)
+      .json({ error: 'Another credential operation is in progress. Please try again.' });
   }
 
   try {
     // Re-check after acquiring lock in case another request completed setup first
     if (isAuthEnabled()) {
-      return res
-        .status(403)
-        .json({ error: 'Authentication is already configured. Use the password update endpoint to change credentials.' });
+      return res.status(403).json({
+        error:
+          'Authentication is already configured. Use the password update endpoint to change credentials.',
+      });
     }
 
     const hashedPassword = hashPassword(password);
@@ -224,7 +234,9 @@ router.post('/api/auth/setup', authLimiter, (req, res) => { // lgtm[js/missing-c
 router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
   // Auth must be configured before a password change can be made
   if (!isAuthEnabled()) {
-    return res.status(409).json({ error: 'No authentication is configured. Use POST /api/auth/setup to set credentials first.' });
+    return res.status(409).json({
+      error: 'No authentication is configured. Use POST /api/auth/setup to set credentials first.',
+    });
   }
 
   const { currentPassword, newPassword } = req.body || {};
@@ -242,7 +254,9 @@ router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
   }
 
   if (!acquireLock()) {
-    return res.status(409).json({ error: 'Another credential operation is in progress. Please try again.' });
+    return res
+      .status(409)
+      .json({ error: 'Another credential operation is in progress. Please try again.' });
   }
 
   try {

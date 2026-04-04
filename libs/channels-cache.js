@@ -6,7 +6,6 @@ const CHANNELS_FILE = getDataPath('channels.json');
 
 // In-memory cache
 let channelsCache = null;
-let cacheTimestamp = null;
 let fileWatcher = null;
 
 // Callback hooks for when channels are updated
@@ -43,31 +42,29 @@ async function loadChannelsFromDisk() {
 export async function initChannelsCache() {
   // Load initial data
   channelsCache = await loadChannelsFromDisk();
-  cacheTimestamp = Date.now();
-  
+
   let reloadInProgress = false;
-  
+
   // Watch for file changes to invalidate cache
   if (!fileWatcher && fs.existsSync(CHANNELS_FILE)) {
-    fileWatcher = fs.watch(CHANNELS_FILE, { persistent: false }, async (eventType) => {
+    fileWatcher = fs.watch(CHANNELS_FILE, { persistent: false }, async eventType => {
       if (eventType === 'change') {
         // Prevent concurrent reloads
         if (reloadInProgress) {
           console.log('[Cache] Reload already in progress, skipping...');
           return;
         }
-        
+
         reloadInProgress = true;
         console.log('[Cache] Channels file changed, reloading...');
         try {
           channelsCache = await loadChannelsFromDisk();
-          cacheTimestamp = Date.now();
           console.log(`[Cache] Reloaded ${channelsCache.length} channels`);
-          
-          // Notify all registered callbacks
+
+          // Notify all registered callbacks (await to catch async errors)
           for (const callback of updateCallbacks) {
             try {
-              callback();
+              await callback();
             } catch (err) {
               console.error('[Cache] Error in update callback:', err.message);
             }
@@ -80,7 +77,7 @@ export async function initChannelsCache() {
       }
     });
   }
-  
+
   console.log(`[Cache] Initialized with ${channelsCache.length} channels`);
 }
 
@@ -103,13 +100,12 @@ export function getChannels() {
  */
 export async function invalidateCache() {
   channelsCache = await loadChannelsFromDisk();
-  cacheTimestamp = Date.now();
   console.log(`[Cache] Cache invalidated, reloaded ${channelsCache.length} channels`);
-  
-  // Notify all registered callbacks
+
+  // Notify all registered callbacks (await to catch async errors)
   for (const callback of updateCallbacks) {
     try {
-      callback();
+      await callback();
     } catch (err) {
       console.error('[Cache] Error in update callback:', err.message);
     }

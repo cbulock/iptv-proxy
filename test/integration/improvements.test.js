@@ -11,7 +11,7 @@ import sinon from 'sinon';
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 async function startServer(app) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const server = app.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
       resolve({ server, baseUrl: `http://127.0.0.1:${port}` });
@@ -20,7 +20,7 @@ async function startServer(app) {
 }
 
 async function stopServer(server) {
-  return new Promise((resolve) => server.close(resolve));
+  return new Promise(resolve => server.close(resolve));
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ describe('Config Backup API', () => {
 
     // Confirm it's gone
     const listRes = await axios.get(`${baseUrl}/api/config/backups`);
-    const names = listRes.data.backups.map((b) => b.name);
+    const names = listRes.data.backups.map(b => b.name);
     expect(names).to.not.include(name);
   });
 
@@ -198,7 +198,7 @@ describe('Config Backup API', () => {
 describe('Usage History', () => {
   let server;
   let baseUrl;
-  let registerUsage, touchUsage, unregisterUsage, usageRouter;
+  let registerUsage, unregisterUsage, usageRouter;
 
   before(async () => {
     // Import the module fresh – history is module-level state.
@@ -207,7 +207,6 @@ describe('Usage History', () => {
     // because we only check that our entries appear.
     const mod = await import('../../server/usage.js');
     registerUsage = mod.registerUsage;
-    touchUsage = mod.touchUsage;
     unregisterUsage = mod.unregisterUsage;
     usageRouter = mod.default;
 
@@ -239,14 +238,12 @@ describe('Usage History', () => {
     const key = await registerUsage({ ip: '10.0.0.1', channelId });
 
     // Small delay so duration > 0
-    await new Promise((r) => setTimeout(r, 10));
+    await new Promise(r => setTimeout(r, 10));
 
     unregisterUsage(key);
 
     const res = await axios.get(`${baseUrl}/api/usage/history`);
-    const entry = res.data.history.find(
-      (h) => h.ip === '10.0.0.1' && h.channelId === channelId
-    );
+    const entry = res.data.history.find(h => h.ip === '10.0.0.1' && h.channelId === channelId);
 
     expect(entry).to.exist;
     expect(entry.endedAt).to.be.a('string');
@@ -258,21 +255,21 @@ describe('Usage History', () => {
     const id2 = `order-test-2-${Date.now()}`;
 
     const k1 = await registerUsage({ ip: '10.0.0.2', channelId: id1 });
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise(r => setTimeout(r, 5));
     const k2 = await registerUsage({ ip: '10.0.0.2', channelId: id2 });
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise(r => setTimeout(r, 5));
 
     unregisterUsage(k1);
     unregisterUsage(k2);
 
     const res = await axios.get(`${baseUrl}/api/usage/history`);
     const entries = res.data.history.filter(
-      (h) => h.ip === '10.0.0.2' && (h.channelId === id1 || h.channelId === id2)
+      h => h.ip === '10.0.0.2' && (h.channelId === id1 || h.channelId === id2)
     );
 
     // id2 ended later, so it should appear first in reverse-chronological list
-    const idx1 = entries.findIndex((h) => h.channelId === id1);
-    const idx2 = entries.findIndex((h) => h.channelId === id2);
+    const idx1 = entries.findIndex(h => h.channelId === id1);
+    const idx2 = entries.findIndex(h => h.channelId === id2);
     expect(idx2).to.be.lessThan(idx1);
   });
 });
@@ -421,7 +418,7 @@ describe('Rate limiting', () => {
 
   it('localhost is skipped by the production rate limiter configuration', () => {
     // Validate the skip function used in the real lineup limiter
-    const skip = (req) => req.ip === '::1' || req.ip === '127.0.0.1';
+    const skip = req => req.ip === '::1' || req.ip === '127.0.0.1';
     expect(skip({ ip: '127.0.0.1' })).to.be.true;
     expect(skip({ ip: '::1' })).to.be.true;
     expect(skip({ ip: '192.168.1.50' })).to.be.false;
@@ -447,11 +444,7 @@ describe('GET /channels?mapped_only=true', () => {
     // Write a channel-map.yaml that maps only "Mapped Channel"
     await fs.writeFile(
       path.join(tmpDir, 'channel-map.yaml'),
-      [
-        '"Mapped Channel":',
-        '  number: "5"',
-        '  tvg_id: mapped.1',
-      ].join('\n') + '\n',
+      ['"Mapped Channel":', '  number: "5"', '  tvg_id: mapped.1'].join('\n') + '\n',
       'utf8'
     );
 
@@ -499,7 +492,11 @@ describe('GET /channels?mapped_only=true', () => {
     if (hadOriginalChannels) {
       await fs.writeFile(channelsFile, originalChannels, 'utf8');
     } else {
-      try { await fs.unlink(channelsFile); } catch (_) { /* ignore */ }
+      try {
+        await fs.unlink(channelsFile);
+      } catch (_) {
+        /* ignore */
+      }
     }
 
     if (originalConfigPath === undefined) {
@@ -548,11 +545,7 @@ describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
     // Channel map only contains the M3U channel, not the HDHomeRun channel
     await fs.writeFile(
       path.join(tmpDir, 'channel-map.yaml'),
-      [
-        '"Mapped M3U Channel":',
-        '  number: "5"',
-        '  tvg_id: m3u.1',
-      ].join('\n') + '\n',
+      ['"Mapped M3U Channel":', '  number: "5"', '  tvg_id: m3u.1'].join('\n') + '\n',
       'utf8'
     );
 
@@ -615,7 +608,11 @@ describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
     if (hadOriginalChannels) {
       await fs.writeFile(channelsFile, originalChannels, 'utf8');
     } else {
-      try { await fs.unlink(channelsFile); } catch (_) { /* ignore */ }
+      try {
+        await fs.unlink(channelsFile);
+      } catch (_) {
+        /* ignore */
+      }
     }
 
     if (originalConfigPath === undefined) {

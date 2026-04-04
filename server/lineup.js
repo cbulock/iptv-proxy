@@ -11,16 +11,13 @@ import { loadConfig } from '../libs/config-loader.js';
 const lineupLimiter = RateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 60, // limit each IP to 60 requests per minute
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 // M3U and JSON lineup caches
 let m3uCache = null;
 let jsonCache = null;
-
-// Invalidate caches when channels are updated
-let lastChannelsUpdate = Date.now();
 
 // Cache the most-recently-served HLS manifest response URL for each channel.
 // When a channel's configured URL redirects to a different origin (e.g., http://host:8000 →
@@ -32,7 +29,6 @@ const hlsManifestOriginCache = new Map();
 function invalidateCaches() {
   if (m3uCache) m3uCache.clear();
   if (jsonCache) jsonCache.clear();
-  lastChannelsUpdate = Date.now();
 }
 
 function isLikelyHlsPlaylist(contentType = '', upstreamUrl = '') {
@@ -157,6 +153,37 @@ function parseBooleanQueryParam(value) {
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
+/**
+ * Check that overrideUrlString uses HTTP(S) and shares the same origin
+ * (protocol + hostname + port) as channelUrlString.
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+function isSameOriginHttpUrl(overrideUrlString, channelUrlString) {
+  const defaultPorts = { 'http:': '80', 'https:': '443' };
+  const normalizePort = url => url.port || defaultPorts[url.protocol];
+
+  let overrideUrl;
+  let channelUrl;
+  try {
+    overrideUrl = new URL(overrideUrlString);
+    channelUrl = new URL(channelUrlString);
+  } catch (_err) {
+    return { ok: false, reason: 'parse-error' };
+  }
+
+  // Only allow HTTP(S) schemes for both URLs.
+  if (!defaultPorts[overrideUrl.protocol] || !defaultPorts[channelUrl.protocol]) {
+    return { ok: false, reason: 'invalid-protocol' };
+  }
+
+  const sameOrigin =
+    overrideUrl.protocol === channelUrl.protocol &&
+    overrideUrl.hostname === channelUrl.hostname &&
+    normalizePort(overrideUrl) === normalizePort(channelUrl);
+
+  return sameOrigin ? { ok: true } : { ok: false, reason: 'origin-mismatch' };
+}
+
 export function setupLineupRoutes(app, config, usageHelpers = {}) {
   // Initialize lineup caches with TTL from config (default: 1 hour)
   const appConfig = loadConfig('app');
@@ -168,172 +195,154 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
   const {
     registerUsage = async () => undefined,
     touchUsage = () => undefined,
-    unregisterUsage = () => undefined
+    unregisterUsage = () => undefined,
   } = usageHelpers;
   const loadChannels = () => getChannels();
 
-  app.get('/lineup.json', lineupLimiter, asyncHandler(async (req, res) => {
-    const includeUnmapped = parseBooleanQueryParam(req.query.include_unmapped ?? req.query.includeUnmapped);
-    const cacheKey = `${req.protocol}://${req.get('host')}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
-    
-    // Check cache
-    const cached = jsonCache.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
-    
-    let channels = loadChannels();
-    
-    // Validate that we have channels
-    if (!Array.isArray(channels)) {
-      throw new AppError('Invalid channels data structure', 500);
-    }
+  app.get(
+    '/lineup.json',
+    lineupLimiter,
+    asyncHandler(async (req, res) => {
+      const includeUnmapped = parseBooleanQueryParam(
+        req.query.include_unmapped ?? req.query.includeUnmapped
+      );
+      const cacheKey = `${req.protocol}://${req.get('host')}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
 
-    if (!includeUnmapped) {
-      const channelMap = loadConfig('channelMap') || {};
-      const mapKeys = new Set(Object.keys(channelMap));
-      channels = channels.filter(channel => isChannelMapped(channel, channelMap, mapKeys));
-    }
-
-    const baseUrl = getBaseUrl(req);
-    const lineup = channels
-      .filter(channel => channel && channel.name) // Filter out invalid channels
-      .map(channel => ({
-        GuideNumber: resolveGuideNumberForLineup(channel),
-        GuideName: channel.name,
-        URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.name)}`
-      }));
-
-    // Cache the result
-    jsonCache.set(cacheKey, lineup);
-    
-    res.json(lineup);
-  }));
-
-  app.get('/lineup.m3u', lineupLimiter, asyncHandler(async (req, res) => {
-    // Extract query parameters for filtering
-    const filterSource = req.query.source ? String(req.query.source) : null;
-    const filterGroup = req.query.group ? String(req.query.group) : null;
-    const includeUnmapped = parseBooleanQueryParam(req.query.include_unmapped ?? req.query.includeUnmapped);
-    
-    // Create cache key including filters
-    const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
-    
-    // Check cache
-    const cached = m3uCache.get(cacheKey);
-    if (cached) {
-      res.set('Content-Type', 'application/x-mpegURL');
-      return res.send(cached);
-    }
-    
-    let channels = loadChannels();
-    
-    // Validate that we have channels
-    if (!Array.isArray(channels)) {
-      throw new AppError('Invalid channels data structure', 500);
-    }
-    
-    // Apply filters (note: source and group both filter by channel.source since group-title=source)
-    if (filterSource) {
-      channels = channels.filter(ch => ch && ch.source === filterSource);
-    } else if (filterGroup) {
-      // group-title in M3U is set to channel.source, so this filters the same way
-      channels = channels.filter(ch => ch && ch.source === filterGroup);
-    }
-    
-    // Filter out invalid channels
-    channels = channels.filter(ch => ch && ch.name && ch.source);
-
-    if (!includeUnmapped) {
-      const channelMap = loadConfig('channelMap') || {};
-      const mapKeys = new Set(Object.keys(channelMap));
-      channels = channels.filter(channel => isChannelMapped(channel, channelMap, mapKeys));
-    }
-    
-    const tvgIdMap = new Map(); // For deduplication
-    const baseUrl = getBaseUrl(req);
-
-    const epgUrl = `${baseUrl}/xmltv.xml`;
-    let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
-
-    for (const channel of channels) {
-      try {
-        let tvgId = channel.tvg_id || '';
-        const originalTvgId = tvgId;
-
-        // Deduplicate tvg-id
-        if (tvgIdMap.has(tvgId)) {
-          let i = 1;
-          while (tvgIdMap.has(`${originalTvgId}_${i}`)) i++;
-          tvgId = `${originalTvgId}_${i}`;
-        }
-        if (tvgId) tvgIdMap.set(tvgId, true);
-
-        const tvgName = channel.name || '';
-        const tvgLogo = channel.logo
-          ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
-          : '';
-        const tvgChno = channel.guideNumber || '';
-        const groupTitle = channel.source || '';
-        const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
-
-        output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}"`;
-        if (tvgChno) {
-          output += ` tvg-chno="${tvgChno}"`;
-        }
-        output += `,${tvgName}\n`;
-        output += `${streamUrl}\n`;
-      } catch (channelErr) {
-        // Log but continue processing other channels
-        console.warn(`[lineup.m3u] Skipping invalid channel: ${channelErr.message}`);
+      // Check cache
+      const cached = jsonCache.get(cacheKey);
+      if (cached) {
+        return res.json(cached);
       }
-    }
-    
-    // Cache the result
-    m3uCache.set(cacheKey, output);
 
-    res.set('Content-Type', 'application/x-mpegURL');
-    res.send(output);
-  }));
+      let channels = loadChannels();
+
+      // Validate that we have channels
+      if (!Array.isArray(channels)) {
+        throw new AppError('Invalid channels data structure', 500);
+      }
+
+      if (!includeUnmapped) {
+        const channelMap = loadConfig('channelMap') || {};
+        const mapKeys = new Set(Object.keys(channelMap));
+        channels = channels.filter(channel => isChannelMapped(channel, channelMap, mapKeys));
+      }
+
+      const baseUrl = getBaseUrl(req);
+      const lineup = channels
+        .filter(channel => channel && channel.name) // Filter out invalid channels
+        .map(channel => ({
+          GuideNumber: resolveGuideNumberForLineup(channel),
+          GuideName: channel.name,
+          URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.name)}`,
+        }));
+
+      // Cache the result
+      jsonCache.set(cacheKey, lineup);
+
+      res.json(lineup);
+    })
+  );
+
+  app.get(
+    '/lineup.m3u',
+    lineupLimiter,
+    asyncHandler(async (req, res) => {
+      // Extract query parameters for filtering
+      const filterSource = req.query.source ? String(req.query.source) : null;
+      const filterGroup = req.query.group ? String(req.query.group) : null;
+      const includeUnmapped = parseBooleanQueryParam(
+        req.query.include_unmapped ?? req.query.includeUnmapped
+      );
+
+      // Create cache key including filters
+      const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
+
+      // Check cache
+      const cached = m3uCache.get(cacheKey);
+      if (cached) {
+        res.set('Content-Type', 'application/x-mpegURL');
+        return res.send(cached);
+      }
+
+      let channels = loadChannels();
+
+      // Validate that we have channels
+      if (!Array.isArray(channels)) {
+        throw new AppError('Invalid channels data structure', 500);
+      }
+
+      // Apply filters (note: source and group both filter by channel.source since group-title=source)
+      if (filterSource) {
+        channels = channels.filter(ch => ch && ch.source === filterSource);
+      } else if (filterGroup) {
+        // group-title in M3U is set to channel.source, so this filters the same way
+        channels = channels.filter(ch => ch && ch.source === filterGroup);
+      }
+
+      // Filter out invalid channels
+      channels = channels.filter(ch => ch && ch.name && ch.source);
+
+      if (!includeUnmapped) {
+        const channelMap = loadConfig('channelMap') || {};
+        const mapKeys = new Set(Object.keys(channelMap));
+        channels = channels.filter(channel => isChannelMapped(channel, channelMap, mapKeys));
+      }
+
+      const tvgIdMap = new Map(); // For deduplication
+      const baseUrl = getBaseUrl(req);
+
+      const epgUrl = `${baseUrl}/xmltv.xml`;
+      let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
+
+      for (const channel of channels) {
+        try {
+          let tvgId = channel.tvg_id || '';
+          const originalTvgId = tvgId;
+
+          // Deduplicate tvg-id
+          if (tvgIdMap.has(tvgId)) {
+            let i = 1;
+            while (tvgIdMap.has(`${originalTvgId}_${i}`)) i++;
+            tvgId = `${originalTvgId}_${i}`;
+          }
+          if (tvgId) tvgIdMap.set(tvgId, true);
+
+          const tvgName = channel.name || '';
+          const tvgLogo = channel.logo
+            ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
+            : '';
+          const tvgChno = channel.guideNumber || '';
+          const groupTitle = channel.source || '';
+          const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
+
+          output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}"`;
+          if (tvgChno) {
+            output += ` tvg-chno="${tvgChno}"`;
+          }
+          output += `,${tvgName}\n`;
+          output += `${streamUrl}\n`;
+        } catch (channelErr) {
+          // Log but continue processing other channels
+          console.warn(`[lineup.m3u] Skipping invalid channel: ${channelErr.message}`);
+        }
+      }
+
+      // Cache the result
+      m3uCache.set(cacheKey, output);
+
+      res.set('Content-Type', 'application/x-mpegURL');
+      res.send(output);
+    })
+  );
 
   app.all('/stream/:source/:name', async (req, res) => {
     const { source, name } = req.params;
     const upstreamOverride = req.query.upstream ? String(req.query.upstream) : null;
     const channels = loadChannels();
 
-    const channel = channels.find(
-      c => c.source === source && c.name === name
-    );
+    const channel = channels.find(c => c.source === source && c.name === name);
 
     if (!channel) return res.status(404).send('Channel not found');
-
-    // Helper to validate that an override URL is HTTP(S) and shares the same origin
-    // (protocol + hostname + port) as the channel's configured upstream URL.
-    const isSameOriginHttpUrl = (overrideUrlString, channelUrlString) => {
-      const defaultPorts = { 'http:': '80', 'https:': '443' };
-      const normalizePort = (url) => url.port || defaultPorts[url.protocol];
-
-      let overrideUrl;
-      let channelUrl;
-      try {
-        overrideUrl = new URL(overrideUrlString);
-        channelUrl = new URL(channelUrlString);
-      } catch (_err) {
-        return { ok: false, reason: 'parse-error' };
-      }
-
-      // Only allow HTTP(S) schemes for both URLs.
-      if (!defaultPorts[overrideUrl.protocol] || !defaultPorts[channelUrl.protocol]) {
-        return { ok: false, reason: 'invalid-protocol' };
-      }
-
-      const sameOrigin =
-        overrideUrl.protocol === channelUrl.protocol &&
-        overrideUrl.hostname === channelUrl.hostname &&
-        normalizePort(overrideUrl) === normalizePort(channelUrl);
-
-      return sameOrigin ? { ok: true } : { ok: false, reason: 'origin-mismatch' };
-    };
 
     // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
     // HTTP(S) origin (protocol + hostname + port) as the channel's configured upstream URL.
@@ -404,16 +413,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         res.status(response.status || 200).end();
         console.info('[stream] %s/%s head ok in %dms', source, name, Date.now() - startTime);
       } catch (err) {
-        console.warn(
-          '[stream] head failed %s/%s: %s',
-          source,
-          name,
-          err.message,
-          {
-            status: err.response?.status,
-            code: err.code
-          }
-        );
+        console.warn('[stream] head failed %s/%s: %s', source, name, err.message, {
+          status: err.response?.status,
+          code: err.code,
+        });
         res.status(502).end();
       }
       return;
@@ -488,7 +491,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         res.set(headers);
         res.set('content-type', 'application/x-mpegURL');
         res.send(rewrittenBody);
-        console.info('[stream] %s/%s playlist rewritten in %dms', source, name, Date.now() - startTime);
+        console.info(
+          '[stream] %s/%s playlist rewritten in %dms',
+          source,
+          name,
+          Date.now() - startTime
+        );
         return;
       }
 
@@ -516,7 +524,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       const axiosOptions = {
         responseType: 'stream',
         timeout: 15000,
-        ...(upstreamOverride ? { maxRedirects: 0 } : {})
+        ...(upstreamOverride ? { maxRedirects: 0 } : {}),
       };
       const response = await axios.get(upstreamUrl, axiosOptions);
 
@@ -524,16 +532,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     } catch (err) {
       if (usageKey && !upstreamOverride) unregisterUsage(usageKey);
       if (usageInterval) clearInterval(usageInterval);
-      console.warn(
-        '[stream] failed %s/%s: %s',
-        source,
-        name,
-        err.message,
-        {
-          status: err.response?.status,
-          code: err.code
-        }
-      );
+      console.warn('[stream] failed %s/%s: %s', source, name, err.message, {
+        status: err.response?.status,
+        code: err.code,
+      });
       res.status(502).send('Failed to fetch stream');
     }
   });

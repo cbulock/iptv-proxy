@@ -12,7 +12,7 @@ http://example.com/stream1.m3u8
 https://example.com/stream2.m3u8`;
 
       const result = validateM3UFormat(m3u);
-      
+
       expect(result.isValid).to.be.true;
       expect(result.errors).to.be.empty;
       expect(result.channelCount).to.equal(2);
@@ -23,7 +23,7 @@ https://example.com/stream2.m3u8`;
 http://example.com/stream1.m3u8`;
 
       const result = validateM3UFormat(m3u);
-      
+
       expect(result.isValid).to.be.false;
       expect(result.errors).to.include('M3U file must start with #EXTM3U header');
     });
@@ -34,7 +34,7 @@ http://example.com/stream1.m3u8`;
 ftp://example.com/stream1.m3u8`;
 
       const result = validateM3UFormat(m3u);
-      
+
       expect(result.isValid).to.be.false;
       expect(result.errors[0]).to.include('Invalid stream URL protocol');
     });
@@ -45,14 +45,14 @@ ftp://example.com/stream1.m3u8`;
 http://example.com/stream1.m3u8`;
 
       const result = validateM3UFormat(m3u);
-      
+
       expect(result.isValid).to.be.false;
       expect(result.errors[0]).to.include('channel name');
     });
 
     it('should accept all valid protocols', () => {
       const protocols = ['http', 'https', 'rtsp', 'rtp', 'udp'];
-      
+
       protocols.forEach(protocol => {
         const m3u = `#EXTM3U
 #EXTINF:-1,Channel
@@ -67,7 +67,7 @@ ${protocol}://example.com/stream`;
       const m3u = '#EXTM3U\n';
 
       const result = validateM3UFormat(m3u);
-      
+
       expect(result.isValid).to.be.true;
       expect(result.warnings).to.include('M3U file contains no channels');
     });
@@ -86,7 +86,7 @@ ${protocol}://example.com/stream`;
 </tv>`;
 
       const result = validateXMLTVFormat(xml);
-      
+
       expect(result.isValid).to.be.true;
       expect(result.errors).to.be.empty;
       expect(result.channelCount).to.equal(1);
@@ -100,17 +100,18 @@ ${protocol}://example.com/stream`;
 </channel>`;
 
       const result = validateXMLTVFormat(xml);
-      
+
       expect(result.isValid).to.be.false;
       expect(result.errors[0]).to.include('<tv> root element');
     });
 
     it('should detect malformed XML structure', () => {
       // Test with truly malformed XML - missing closing tag for channel
-      const xml = '<?xml version="1.0"?><tv><channel id="ch1"><display-name>Test</display-name></tv>';
+      const xml =
+        '<?xml version="1.0"?><tv><channel id="ch1"><display-name>Test</display-name></tv>';
 
       const result = validateXMLTVFormat(xml);
-      
+
       // fast-xml-parser is lenient and may parse this, so we check if it parses
       // and if the structure is still valid
       expect(result.isValid || result.errors.length > 0).to.be.true;
@@ -125,7 +126,7 @@ ${protocol}://example.com/stream`;
 </tv>`;
 
       const result = validateXMLTVFormat(xml);
-      
+
       expect(result.isValid).to.be.false;
       expect(result.errors[0]).to.include("missing required 'id' attribute");
     });
@@ -142,7 +143,7 @@ ${protocol}://example.com/stream`;
 </tv>`;
 
       const result = validateXMLTVFormat(xml);
-      
+
       expect(result.isValid).to.be.false;
       expect(result.errors.some(e => e.includes('start'))).to.be.true;
       expect(result.errors.some(e => e.includes('stop'))).to.be.true;
@@ -155,7 +156,7 @@ ${protocol}://example.com/stream`;
 </tv>`;
 
       const result = validateXMLTVFormat(xml);
-      
+
       expect(result.isValid).to.be.true;
       expect(result.warnings[0]).to.include('missing display-name element');
     });
@@ -166,7 +167,7 @@ ${protocol}://example.com/stream`;
       const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="test"></tv>';
 
       const result = validateXMLTVFormat(xml);
-      
+
       expect(result.isValid).to.be.true;
       expect(result.warnings).to.include('XMLTV file contains no channels');
       expect(result.warnings).to.include('XMLTV file contains no programmes');

@@ -13,7 +13,7 @@ const COMMON_CONFIGS = {
 #   number: "1.1"
 #   tvg_id: "channel.id"
 {}
-`
+`,
 };
 
 const PROVIDERS_CONFIG = `# IPTV Providers configuration

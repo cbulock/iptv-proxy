@@ -16,7 +16,7 @@ async function hashPassword(password) {
 
 async function main() {
   const args = process.argv.slice(2);
-  
+
   if (args.length > 0) {
     // Password provided as command line argument
     const password = args[0];
@@ -31,16 +31,16 @@ async function main() {
     // Interactive mode - prompt for password
     const rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     });
-    
-    rl.question('Enter password to hash: ', async (password) => {
+
+    rl.question('Enter password to hash: ', async password => {
       if (!password) {
         console.error('Error: Password cannot be empty');
         rl.close();
         process.exit(1);
       }
-      
+
       const hash = await hashPassword(password);
       console.log('\nBcrypt hash:');
       console.log(hash);

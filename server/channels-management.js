@@ -25,10 +25,7 @@ router.use(requireAuth);
 
 function isSafeChannelKey(key) {
   return (
-    typeof key === 'string' &&
-    key !== '__proto__' &&
-    key !== 'constructor' &&
-    key !== 'prototype'
+    typeof key === 'string' && key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
   );
 }
 // Rate limiter for write-heavy channel management operations
@@ -38,6 +35,33 @@ const channelsWriteLimiter = rateLimit({
 });
 
 /**
+ * Load, apply an update function, validate, save the channel map, then reload channels.
+ * Returns { error } on failure or undefined on success.
+ * @param {function(Object): Object|void} updater - Mutates the mapping in-place; may return early error object.
+ * @returns {Promise<{error: string}|undefined>}
+ */
+async function saveChannelMapUpdates(updater) {
+  let mapping = {};
+  try {
+    mapping = loadConfig('channelMap');
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn('[Channels] Could not read channel map:', err.message);
+  }
+
+  const earlyError = await updater(mapping);
+  if (earlyError) return earlyError;
+
+  const validation = validateConfigData('channelMap', mapping);
+  if (!validation.valid) return { error: validation.error };
+
+  const yamlText = yaml.stringify(validation.value || {});
+  await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
+
+  await parseAll();
+  await invalidateCache();
+}
+
+/**
  * Reorder channels by updating their guide numbers
  * POST /api/channels/reorder
  * Body: { channels: [{ name: string, number: string }] }
@@ -45,51 +69,25 @@ const channelsWriteLimiter = rateLimit({
 router.post('/reorder', channelsWriteLimiter, async (req, res) => {
   try {
     const { channels } = req.body;
-    
+
     if (!Array.isArray(channels)) {
       return res.status(400).json({ error: 'channels must be an array' });
     }
-    
-    // Load current mapping
-    let mapping = {};
-    try {
-      mapping = loadConfig('channelMap');
-    } catch {}
-    
-    // Update guide numbers for specified channels
+
     let updated = 0;
-    for (const ch of channels) {
-      if (!ch.name) continue;
-      if (!isSafeChannelKey(ch.name)) {
-        return res.status(400).json({ error: 'Invalid channel name' });
+    const err = await saveChannelMapUpdates(mapping => {
+      for (const ch of channels) {
+        if (!ch.name) continue;
+        if (!isSafeChannelKey(ch.name)) return { error: 'Invalid channel name' };
+        if (!mapping[ch.name]) mapping[ch.name] = {};
+        mapping[ch.name].number = String(ch.number || '');
+        updated++;
       }
-      
-      if (!mapping[ch.name]) {
-        mapping[ch.name] = {};
-      }
-      
-      mapping[ch.name].number = String(ch.number || '');
-      updated++;
-    }
-    
-    // Validate and save
-    const validation = validateConfigData('channelMap', mapping);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.error });
-    }
-    
-    const yamlText = yaml.stringify(validation.value || {});
-    await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
-    
-    // Reload channels
-    await parseAll();
-    await invalidateCache();
-    
-    res.json({ 
-      status: 'success', 
-      message: `Reordered ${updated} channels`,
-      updated 
     });
+
+    if (err) return res.status(400).json(err);
+
+    res.json({ status: 'success', message: `Reordered ${updated} channels`, updated });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reorder channels', detail: err.message });
   }
@@ -103,59 +101,35 @@ router.post('/reorder', channelsWriteLimiter, async (req, res) => {
 router.post('/rename', channelsWriteLimiter, async (req, res) => {
   try {
     const { channels } = req.body;
-    
+
     if (!Array.isArray(channels)) {
       return res.status(400).json({ error: 'channels must be an array' });
     }
-    
-    // Load current mapping
-    let mapping = {};
-    try {
-      mapping = loadConfig('channelMap');
-    } catch {}
-    
-    // Rename channels
+
     let updated = 0;
-    for (const ch of channels) {
-      if (!ch.oldName || !ch.newName) continue;
-      
-      // If there was an existing mapping for oldName, migrate it to newName
-      if (mapping[ch.oldName]) {
-        // Move the mapping to the new key and update the display name
-        mapping[ch.newName] = {
-          ...mapping[ch.oldName],
-          name: ch.newName
-        };
-        delete mapping[ch.oldName];
-      } else {
-        // Create new mapping: the key is the source channel name (oldName),
-        // and 'name' field overrides the display name to newName
-        mapping[ch.oldName] = {
-          name: ch.newName
-        };
+    const err = await saveChannelMapUpdates(mapping => {
+      for (const ch of channels) {
+        if (!ch.oldName || !ch.newName) continue;
+        if (!isSafeChannelKey(ch.oldName) || !isSafeChannelKey(ch.newName)) continue;
+
+        // If there was an existing mapping for oldName, migrate it to newName
+        if (mapping[ch.oldName]) {
+          // Move the mapping to the new key and update the display name
+          mapping[ch.newName] = { ...mapping[ch.oldName], name: ch.newName };
+          delete mapping[ch.oldName];
+        } else {
+          // Create new mapping: the key is the source channel name (oldName),
+          // and 'name' field overrides the display name to newName
+          mapping[ch.oldName] = { name: ch.newName };
+        }
+
+        updated++;
       }
-      
-      updated++;
-    }
-    
-    // Validate and save
-    const validation = validateConfigData('channelMap', mapping);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.error });
-    }
-    
-    const yamlText = yaml.stringify(validation.value || {});
-    await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
-    
-    // Reload channels
-    await parseAll();
-    await invalidateCache();
-    
-    res.json({ 
-      status: 'success', 
-      message: `Renamed ${updated} channels`,
-      updated 
     });
+
+    if (err) return res.status(400).json(err);
+
+    res.json({ status: 'success', message: `Renamed ${updated} channels`, updated });
   } catch (err) {
     res.status(500).json({ error: 'Failed to rename channels', detail: err.message });
   }
@@ -170,48 +144,24 @@ router.post('/rename', channelsWriteLimiter, async (req, res) => {
 router.post('/group', channelsWriteLimiter, async (req, res) => {
   try {
     const { channels } = req.body;
-    
+
     if (!Array.isArray(channels)) {
       return res.status(400).json({ error: 'channels must be an array' });
     }
-    
-    // Load current mapping
-    let mapping = {};
-    try {
-      mapping = loadConfig('channelMap');
-    } catch {}
-    
-    // Update groups
+
     let updated = 0;
-    for (const ch of channels) {
-      if (!ch.name || !isSafeChannelKey(ch.name)) continue;
-      
-      if (!mapping[ch.name]) {
-        mapping[ch.name] = {};
+    const err = await saveChannelMapUpdates(mapping => {
+      for (const ch of channels) {
+        if (!ch.name || !isSafeChannelKey(ch.name)) continue;
+        if (!mapping[ch.name]) mapping[ch.name] = {};
+        mapping[ch.name].group = String(ch.group || '');
+        updated++;
       }
-      
-      mapping[ch.name].group = String(ch.group || '');
-      updated++;
-    }
-    
-    // Validate and save
-    const validation = validateConfigData('channelMap', mapping);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.error });
-    }
-    
-    const yamlText = yaml.stringify(validation.value || {});
-    await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
-    
-    // Reload channels
-    await parseAll();
-    await invalidateCache();
-    
-    res.json({ 
-      status: 'success', 
-      message: `Updated groups for ${updated} channels`,
-      updated 
     });
+
+    if (err) return res.status(400).json(err);
+
+    res.json({ status: 'success', message: `Updated groups for ${updated} channels`, updated });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update groups', detail: err.message });
   }
@@ -225,64 +175,42 @@ router.post('/group', channelsWriteLimiter, async (req, res) => {
 router.post('/bulk-update', channelsWriteLimiter, async (req, res) => {
   try {
     const { channels } = req.body;
-    
+
     if (!Array.isArray(channels)) {
       return res.status(400).json({ error: 'channels must be an array' });
     }
-    
-    // Load current mapping
-    let mapping = {};
-    try {
-      mapping = loadConfig('channelMap');
-    } catch {}
-    
-    // Apply updates
+
     let updated = 0;
-    for (const ch of channels) {
-      if (!ch.name) continue;
-      
-      const targetKey = ch.newName || ch.name;
-      
-      if (!isSafeChannelKey(ch.name) || !isSafeChannelKey(targetKey)) {
-        return res.status(400).json({ error: 'Invalid channel name' });
+    const err = await saveChannelMapUpdates(mapping => {
+      for (const ch of channels) {
+        if (!ch.name) continue;
+
+        const targetKey = ch.newName || ch.name;
+
+        if (!isSafeChannelKey(ch.name) || !isSafeChannelKey(targetKey)) {
+          return { error: 'Invalid channel name' };
+        }
+
+        // Migrate existing mapping if renaming
+        if (ch.newName && ch.name !== ch.newName && mapping[ch.name]) {
+          mapping[targetKey] = { ...mapping[ch.name] };
+          delete mapping[ch.name];
+        }
+
+        if (!mapping[targetKey]) mapping[targetKey] = {};
+
+        // Apply updates
+        if (ch.newName) mapping[targetKey].name = ch.newName;
+        if (ch.number !== undefined) mapping[targetKey].number = String(ch.number);
+        if (ch.group !== undefined) mapping[targetKey].group = String(ch.group);
+
+        updated++;
       }
-      
-      // Migrate existing mapping if renaming
-      if (ch.newName && ch.name !== ch.newName && mapping[ch.name]) {
-        mapping[targetKey] = { ...mapping[ch.name] };
-        delete mapping[ch.name];
-      }
-      
-      if (!mapping[targetKey]) {
-        mapping[targetKey] = {};
-      }
-      
-      // Apply updates
-      if (ch.newName) mapping[targetKey].name = ch.newName;
-      if (ch.number !== undefined) mapping[targetKey].number = String(ch.number);
-      if (ch.group !== undefined) mapping[targetKey].group = String(ch.group);
-      
-      updated++;
-    }
-    
-    // Validate and save
-    const validation = validateConfigData('channelMap', mapping);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.error });
-    }
-    
-    const yamlText = yaml.stringify(validation.value || {});
-    await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
-    
-    // Reload channels
-    await parseAll();
-    await invalidateCache();
-    
-    res.json({ 
-      status: 'success', 
-      message: `Updated ${updated} channels`,
-      updated 
     });
+
+    if (err) return res.status(400).json(err);
+
+    res.json({ status: 'success', message: `Updated ${updated} channels`, updated });
   } catch (err) {
     res.status(500).json({ error: 'Failed to bulk update channels', detail: err.message });
   }

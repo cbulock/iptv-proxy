@@ -37,7 +37,9 @@ describe('Usage Route Integration', () => {
 
       const response = await axios.get(`${baseUrl}/api/usage/active`);
       const active = Array.isArray(response.data?.active) ? response.data.active : [];
-      const entries = active.filter(entry => entry.ip === '127.0.0.1' && entry.channelId === channelId);
+      const entries = active.filter(
+        entry => entry.ip === '127.0.0.1' && entry.channelId === channelId
+      );
 
       expect(key2).to.equal(key1);
       expect(entries.length).to.equal(1);
@@ -94,4 +96,3 @@ describe('Usage Route Integration', () => {
     }
   });
 });
-

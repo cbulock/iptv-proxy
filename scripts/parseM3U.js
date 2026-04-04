@@ -239,7 +239,7 @@ async function processSource(source, map) {
       console.log('   💡 Fix: HDHomeRun device error');
       console.log('      • Verify device is powered on and connected to network');
       console.log(`      • Test access: curl ${source.url}/discover.json`);
-      console.log('      • Check device IP address hasn\'t changed');
+      console.log("      • Check device IP address hasn't changed");
     } else {
       console.log('   💡 Fix: Check the source URL and network connectivity');
       console.log(`      • Test manually: curl -I "${source.url}"`);

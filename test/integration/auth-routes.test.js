@@ -40,7 +40,7 @@ function buildApp() {
 }
 
 async function startServer(app) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const server = app.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
       resolve({ server, baseUrl: `http://127.0.0.1:${port}` });
@@ -49,7 +49,7 @@ async function startServer(app) {
 }
 
 async function stopServer(server) {
-  return new Promise((resolve) => server.close(resolve));
+  return new Promise(resolve => server.close(resolve));
 }
 
 /**
@@ -154,7 +154,10 @@ describe('Auth Routes Integration', () => {
     });
 
     it('returns 200 and a session cookie with valid credentials', async () => {
-      const res = await axios.post(`${baseUrl}/api/auth/login`, { username: 'admin', password: 'password123' });
+      const res = await axios.post(`${baseUrl}/api/auth/login`, {
+        username: 'admin',
+        password: 'password123',
+      });
       expect(res.status).to.equal(200);
       expect(res.data.status).to.equal('ok');
       expect(res.data).to.have.property('csrfToken').that.is.a('string');
@@ -180,7 +183,10 @@ describe('Auth Routes Integration', () => {
     });
 
     it('returns csrfToken in the login response', async () => {
-      const res = await axios.post(`${baseUrl}/api/auth/login`, { username: 'admin', password: 'password123' });
+      const res = await axios.post(`${baseUrl}/api/auth/login`, {
+        username: 'admin',
+        password: 'password123',
+      });
       expect(res.status).to.equal(200);
       expect(res.data).to.have.property('csrfToken').that.is.a('string').with.length.greaterThan(0);
     });
@@ -194,16 +200,24 @@ describe('Auth Routes Integration', () => {
       const cookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
 
       // Confirm we are logged in
-      const before = await axios.get(`${baseUrl}/api/auth/session`, { headers: cookieHeader(cookie) });
+      const before = await axios.get(`${baseUrl}/api/auth/session`, {
+        headers: cookieHeader(cookie),
+      });
       expect(before.data.authenticated).to.equal(true);
 
       // Log out
-      const logoutRes = await axios.post(`${baseUrl}/api/auth/logout`, {}, { headers: cookieHeader(cookie) });
+      const logoutRes = await axios.post(
+        `${baseUrl}/api/auth/logout`,
+        {},
+        { headers: cookieHeader(cookie) }
+      );
       expect(logoutRes.status).to.equal(200);
       expect(logoutRes.data).to.deep.equal({ status: 'logged_out' });
 
       // The old session cookie should no longer be authenticated
-      const after = await axios.get(`${baseUrl}/api/auth/session`, { headers: cookieHeader(cookie) });
+      const after = await axios.get(`${baseUrl}/api/auth/session`, {
+        headers: cookieHeader(cookie),
+      });
       expect(after.data.authenticated).to.equal(false);
     });
   });
@@ -224,7 +238,9 @@ describe('Auth Routes Integration', () => {
     it('returns a csrfToken when authenticated', async () => {
       await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
       const cookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
-      const res = await axios.get(`${baseUrl}/api/auth/csrf-token`, { headers: cookieHeader(cookie) });
+      const res = await axios.get(`${baseUrl}/api/auth/csrf-token`, {
+        headers: cookieHeader(cookie),
+      });
       expect(res.status).to.equal(200);
       expect(res.data).to.have.property('csrfToken').that.is.a('string').with.length.greaterThan(0);
     });
@@ -232,8 +248,12 @@ describe('Auth Routes Integration', () => {
     it('returns the same token on repeated calls', async () => {
       await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
       const cookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
-      const r1 = await axios.get(`${baseUrl}/api/auth/csrf-token`, { headers: cookieHeader(cookie) });
-      const r2 = await axios.get(`${baseUrl}/api/auth/csrf-token`, { headers: cookieHeader(cookie) });
+      const r1 = await axios.get(`${baseUrl}/api/auth/csrf-token`, {
+        headers: cookieHeader(cookie),
+      });
+      const r2 = await axios.get(`${baseUrl}/api/auth/csrf-token`, {
+        headers: cookieHeader(cookie),
+      });
       expect(r1.data.csrfToken).to.equal(r2.data.csrfToken);
     });
   });
@@ -242,7 +262,10 @@ describe('Auth Routes Integration', () => {
 
   describe('POST /api/auth/setup', () => {
     it('returns 200 and saves credentials when auth is not configured', async () => {
-      const res = await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      const res = await axios.post(`${baseUrl}/api/auth/setup`, {
+        username: 'admin',
+        password: 'password123',
+      });
       expect(res.status).to.equal(200);
       expect(res.data).to.deep.equal({ status: 'configured' });
 
@@ -256,7 +279,10 @@ describe('Auth Routes Integration', () => {
     it('returns 403 when auth is already configured', async () => {
       await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
       try {
-        await axios.post(`${baseUrl}/api/auth/setup`, { username: 'other', password: 'password456' });
+        await axios.post(`${baseUrl}/api/auth/setup`, {
+          username: 'other',
+          password: 'password456',
+        });
         expect.fail('Expected 403');
       } catch (err) {
         expect(err.response.status).to.equal(403);
@@ -284,7 +310,10 @@ describe('Auth Routes Integration', () => {
 
     it('returns 400 when username exceeds 50 characters', async () => {
       try {
-        await axios.post(`${baseUrl}/api/auth/setup`, { username: 'a'.repeat(51), password: 'password123' });
+        await axios.post(`${baseUrl}/api/auth/setup`, {
+          username: 'a'.repeat(51),
+          password: 'password123',
+        });
         expect.fail('Expected 400');
       } catch (err) {
         expect(err.response.status).to.equal(400);
@@ -294,7 +323,10 @@ describe('Auth Routes Integration', () => {
 
     it('returns 400 when username contains invalid characters', async () => {
       try {
-        await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin<script>', password: 'password123' });
+        await axios.post(`${baseUrl}/api/auth/setup`, {
+          username: 'admin<script>',
+          password: 'password123',
+        });
         expect.fail('Expected 400');
       } catch (err) {
         expect(err.response.status).to.equal(400);
@@ -313,7 +345,10 @@ describe('Auth Routes Integration', () => {
 
     it('returns 400 when password exceeds 128 characters', async () => {
       try {
-        await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'a'.repeat(129) });
+        await axios.post(`${baseUrl}/api/auth/setup`, {
+          username: 'admin',
+          password: 'a'.repeat(129),
+        });
         expect.fail('Expected 400');
       } catch (err) {
         expect(err.response.status).to.equal(400);
@@ -322,7 +357,10 @@ describe('Auth Routes Integration', () => {
     });
 
     it('does not expose internal error details in successful responses', async () => {
-      const res = await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      const res = await axios.post(`${baseUrl}/api/auth/setup`, {
+        username: 'admin',
+        password: 'password123',
+      });
       expect(res.data).to.not.have.property('detail');
     });
   });
@@ -341,7 +379,10 @@ describe('Auth Routes Integration', () => {
 
     it('returns 401 when no session cookie is provided', async () => {
       try {
-        await axios.put(`${baseUrl}/api/auth/password`, { currentPassword: 'password123', newPassword: 'newpassword456' });
+        await axios.put(`${baseUrl}/api/auth/password`, {
+          currentPassword: 'password123',
+          newPassword: 'newpassword456',
+        });
         expect.fail('Expected 401');
       } catch (err) {
         expect(err.response.status).to.equal(401);

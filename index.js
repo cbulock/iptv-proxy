@@ -53,18 +53,22 @@ const sessionSecret = (() => {
     if (typeof appCfg.session_secret === 'string' && appCfg.session_secret.length >= 32) {
       return appCfg.session_secret;
     }
-  } catch (_) { /* ignore: fall through to generate */ }
+  } catch (_) {
+    /* ignore: fall through to generate */
+  }
 
   // Generate a new secret and persist it so sessions survive restarts
   const newSecret = crypto.randomBytes(32).toString('hex');
   try {
     const appYamlPath = getConfigPath('app.yaml');
     const existing = fs.existsSync(appYamlPath)
-      ? (yaml.parse(fs.readFileSync(appYamlPath, 'utf8')) || {})
+      ? yaml.parse(fs.readFileSync(appYamlPath, 'utf8')) || {}
       : {};
     existing.session_secret = newSecret;
     fs.writeFileSync(appYamlPath, yaml.stringify(existing), 'utf8');
-    console.log(chalk.cyan('[Auth] Generated and saved session_secret to app.yaml for persistent sessions.'));
+    console.log(
+      chalk.cyan('[Auth] Generated and saved session_secret to app.yaml for persistent sessions.')
+    );
   } catch (saveErr) {
     console.warn(
       '[Auth] Could not save session_secret to app.yaml — sessions will be invalidated on restart.',
@@ -120,7 +124,7 @@ function resolveHashedAdminEntry(ext) {
   }
 
   const assetNames = fs.readdirSync(builtAdminAssetsDir);
-  const match = assetNames.find((name) => name.startsWith('index-') && name.endsWith(`.${ext}`));
+  const match = assetNames.find(name => name.startsWith('index-') && name.endsWith(`.${ext}`));
   return match ? path.join(builtAdminAssetsDir, match) : null;
 }
 
@@ -140,19 +144,19 @@ try {
 const adminLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 // Serve all /admin assets with authentication.
 // Order: built admin files -> shared public files -> hashed entry fallback.
 app.use('/admin', adminLimiter, requireAuthHTML, (req, res, next) => {
-  builtAdminStatic(req, res, (err) => {
+  builtAdminStatic(req, res, err => {
     if (err) {
       return next(err);
     }
 
-    publicStaticForAdmin(req, res, (fallbackErr) => {
+    publicStaticForAdmin(req, res, fallbackErr => {
       if (fallbackErr) {
         return next(fallbackErr);
       }
@@ -274,10 +278,10 @@ app.listen(port, () => {
   const adminUrl = isAdminBuilt()
     ? `${base}/admin/`
     : `http://${config.host}:${adminDevPort}/admin/ (dev server - run 'npm run dev')`;
-  
+
   console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
-  console.log(chalk.cyan(`  M3U Playlist:`), chalk.yellow(`${base}/lineup.m3u`));
-  console.log(chalk.cyan(`  XMLTV Guide:`), chalk.yellow(`${base}/xmltv.xml`));
+  console.log(chalk.cyan('  M3U Playlist:'), chalk.yellow(`${base}/lineup.m3u`));
+  console.log(chalk.cyan('  XMLTV Guide:'), chalk.yellow(`${base}/xmltv.xml`));
   console.log(chalk.cyan('  MCP Endpoint:'), chalk.yellow(`${base}/mcp`));
-  console.log(chalk.cyan(`  Admin UI:`), chalk.yellow(adminUrl));
+  console.log(chalk.cyan('  Admin UI:'), chalk.yellow(adminUrl));
 });

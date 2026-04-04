@@ -61,7 +61,8 @@ describe('MCP Route Integration', () => {
   let tmpConfigDir;
   let cleanupCache;
 
-  before(async () => {
+  before(async function () {
+    this.timeout(30000); // ESM dynamic imports can be slow on Windows
     // Create isolated temp directories before importing any DATA_PATH-dependent modules
     tmpDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-mcp-data-'));
     tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-mcp-config-'));
@@ -86,7 +87,13 @@ describe('MCP Route Integration', () => {
     const testChannels = [
       { name: 'CNN', tvg_id: 'cnn.us', source: 'TestProvider', group: 'News' },
       { name: 'ESPN', tvg_id: 'espn.us', source: 'TestProvider', group: 'Sports' },
-      { name: 'Fox News', tvg_id: 'fox.us', source: 'OtherProvider', group: 'News', logo: 'http://example.com/fox.png' },
+      {
+        name: 'Fox News',
+        tvg_id: 'fox.us',
+        source: 'OtherProvider',
+        group: 'News',
+        logo: 'http://example.com/fox.png',
+      },
     ];
     await fs.writeFile(channelsFile, JSON.stringify(testChannels));
     await initChannelsCache();
@@ -158,7 +165,14 @@ describe('MCP Route Integration', () => {
     const channels = JSON.parse(msg.result.content[0].text);
     expect(channels).to.have.lengthOf(3);
     // Verify the public channel shape exposed by the MCP tool
-    expect(channels[0]).to.have.all.keys('name', 'source', 'tvg_id', 'guideNumber', 'group', 'logo');
+    expect(channels[0]).to.have.all.keys(
+      'name',
+      'source',
+      'tvg_id',
+      'guideNumber',
+      'group',
+      'logo'
+    );
   });
 
   it('list_channels filters by source', async () => {

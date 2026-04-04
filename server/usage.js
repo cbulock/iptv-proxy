@@ -13,7 +13,11 @@ const HISTORY_MAX = 100;
 let channelsCache = [];
 
 async function loadChannels() {
-  try { channelsCache = JSON.parse(await fs.readFile(getDataPath('channels.json'), 'utf8')) || []; } catch { channelsCache = []; }
+  try {
+    channelsCache = JSON.parse(await fs.readFile(getDataPath('channels.json'), 'utf8')) || [];
+  } catch {
+    channelsCache = [];
+  }
 }
 
 function findChannelMeta(channelId) {
@@ -71,7 +75,15 @@ export async function registerUsage({ ip, channelId, userAgent = '' }) {
     return key;
   }
   const client = parseClientName(userAgent);
-  ACTIVE.set(key, { ip: normalizedIp, channelId, ...meta, userAgent, client, startedAt: now, lastSeen: now });
+  ACTIVE.set(key, {
+    ip: normalizedIp,
+    channelId,
+    ...meta,
+    userAgent,
+    client,
+    startedAt: now,
+    lastSeen: now,
+  });
   return key;
 }
 
@@ -102,7 +114,7 @@ router.get('/api/usage/active', requireAuth, (req, res) => {
   const list = Array.from(ACTIVE.values()).map(entry => ({
     ...entry,
     // keep both field names for backward compatibility
-    lastSeenAt: entry.lastSeen
+    lastSeenAt: entry.lastSeen,
   }));
   res.json({ active: list, count: list.length });
 });
