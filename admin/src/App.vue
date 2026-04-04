@@ -1584,23 +1584,25 @@ function setupMpegtsPlayer(video, streamUrl) {
     showPlayerError('Browser does not support media streaming (MSE unavailable).');
     return;
   }
-  mpegtsInstance = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: streamUrl });
-  mpegtsInstance.attachMediaElement(video);
-  mpegtsInstance.on(mpegts.Events.ERROR, (_type, detail) => {
-    // Codec/decode errors mean the stream format isn't browser-playable
-    if (detail && (detail.type === 'MediaError' || detail.type === 'NetworkError')) {
-      console.warn('[player] mpegts.js error:', detail);
-      if (mpegtsInstance) {
-        mpegtsInstance.destroy();
-        mpegtsInstance = null;
-      }
-      showPlayerError(
-        'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
-      );
-    }
+  // Capture the player in a local const so callbacks can guard against firing
+  // after this instance has been replaced (e.g. play().catch fires asynchronously).
+  const player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: streamUrl });
+  mpegtsInstance = player;
+  player.attachMediaElement(video);
+  player.on(mpegts.Events.ERROR, (errorType, errorDetail, _errorInfo) => {
+    if (player !== mpegtsInstance) return; // stale callback from a previous player
+    console.warn('[player] mpegts.js error:', errorType, errorDetail);
+    mpegtsInstance.destroy();
+    mpegtsInstance = null;
+    const msg =
+      errorType === 'MediaError'
+        ? 'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
+        : 'Stream unavailable. The channel may be offline or unreachable.';
+    showPlayerError(msg);
   });
-  mpegtsInstance.load();
-  mpegtsInstance.play().catch(err => {
+  player.load();
+  player.play().catch(err => {
+    if (player !== mpegtsInstance) return; // stale callback from a previous player
     // Distinguish autoplay-blocked rejections from real playback/decoding failures.
     const errorName = err && err.name;
     const errorMessage = err && err.message ? String(err.message) : '';
@@ -1620,10 +1622,8 @@ function setupMpegtsPlayer(video, streamUrl) {
     }
 
     console.warn('[player] mpegts.js playback failed:', err);
-    if (mpegtsInstance) {
-      mpegtsInstance.destroy();
-      mpegtsInstance = null;
-    }
+    mpegtsInstance.destroy();
+    mpegtsInstance = null;
     showPlayerError(
       'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
     );
