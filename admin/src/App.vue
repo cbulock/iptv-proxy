@@ -1656,24 +1656,29 @@ async function setupVideoPlayer() {
     return;
   }
 
-  // Probe the stream Content-Type before committing to a player.
-  // fetch() resolves as soon as response headers arrive; we cancel the body
-  // immediately so we don't download the stream body twice.
+  // HEAD-probe the stream to read its Content-Type without starting a real
+  // stream connection or tuning the HDHomeRun device.
   let contentType = '';
   try {
-    const probeResponse = await fetch(streamUrl);
+    const probeResponse = await fetch(streamUrl, { method: 'HEAD' });
+    if (!probeResponse.ok) {
+      showPlayerError('Stream unavailable. The channel may be offline or unreachable.');
+      return;
+    }
     contentType = probeResponse.headers.get('content-type') || '';
-    probeResponse.body?.cancel();
   } catch {
     showPlayerError('Stream unavailable. The channel may be offline or unreachable.');
     return;
   }
 
-  // Raw MPEG-TS streams (video/mpeg, video/mp2t) carry MPEG-2 video which browsers
-  // cannot decode — MSE only supports H.264/H.265. mpegts.js can parse the TS
-  // container but silently drops the MPEG-2 video track without emitting an error,
-  // leaving a black screen. Show a clear error immediately instead.
-  if (contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t')) {
+  // HDHomeRun OTA channels (ATSC 1.0) return raw MPEG-TS with MPEG-2 video even
+  // when ?streamMode=hls is requested. mpegts.js can parse the TS container but
+  // silently drops MPEG-2 video (stream type 0x02) without emitting an error,
+  // leaving a black screen. Show a clear error immediately for this case.
+  // We narrow to HDHomeRun channels because other providers may serve H.264-in-TS
+  // with the same content type, which mpegts.js handles correctly.
+  const isMpegTs = contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t');
+  if (isMpegTs && state.previewWatchingChannel?.hdhomerun) {
     showPlayerError(
       'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
     );
