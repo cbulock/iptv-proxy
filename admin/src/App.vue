@@ -1563,6 +1563,11 @@ const videoPlayerEl = ref(null);
 let hlsInstance = null;
 let mpegtsInstance = null;
 
+const ERR_UNSUPPORTED_CODEC =
+  'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.';
+const ERR_STREAM_UNAVAILABLE =
+  'Stream unavailable. The channel may be offline or unreachable.';
+
 /**
  * Set up mpegts.js player for raw MPEG-TS streams (e.g. HDHomeRun that returns
  * video/mpeg instead of HLS). Called directly for HDHomeRun channels, or as a
@@ -1594,10 +1599,7 @@ function setupMpegtsPlayer(video, streamUrl) {
     console.warn('[player] mpegts.js error:', errorType, errorDetail);
     mpegtsInstance.destroy();
     mpegtsInstance = null;
-    const msg =
-      errorType === 'MediaError'
-        ? 'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
-        : 'Stream unavailable. The channel may be offline or unreachable.';
+    const msg = errorType === 'MediaError' ? ERR_UNSUPPORTED_CODEC : ERR_STREAM_UNAVAILABLE;
     showPlayerError(msg);
   });
   player.load();
@@ -1624,9 +1626,7 @@ function setupMpegtsPlayer(video, streamUrl) {
     console.warn('[player] mpegts.js playback failed:', err);
     mpegtsInstance.destroy();
     mpegtsInstance = null;
-    showPlayerError(
-      'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
-    );
+    showPlayerError(ERR_UNSUPPORTED_CODEC);
   });
 }
 
@@ -1654,6 +1654,52 @@ async function setupVideoPlayer() {
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = streamUrl;
     return;
+  }
+
+  // HDHomeRun OTA channels (ATSC 1.0) return raw MPEG-TS with MPEG-2 video even
+  // when ?streamMode=hls is requested. mpegts.js can parse the TS container but
+  // silently drops MPEG-2 video (stream type 0x02) without emitting an error,
+  // leaving a black screen. Start a HEAD probe in parallel so playback setup is
+  // not delayed on every preview, and only interrupt if the probe confirms TS.
+  // The probe is only issued for HDHomeRun channels since the result is only used
+  // for this check — other providers skip the probe and start playback immediately.
+  if (state.previewWatchingChannel?.hdhomerun) {
+    const previewChannel = state.previewWatchingChannel;
+    fetch(streamUrl, { method: 'HEAD', signal: AbortSignal.timeout(1000) })
+      .then((probeResponse) => {
+        if (!probeResponse.ok) return;
+
+        const contentType = (probeResponse.headers.get('content-type') || '').toLowerCase();
+        const isMpegTs =
+          contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t');
+        if (!isMpegTs) return;
+
+        // Ignore stale probe results if the user switched channels or the player
+        // was reinitialized while the request was in flight.
+        if (
+          videoPlayerEl.value !== video ||
+          state.previewWatchingChannel !== previewChannel ||
+          previewStreamUrl.value !== streamUrl
+        ) {
+          return;
+        }
+
+        if (hlsInstance) {
+          hlsInstance.destroy();
+          hlsInstance = null;
+        }
+        if (mpegtsInstance) {
+          mpegtsInstance.destroy();
+          mpegtsInstance = null;
+        }
+
+        video.removeAttribute('src');
+        video.load();
+        showPlayerError(ERR_UNSUPPORTED_CODEC);
+      })
+      .catch(() => {
+        // HEAD failed — fall through to normal player logic.
+      });
   }
 
   // Use bundled HLS.js for other browsers.
@@ -1689,7 +1735,7 @@ async function setupVideoPlayer() {
         // Stream is not HLS (e.g. raw MPEG-TS from HDHomeRun); try mpegts.js
         setupMpegtsPlayer(video, streamUrl);
       } else {
-        showPlayerError('Stream unavailable. The channel may be offline or unreachable.');
+        showPlayerError(ERR_STREAM_UNAVAILABLE);
       }
     });
     return;
