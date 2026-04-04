@@ -1656,33 +1656,34 @@ async function setupVideoPlayer() {
     return;
   }
 
-  // HEAD-probe the stream to read its Content-Type without starting a real
-  // stream connection or tuning the HDHomeRun device.
-  let contentType = '';
-  try {
-    const probeResponse = await fetch(streamUrl, { method: 'HEAD' });
-    if (!probeResponse.ok) {
-      showPlayerError('Stream unavailable. The channel may be offline or unreachable.');
-      return;
-    }
-    contentType = probeResponse.headers.get('content-type') || '';
-  } catch {
-    showPlayerError('Stream unavailable. The channel may be offline or unreachable.');
-    return;
-  }
-
   // HDHomeRun OTA channels (ATSC 1.0) return raw MPEG-TS with MPEG-2 video even
   // when ?streamMode=hls is requested. mpegts.js can parse the TS container but
   // silently drops MPEG-2 video (stream type 0x02) without emitting an error,
-  // leaving a black screen. Show a clear error immediately for this case.
-  // We narrow to HDHomeRun channels because other providers may serve H.264-in-TS
-  // with the same content type, which mpegts.js handles correctly.
-  const isMpegTs = contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t');
-  if (isMpegTs && state.previewWatchingChannel?.hdhomerun) {
-    showPlayerError(
-      'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
-    );
-    return;
+  // leaving a black screen. HEAD-probe to detect this case early.
+  // The probe is only issued for HDHomeRun channels since the result is only used
+  // for this check — other providers skip the probe and start playback immediately.
+  if (state.previewWatchingChannel?.hdhomerun) {
+    let contentType = '';
+    try {
+      // HEAD-probe to fetch headers without reading the response body.
+      // Failures (network error, non-2xx) are treated as unknown content type
+      // and fall through to normal HLS.js/mpegts.js logic below.
+      const probeResponse = await fetch(streamUrl, { method: 'HEAD' });
+      if (probeResponse.ok) {
+        contentType = (probeResponse.headers.get('content-type') || '').toLowerCase();
+      }
+    } catch {
+      // HEAD failed — fall through to normal player logic.
+    }
+
+    const isMpegTs =
+      contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t');
+    if (isMpegTs) {
+      showPlayerError(
+        'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
+      );
+      return;
+    }
   }
 
   // Use bundled HLS.js for other browsers.
