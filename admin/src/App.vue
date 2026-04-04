@@ -1656,6 +1656,30 @@ async function setupVideoPlayer() {
     return;
   }
 
+  // Probe the stream Content-Type before committing to a player.
+  // fetch() resolves as soon as response headers arrive; we cancel the body
+  // immediately so we don't download the stream body twice.
+  let contentType = '';
+  try {
+    const probeResponse = await fetch(streamUrl);
+    contentType = probeResponse.headers.get('content-type') || '';
+    probeResponse.body?.cancel();
+  } catch {
+    showPlayerError('Stream unavailable. The channel may be offline or unreachable.');
+    return;
+  }
+
+  // Raw MPEG-TS streams (video/mpeg, video/mp2t) carry MPEG-2 video which browsers
+  // cannot decode — MSE only supports H.264/H.265. mpegts.js can parse the TS
+  // container but silently drops the MPEG-2 video track without emitting an error,
+  // leaving a black screen. Show a clear error immediately instead.
+  if (contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t')) {
+    showPlayerError(
+      'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
+    );
+    return;
+  }
+
   // Use bundled HLS.js for other browsers.
   // For HDHomeRun channels the stream URL includes ?streamMode=hls (see previewStreamUrl),
   // so HLS.js receives the server-proxied HLS playlist from the device.  If the device
