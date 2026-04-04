@@ -24,7 +24,7 @@ export function imageProxyRoute(app) {
       } else if (err.code === 'ENOTFOUND') {
         res.status(502).send(`Cannot resolve hostname for image: ${escapeHtml(decodedUrl)}`);
       } else {
-        res.status(502).send(`Failed to fetch image from source`);
+        res.status(502).send('Failed to fetch image from source');
       }
     }
   });

@@ -31,5 +31,5 @@ export default {
   CONFIG_DIR,
   DATA_DIR,
   getConfigPath,
-  getDataPath
+  getDataPath,
 };

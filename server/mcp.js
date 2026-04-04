@@ -24,7 +24,13 @@ function createMcpServer() {
     {
       source: z.string().optional().describe('Filter channels by provider source name'),
       search: z.string().optional().describe('Case-insensitive substring search on channel name'),
-      limit: z.number().int().min(1).max(500).default(100).describe('Maximum number of channels to return (default 100, max 500)'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .default(100)
+        .describe('Maximum number of channels to return (default 100, max 500)'),
     },
     async ({ source, search, limit = 100 }) => {
       const channels = getChannels();
@@ -35,7 +41,11 @@ function createMcpServer() {
       }
       if (search) {
         const lower = search.toLowerCase();
-        result = result.filter(c => String(c.name || '').toLowerCase().includes(lower));
+        result = result.filter(c =>
+          String(c.name || '')
+            .toLowerCase()
+            .includes(lower)
+        );
       }
 
       result = result.slice(0, limit);
@@ -61,14 +71,25 @@ function createMcpServer() {
     'Get EPG programme guide data for a specific channel.',
     {
       tvg_id: z.string().describe('TVG ID of the channel to query (e.g. "cnn.us")'),
-      hours: z.number().int().min(1).max(48).default(24).describe('Number of hours of guide data to return (default 24, max 48)'),
+      hours: z
+        .number()
+        .int()
+        .min(1)
+        .max(48)
+        .default(24)
+        .describe('Number of hours of guide data to return (default 24, max 48)'),
     },
     async ({ tvg_id, hours = 24 }) => {
       try {
         const data = getGuideData(tvg_id, hours);
         if (data === null) {
           return {
-            content: [{ type: 'text', text: 'EPG data is not available yet. Try again after the EPG has been loaded.' }],
+            content: [
+              {
+                type: 'text',
+                text: 'EPG data is not available yet. Try again after the EPG has been loaded.',
+              },
+            ],
             isError: true,
           };
         }
@@ -78,7 +99,12 @@ function createMcpServer() {
       } catch (error) {
         console.error('Failed to get guide data for tvg_id:', tvg_id, 'hours:', hours, error);
         return {
-          content: [{ type: 'text', text: 'Failed to load EPG data due to an internal error. Please try again later or check EPG configuration.' }],
+          content: [
+            {
+              type: 'text',
+              text: 'Failed to load EPG data due to an internal error. Please try again later or check EPG configuration.',
+            },
+          ],
           isError: true,
         };
       }

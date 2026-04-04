@@ -38,7 +38,11 @@ describe('check-channel-health', () => {
       if (original !== null) {
         await fs.writeFile(f, original, 'utf8');
       } else {
-        try { await fs.unlink(f); } catch (_) { /* ignore */ }
+        try {
+          await fs.unlink(f);
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
   });
@@ -57,7 +61,11 @@ describe('check-channel-health', () => {
         url: '/stream/HDHomeRun/CBS',
         original_url: 'http://hdhomerun.local:5004/auto/v5.1',
         source: 'HDHomeRun',
-        hdhomerun: { deviceID: 'AABBCCDD', baseURL: 'http://hdhomerun.local:5004', model: 'HDTC-2US' },
+        hdhomerun: {
+          deviceID: 'AABBCCDD',
+          baseURL: 'http://hdhomerun.local:5004',
+          model: 'HDTC-2US',
+        },
       },
       {
         name: 'NBC',
@@ -66,7 +74,11 @@ describe('check-channel-health', () => {
         url: '/stream/HDHomeRun/NBC',
         original_url: 'http://hdhomerun.local:5004/auto/v6.1',
         source: 'HDHomeRun',
-        hdhomerun: { deviceID: 'AABBCCDD', baseURL: 'http://hdhomerun.local:5004', model: 'HDTC-2US' },
+        hdhomerun: {
+          deviceID: 'AABBCCDD',
+          baseURL: 'http://hdhomerun.local:5004',
+          model: 'HDTC-2US',
+        },
       },
     ];
 
@@ -106,7 +118,11 @@ describe('check-channel-health', () => {
         url: '/stream/HDHomeRun/CBS',
         original_url: 'http://offline-device.local:5004/auto/v5.1',
         source: 'HDHomeRun',
-        hdhomerun: { deviceID: 'DEADBEEF', baseURL: 'http://offline-device.local:5004', model: 'HDTC-2US' },
+        hdhomerun: {
+          deviceID: 'DEADBEEF',
+          baseURL: 'http://offline-device.local:5004',
+          model: 'HDTC-2US',
+        },
       },
     ];
 
@@ -129,7 +145,11 @@ describe('check-channel-health', () => {
         url: '/stream/HDHomeRun/CBS',
         original_url: 'http://hdhomerun2.local:5004/auto/v5.1',
         source: 'HDHomeRun',
-        hdhomerun: { deviceID: 'AABBCCDD', baseURL: 'http://hdhomerun2.local:5004', model: 'HDTC-2US' },
+        hdhomerun: {
+          deviceID: 'AABBCCDD',
+          baseURL: 'http://hdhomerun2.local:5004',
+          model: 'HDTC-2US',
+        },
       },
       {
         name: 'Regular Channel',

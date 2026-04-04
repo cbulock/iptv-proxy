@@ -1,6 +1,5 @@
-import { describe, it, beforeEach, afterEach } from 'mocha';
+import { describe, it } from 'mocha';
 import { expect } from 'chai';
-import sinon from 'sinon';
 import { applyMapping, proxyURL } from '../../scripts/parseM3U.js';
 import { createMockChannel, createMockMapping } from '../helpers.js';
 

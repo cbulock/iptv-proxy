@@ -1,40 +1,44 @@
 import express from 'express';
 import fs from 'fs/promises';
 import { loadConfig } from '../libs/config-loader.js';
-import { getConfigPath, getDataPath } from '../libs/paths.js';
+import { getDataPath } from '../libs/paths.js';
 import { generateSuggestions, detectDuplicates } from '../libs/channel-matcher.js';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from './auth.js';
 
 const router = express.Router();
 const CHANNELS_FILE = getDataPath('channels.json');
-const CHANNEL_MAP_FILE = getConfigPath('channel-map.yaml');
 
 const conflictsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs for this endpoint
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 const suggestionsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs for this endpoint
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 const duplicatesLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs for this endpoint
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
-  keyGenerator: (req) => req.ip || 'unknown',
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
 });
 
 router.get('/api/mapping/conflicts', requireAuth, conflictsLimiter, async (req, res) => {
   try {
     let channels = [];
-    try { channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8')); } catch {}
+    try {
+      channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
+    } catch (err) {
+      if (err.code !== 'ENOENT')
+        console.warn('[Mapping] Could not read channels file:', err.message);
+    }
 
     const byName = new Map();
     for (const ch of Array.isArray(channels) ? channels : []) {
@@ -46,13 +50,22 @@ router.get('/api/mapping/conflicts', requireAuth, conflictsLimiter, async (req, 
     }
 
     let mapping = {};
-    try { mapping = loadConfig('channelMap'); } catch {}
+    try {
+      mapping = loadConfig('channelMap');
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.warn('[Mapping] Could not read channel map:', err.message);
+    }
 
     const conflicts = [];
     for (const [name, set] of byName.entries()) {
       const candidates = Array.from(set);
       if (candidates.length > 1) {
-        conflicts.push({ name, tvgCandidates: candidates, count: candidates.length, mapped: mapping?.[name]?.tvg_id || '' });
+        conflicts.push({
+          name,
+          tvgCandidates: candidates,
+          count: candidates.length,
+          mapped: mapping?.[name]?.tvg_id || '',
+        });
       }
     }
 
@@ -75,7 +88,7 @@ router.get('/api/mapping/duplicates', requireAuth, duplicatesLimiter, async (req
     }
 
     const duplicates = detectDuplicates(channels);
-    
+
     // Note: totalDuplicateChannels sums all channels in duplicate groups.
     // A channel may appear in both byName and byTvgId if it has both types of duplicates.
     res.json({
@@ -85,8 +98,8 @@ router.get('/api/mapping/duplicates', requireAuth, duplicatesLimiter, async (req
         duplicateNames: duplicates.byName.length,
         duplicateTvgIds: duplicates.byTvgId.length,
         totalDuplicateChannelsByName: duplicates.byName.reduce((sum, d) => sum + d.count, 0),
-        totalDuplicateChannelsByTvgId: duplicates.byTvgId.reduce((sum, d) => sum + d.count, 0)
-      }
+        totalDuplicateChannelsByTvgId: duplicates.byTvgId.reduce((sum, d) => sum + d.count, 0),
+      },
     });
   } catch (e) {
     res.status(500).json({ error: 'Failed to detect duplicates', detail: e.message });
@@ -106,7 +119,9 @@ router.get('/api/mapping/suggestions', requireAuth, suggestionsLimiter, async (r
     let mapping = {};
     try {
       mapping = loadConfig('channelMap');
-    } catch {}
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.warn('[Mapping] Could not read channel map:', err.message);
+    }
 
     // Filter to unmapped channels
     const mapKeys = new Set(Object.keys(mapping || {}));
@@ -119,13 +134,13 @@ router.get('/api/mapping/suggestions', requireAuth, suggestionsLimiter, async (r
     // Generate suggestions
     const threshold = parseFloat(req.query.threshold) || 0.7;
     const maxSuggestions = parseInt(req.query.max) || 3;
-    
+
     const suggestions = generateSuggestions(unmapped, channels, { threshold, maxSuggestions });
-    
+
     res.json({
       suggestions,
       count: suggestions.length,
-      unmappedTotal: unmapped.length
+      unmappedTotal: unmapped.length,
     });
   } catch (e) {
     res.status(500).json({ error: 'Failed to generate suggestions', detail: e.message });

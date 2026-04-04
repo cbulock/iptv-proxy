@@ -28,7 +28,7 @@ describe('EPG/XMLTV Integration', () => {
       const parsed = parser.parse(xmlContent);
 
       const channels = [].concat(parsed.tv.channel);
-      
+
       expect(channels).to.have.length.at.least(2);
       expect(channels[0]).to.have.property('@_id');
       expect(channels[0]).to.have.property('display-name');
@@ -39,7 +39,7 @@ describe('EPG/XMLTV Integration', () => {
       const parsed = parser.parse(xmlContent);
 
       const programmes = [].concat(parsed.tv.programme);
-      
+
       expect(programmes).to.have.length.at.least(2);
       expect(programmes[0]).to.have.property('@_channel');
       expect(programmes[0]).to.have.property('@_start');
@@ -53,7 +53,7 @@ describe('EPG/XMLTV Integration', () => {
 
       const channels = [].concat(parsed.tv.channel);
       const channelWithIcon = channels.find(ch => ch.icon);
-      
+
       expect(channelWithIcon).to.exist;
       expect(channelWithIcon.icon).to.have.property('@_src');
     });
@@ -136,7 +136,7 @@ describe('EPG/XMLTV Integration', () => {
   describe('XMLTV Validation', () => {
     it('should validate well-formed XMLTV structure', async () => {
       const xmlContent = await loadFixture('valid-epg.xml');
-      
+
       let isValid = false;
       try {
         const parsed = parser.parse(xmlContent);
@@ -151,8 +151,9 @@ describe('EPG/XMLTV Integration', () => {
     it('should handle potentially malformed XML', () => {
       // Test with XML that might be considered malformed - unclosed channel tag
       // Note: fast-xml-parser is lenient and may successfully parse this
-      const invalidXml = '<?xml version="1.0"?><tv><channel id="ch1"><display-name>Test</display-name></tv>';
-      
+      const invalidXml =
+        '<?xml version="1.0"?><tv><channel id="ch1"><display-name>Test</display-name></tv>';
+
       let parsed;
       let threwError = false;
       try {
@@ -160,7 +161,7 @@ describe('EPG/XMLTV Integration', () => {
       } catch (err) {
         threwError = true;
       }
-      
+
       // The test passes if either:
       // 1. The parser threw an error (strict parsing)
       // 2. The parser succeeded (lenient parsing)
@@ -173,7 +174,7 @@ describe('EPG/XMLTV Integration', () => {
       const parsed = parser.parse(xmlContent);
 
       const channels = [].concat(parsed.tv.channel);
-      
+
       // All channels should have an id attribute
       channels.forEach(channel => {
         expect(channel).to.have.property('@_id');
@@ -187,7 +188,7 @@ describe('EPG/XMLTV Integration', () => {
       const parsed = parser.parse(xmlContent);
 
       const programmes = [].concat(parsed.tv.programme);
-      
+
       // All programmes should have required time attributes
       programmes.forEach(programme => {
         expect(programme).to.have.property('@_channel');
@@ -203,12 +204,26 @@ describe('EPG/XMLTV Integration', () => {
     it('should merge multiple EPG sources correctly', () => {
       const epg1 = generateXMLTV(
         [{ id: 'ch1', name: 'Channel 1' }],
-        [{ channel: 'ch1', start: '20240101000000 +0000', stop: '20240101010000 +0000', title: 'Show 1' }]
+        [
+          {
+            channel: 'ch1',
+            start: '20240101000000 +0000',
+            stop: '20240101010000 +0000',
+            title: 'Show 1',
+          },
+        ]
       );
 
       const epg2 = generateXMLTV(
         [{ id: 'ch2', name: 'Channel 2' }],
-        [{ channel: 'ch2', start: '20240101000000 +0000', stop: '20240101010000 +0000', title: 'Show 2' }]
+        [
+          {
+            channel: 'ch2',
+            start: '20240101000000 +0000',
+            stop: '20240101010000 +0000',
+            title: 'Show 2',
+          },
+        ]
       );
 
       const parsed1 = parser.parse(epg1);

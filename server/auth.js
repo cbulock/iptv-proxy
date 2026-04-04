@@ -47,7 +47,9 @@ export function verifyCredentials(username, password) {
 
   // Verify the stored password is a bcrypt hash
   if (!isBcryptHash(authConfig.password)) {
-    console.error('Authentication error: Password in app.yaml must be a bcrypt hash. Use: node scripts/hash-password.js your-password');
+    console.error(
+      'Authentication error: Password in app.yaml must be a bcrypt hash. Use: node scripts/hash-password.js your-password'
+    );
     return false;
   }
 

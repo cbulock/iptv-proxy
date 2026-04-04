@@ -102,7 +102,9 @@ describe('EPG Utility Functions', () => {
     });
 
     it('extracts #text from an array of objects', () => {
-      expect(extractTextField([{ '#text': 'Array Title', '@_lang': 'en' }])).to.equal('Array Title');
+      expect(extractTextField([{ '#text': 'Array Title', '@_lang': 'en' }])).to.equal(
+        'Array Title'
+      );
     });
 
     it('returns empty string for an empty array', () => {

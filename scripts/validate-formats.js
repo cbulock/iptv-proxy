@@ -23,22 +23,22 @@ try {
   const m3uPath = path.join(FIXTURES_DIR, 'valid-playlist.m3u');
   const m3uContent = fs.readFileSync(m3uPath, 'utf8');
   const m3uResult = validateM3UFormat(m3uContent);
-  
+
   console.log('M3U Validation Result:');
   console.log(`  Valid: ${m3uResult.isValid}`);
   console.log(`  Channels: ${m3uResult.channelCount}`);
-  
+
   if (m3uResult.errors.length > 0) {
     console.error('  Errors:');
     m3uResult.errors.forEach(err => console.error(`    - ${err}`));
     hasErrors = true;
   }
-  
+
   if (m3uResult.warnings.length > 0) {
     console.warn('  Warnings:');
     m3uResult.warnings.forEach(warn => console.warn(`    - ${warn}`));
   }
-  
+
   if (m3uResult.isValid) {
     console.log('✅ M3U format validation passed\n');
   } else {
@@ -55,23 +55,23 @@ try {
   const xmlPath = path.join(FIXTURES_DIR, 'valid-epg.xml');
   const xmlContent = fs.readFileSync(xmlPath, 'utf8');
   const xmlResult = validateXMLTVFormat(xmlContent);
-  
+
   console.log('XMLTV Validation Result:');
   console.log(`  Valid: ${xmlResult.isValid}`);
   console.log(`  Channels: ${xmlResult.channelCount}`);
   console.log(`  Programmes: ${xmlResult.programmeCount}`);
-  
+
   if (xmlResult.errors.length > 0) {
     console.error('  Errors:');
     xmlResult.errors.forEach(err => console.error(`    - ${err}`));
     hasErrors = true;
   }
-  
+
   if (xmlResult.warnings.length > 0) {
     console.warn('  Warnings:');
     xmlResult.warnings.forEach(warn => console.warn(`    - ${warn}`));
   }
-  
+
   if (xmlResult.isValid) {
     console.log('✅ XMLTV format validation passed\n');
   } else {

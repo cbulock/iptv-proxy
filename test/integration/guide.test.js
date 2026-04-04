@@ -13,7 +13,7 @@ import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 async function startServer(app) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const server = app.listen(0, '127.0.0.1', () => {
       resolve({ server, baseUrl: `http://127.0.0.1:${server.address().port}` });
     });
@@ -21,7 +21,7 @@ async function startServer(app) {
 }
 
 async function stopServer(server) {
-  return new Promise((resolve) => server.close(resolve));
+  return new Promise(resolve => server.close(resolve));
 }
 
 /**
@@ -33,7 +33,7 @@ function buildFutureXMLTV(tvgId) {
   const now = new Date();
 
   function xmltvDate(d) {
-    const pad = (n) => String(n).padStart(2, '0');
+    const pad = n => String(n).padStart(2, '0');
     return (
       `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
       `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())} +0000`
@@ -153,7 +153,7 @@ describe('GET /api/guide', () => {
 
   it('returns both the currently-airing and the upcoming programme', async () => {
     const res = await axios.get(`${baseUrl}/api/guide?tvgId=${TVG_ID}`);
-    const titles = res.data.programmes.map((p) => p.title);
+    const titles = res.data.programmes.map(p => p.title);
     expect(titles).to.include('Current Show');
     expect(titles).to.include('Upcoming Show');
   });
@@ -176,7 +176,7 @@ describe('GET /api/guide', () => {
   it('returns programmes from all channels when tvgId is omitted', async () => {
     const res = await axios.get(`${baseUrl}/api/guide`);
     expect(res.status).to.equal(200);
-    const channels = new Set(res.data.programmes.map((p) => p.channel));
+    const channels = new Set(res.data.programmes.map(p => p.channel));
     expect(channels.size).to.be.at.least(1);
   });
 

@@ -18,11 +18,11 @@ export default defineConfig({
       '/lineup': 'http://127.0.0.1:34400',
       '/xmltv.xml': 'http://127.0.0.1:34400',
       '/stream': 'http://127.0.0.1:34400',
-      '/images': 'http://127.0.0.1:34400'
-    }
+      '/images': 'http://127.0.0.1:34400',
+    },
   },
   build: {
     outDir: path.resolve(__dirname, '../public/admin'),
-    emptyOutDir: true
-  }
+    emptyOutDir: true,
+  },
 });

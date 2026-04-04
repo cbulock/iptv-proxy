@@ -40,7 +40,7 @@ export async function notifyWebhooks(event, data = {}) {
 
   await Promise.allSettled(
     webhooks
-      .filter((hook) => {
+      .filter(hook => {
         if (!hook?.url) return false;
         // If the hook declares an events filter, respect it; otherwise deliver all
         if (Array.isArray(hook.events) && hook.events.length > 0) {
@@ -48,7 +48,7 @@ export async function notifyWebhooks(event, data = {}) {
         }
         return true;
       })
-      .map(async (hook) => {
+      .map(async hook => {
         try {
           await axios.post(hook.url, body, {
             timeout: hook.timeout_ms ?? 5000,

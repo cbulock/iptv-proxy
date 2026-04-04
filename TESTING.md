@@ -108,9 +108,9 @@ describe('M3U Parser - applyMapping', () => {
   it('should apply mapping by channel name', () => {
     const channel = { name: 'Test Channel', tvg_id: 'test.1' };
     const mapping = { 'Test Channel': { name: 'Mapped Channel' } };
-    
+
     const result = applyMapping(channel, mapping);
-    
+
     expect(result.name).to.equal('Mapped Channel');
   });
 });
@@ -135,9 +135,7 @@ describe('M3U Parser Integration', () => {
   });
 
   it('should mock M3U playlist fetch successfully', async () => {
-    nock('http://test.example.com')
-      .get('/playlist.m3u')
-      .reply(200, '#EXTM3U\n...');
+    nock('http://test.example.com').get('/playlist.m3u').reply(200, '#EXTM3U\n...');
 
     // Test code here
   });

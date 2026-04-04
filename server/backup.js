@@ -39,8 +39,8 @@ router.get('/api/config/backups', requireAuth, async (req, res) => {
     await ensureBackupsDir();
     const entries = await fs.readdir(BACKUPS_DIR, { withFileTypes: true });
     const backups = entries
-      .filter((e) => e.isDirectory() && e.name.startsWith('backup-'))
-      .map((e) => ({ name: e.name }))
+      .filter(e => e.isDirectory() && e.name.startsWith('backup-'))
+      .map(e => ({ name: e.name }))
       .sort((a, b) => b.name.localeCompare(a.name)); // newest first
     res.json({ backups, count: backups.length });
   } catch (e) {
@@ -158,7 +158,7 @@ router.get('/api/config/backups/:name/download', requireAuth, async (req, res) =
     res.setHeader('Expires', '0');
 
     const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.on('error', (err) => {
+    archive.on('error', err => {
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to create zip', detail: err.message });
       } else {
