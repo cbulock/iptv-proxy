@@ -1659,31 +1659,49 @@ async function setupVideoPlayer() {
   // HDHomeRun OTA channels (ATSC 1.0) return raw MPEG-TS with MPEG-2 video even
   // when ?streamMode=hls is requested. mpegts.js can parse the TS container but
   // silently drops MPEG-2 video (stream type 0x02) without emitting an error,
-  // leaving a black screen. HEAD-probe to detect this case early.
+  // leaving a black screen. Start a HEAD probe in parallel so playback setup is
+  // not delayed on every preview, and only interrupt if the probe confirms TS.
   // The probe is only issued for HDHomeRun channels since the result is only used
   // for this check — other providers skip the probe and start playback immediately.
   if (state.previewWatchingChannel?.hdhomerun) {
-    let contentType = '';
-    try {
-      // HEAD-probe to fetch headers without reading the response body.
-      // Failures (network error, non-2xx) are treated as unknown content type
-      // and fall through to normal HLS.js/mpegts.js logic below.
-      const probeResponse = await fetch(streamUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000) });
-      if (probeResponse.ok) {
-        contentType = (probeResponse.headers.get('content-type') || '').toLowerCase();
-      }
-    } catch {
-      // HEAD failed — fall through to normal player logic.
-    }
+    const previewChannel = state.previewWatchingChannel;
+    fetch(streamUrl, { method: 'HEAD', signal: AbortSignal.timeout(1000) })
+      .then((probeResponse) => {
+        if (!probeResponse.ok) return;
 
-    const isMpegTs =
-      contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t');
-    if (isMpegTs) {
-      showPlayerError(
-        'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
-      );
-      return;
-    }
+        const contentType = (probeResponse.headers.get('content-type') || '').toLowerCase();
+        const isMpegTs =
+          contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t');
+        if (!isMpegTs) return;
+
+        // Ignore stale probe results if the user switched channels or the player
+        // was reinitialized while the request was in flight.
+        if (
+          videoPlayerEl.value !== video ||
+          state.previewWatchingChannel !== previewChannel ||
+          previewStreamUrl.value !== streamUrl
+        ) {
+          return;
+        }
+
+        if (hlsInstance) {
+          hlsInstance.destroy();
+          hlsInstance = null;
+        }
+        if (mpegtsInstance) {
+          mpegtsInstance.destroy();
+          mpegtsInstance = null;
+        }
+
+        video.removeAttribute('src');
+        video.load();
+        showPlayerError(
+          'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.'
+        );
+      })
+      .catch(() => {
+        // HEAD failed — fall through to normal player logic.
+      });
   }
 
   // Use bundled HLS.js for other browsers.
