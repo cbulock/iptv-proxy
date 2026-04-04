@@ -11,6 +11,7 @@ import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import RateLimit from 'express-rate-limit';
 import { validateConfigData } from '../libs/config-loader.js';
 import { asyncHandler, AppError } from './error-handler.js';
+import { requireAuth } from './auth.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
 
 const router = express.Router();
@@ -192,6 +193,7 @@ function generateM3U(channels, baseUrl) {
  */
 router.post(
   '/api/preview/m3u',
+  requireAuth,
   previewLimiter,
   asyncHandler(async (req, res) => {
     const { m3uConfig, channelMapConfig } = req.body;
@@ -229,6 +231,7 @@ router.post(
  */
 router.post(
   '/api/preview/channels',
+  requireAuth,
   previewLimiter,
   asyncHandler(async (req, res) => {
     const { m3uConfig, channelMapConfig } = req.body;
@@ -266,6 +269,7 @@ router.post(
  */
 router.post(
   '/api/preview/epg',
+  requireAuth,
   previewLimiter,
   asyncHandler(async (req, res) => {
     const { epgConfig, channels } = req.body;
@@ -354,6 +358,7 @@ router.post(
  */
 router.post(
   '/api/preview/epg/json',
+  requireAuth,
   previewLimiter,
   asyncHandler(async (req, res) => {
     const { epgConfig, channels } = req.body;

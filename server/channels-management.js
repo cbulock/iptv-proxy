@@ -110,6 +110,7 @@ router.post('/rename', channelsWriteLimiter, async (req, res) => {
     const err = await saveChannelMapUpdates(mapping => {
       for (const ch of channels) {
         if (!ch.oldName || !ch.newName) continue;
+        if (!isSafeChannelKey(ch.oldName) || !isSafeChannelKey(ch.newName)) continue;
 
         // If there was an existing mapping for oldName, migrate it to newName
         if (mapping[ch.oldName]) {
