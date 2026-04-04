@@ -1668,7 +1668,7 @@ async function setupVideoPlayer() {
       // HEAD-probe to fetch headers without reading the response body.
       // Failures (network error, non-2xx) are treated as unknown content type
       // and fall through to normal HLS.js/mpegts.js logic below.
-      const probeResponse = await fetch(streamUrl, { method: 'HEAD' });
+      const probeResponse = await fetch(streamUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000) });
       if (probeResponse.ok) {
         contentType = (probeResponse.headers.get('content-type') || '').toLowerCase();
       }
