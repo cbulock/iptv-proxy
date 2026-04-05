@@ -1698,7 +1698,41 @@ async function setupVideoPlayer() {
         showPlayerError(ERR_UNSUPPORTED_CODEC);
       })
       .catch(() => {
-        // HEAD failed — fall through to normal player logic.
+        // HEAD not supported by the upstream device — fall back to a GET probe.
+        // The body is cancelled immediately after reading headers so we don't
+        // download the stream alongside HLS.js.
+        fetch(streamUrl, { signal: AbortSignal.timeout(3000) })
+          .then(getResponse => {
+            const ct = (getResponse.headers.get('content-type') || '').toLowerCase();
+            getResponse.body?.cancel();
+
+            const isMpegTs =
+              ct.startsWith('video/mpeg') || ct.startsWith('video/mp2t');
+            if (!isMpegTs) return;
+
+            // Staleness check — ignore if the user closed/switched the player.
+            if (
+              videoPlayerEl.value !== video ||
+              state.previewWatchingChannel !== previewChannel ||
+              previewStreamUrl.value !== streamUrl
+            ) {
+              return;
+            }
+
+            if (hlsInstance) {
+              hlsInstance.destroy();
+              hlsInstance = null;
+            }
+            if (mpegtsInstance) {
+              mpegtsInstance.destroy();
+              mpegtsInstance = null;
+            }
+
+            video.removeAttribute('src');
+            video.load();
+            showPlayerError(ERR_UNSUPPORTED_CODEC);
+          })
+          .catch(() => {}); // GET also failed — give up and leave HLS.js running.
       });
   }
 
