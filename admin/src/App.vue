@@ -1665,40 +1665,52 @@ async function setupVideoPlayer() {
   // for this check — other providers skip the probe and start playback immediately.
   if (state.previewWatchingChannel?.hdhomerun) {
     const previewChannel = state.previewWatchingChannel;
+
+    // Shared teardown used by both the HEAD and GET probe paths.
+    function handleMpegTsDetected() {
+      // Ignore stale probe results if the user closed/switched the player.
+      if (
+        videoPlayerEl.value !== video ||
+        state.previewWatchingChannel !== previewChannel ||
+        previewStreamUrl.value !== streamUrl
+      ) {
+        return;
+      }
+      if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+      }
+      if (mpegtsInstance) {
+        mpegtsInstance.destroy();
+        mpegtsInstance = null;
+      }
+      video.removeAttribute('src');
+      video.load();
+      showPlayerError(ERR_UNSUPPORTED_CODEC);
+    }
+
     fetch(streamUrl, { method: 'HEAD', signal: AbortSignal.timeout(1000) })
       .then((probeResponse) => {
         if (!probeResponse.ok) return;
-
         const contentType = (probeResponse.headers.get('content-type') || '').toLowerCase();
         const isMpegTs =
           contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t');
-        if (!isMpegTs) return;
-
-        // Ignore stale probe results if the user switched channels or the player
-        // was reinitialized while the request was in flight.
-        if (
-          videoPlayerEl.value !== video ||
-          state.previewWatchingChannel !== previewChannel ||
-          previewStreamUrl.value !== streamUrl
-        ) {
-          return;
-        }
-
-        if (hlsInstance) {
-          hlsInstance.destroy();
-          hlsInstance = null;
-        }
-        if (mpegtsInstance) {
-          mpegtsInstance.destroy();
-          mpegtsInstance = null;
-        }
-
-        video.removeAttribute('src');
-        video.load();
-        showPlayerError(ERR_UNSUPPORTED_CODEC);
+        if (isMpegTs) handleMpegTsDetected();
       })
       .catch(() => {
-        // HEAD failed — fall through to normal player logic.
+        // HEAD not supported by the upstream device — fall back to a GET probe.
+        // The body is cancelled immediately after reading headers so we don't
+        // download the stream alongside HLS.js.
+        fetch(streamUrl, { signal: AbortSignal.timeout(3000) })
+          .then(async getResponse => {
+            const ct = (getResponse.headers.get('content-type') || '').toLowerCase();
+            await getResponse.body?.cancel().catch(() => {});
+            if (!getResponse.ok) return;
+            const isMpegTs =
+              ct.startsWith('video/mpeg') || ct.startsWith('video/mp2t');
+            if (isMpegTs) handleMpegTsDetected();
+          })
+          .catch(() => {}); // GET also failed — give up and leave HLS.js running.
       });
   }
 
