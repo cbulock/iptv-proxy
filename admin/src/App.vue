@@ -1706,6 +1706,7 @@ async function setupVideoPlayer() {
             const ct = (getResponse.headers.get('content-type') || '').toLowerCase();
             getResponse.body?.cancel();
 
+            if (!getResponse.ok) return;
             const isMpegTs =
               ct.startsWith('video/mpeg') || ct.startsWith('video/mp2t');
             if (!isMpegTs) return;
