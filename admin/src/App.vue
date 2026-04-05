@@ -1702,9 +1702,9 @@ async function setupVideoPlayer() {
         // The body is cancelled immediately after reading headers so we don't
         // download the stream alongside HLS.js.
         fetch(streamUrl, { signal: AbortSignal.timeout(3000) })
-          .then(getResponse => {
+          .then(async getResponse => {
             const ct = (getResponse.headers.get('content-type') || '').toLowerCase();
-            getResponse.body?.cancel();
+            await getResponse.body?.cancel().catch(() => {});
 
             if (!getResponse.ok) return;
             const isMpegTs =
