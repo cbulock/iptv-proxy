@@ -536,6 +536,15 @@
                   >
                     <div aria-hidden="true" style="font-size: 1.5rem">⚠️</div>
                     <div style="font-weight: 600">{{ state.playerError }}</div>
+                    <n-button
+                      v-if="showTranscodeButton"
+                      size="small"
+                      type="primary"
+                      style="margin-top: 0.25rem"
+                      @click="setupTranscodePlayer"
+                    >
+                      Try Server Transcoding
+                    </n-button>
                     <div style="font-size: 0.8em; opacity: 0.7">
                       Try opening the stream URL directly in VLC or another IPTV player.
                     </div>
@@ -1567,6 +1576,8 @@ const ERR_UNSUPPORTED_CODEC =
   'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.';
 const ERR_STREAM_UNAVAILABLE =
   'Stream unavailable. The channel may be offline or unreachable.';
+const ERR_TRANSCODE_FAILED =
+  'Server transcoding failed. Ensure ffmpeg is installed on the server, or open the stream URL in VLC.';
 
 /**
  * Set up mpegts.js player for raw MPEG-TS streams (e.g. HDHomeRun that returns
@@ -1577,6 +1588,23 @@ function showPlayerError(msg) {
   if (state.playerError) return; // already showing an error; don't overwrite
   console.warn('[player] error:', msg);
   state.playerError = msg;
+}
+
+/**
+ * Returns true when a play() rejection was caused by browser autoplay policy
+ * rather than a real playback or decoding failure.
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function isAutoplayBlocked(err) {
+  const name = err && err.name;
+  const msg = err && err.message ? String(err.message) : '';
+  return (
+    name === 'NotAllowedError' ||
+    msg.includes("play() failed because the user didn't interact with the document first") ||
+    msg.includes("user didn't interact with the document first") ||
+    msg.includes('must be user-initiated')
+  );
 }
 
 function setupMpegtsPlayer(video, streamUrl) {
@@ -1605,18 +1633,8 @@ function setupMpegtsPlayer(video, streamUrl) {
   player.load();
   player.play().catch(err => {
     if (player !== mpegtsInstance) return; // stale callback from a previous player
-    // Distinguish autoplay-blocked rejections from real playback/decoding failures.
-    const errorName = err && err.name;
-    const errorMessage = err && err.message ? String(err.message) : '';
-    const isAutoplayBlocked =
-      errorName === 'NotAllowedError' ||
-      errorMessage.includes(
-        "play() failed because the user didn't interact with the document first"
-      ) ||
-      errorMessage.includes("user didn't interact with the document first") ||
-      errorMessage.includes('must be user-initiated');
 
-    if (isAutoplayBlocked) {
+    if (isAutoplayBlocked(err)) {
       // Autoplay was blocked by the browser. Keep the mpegts instance attached so the
       // user can start playback manually (e.g. by clicking the video element).
       console.warn('[player] mpegts.js autoplay blocked by browser policy:', err);
@@ -1773,6 +1791,69 @@ function stopVideoPlayer() {
     video.load();
   }
   state.playerError = null;
+}
+
+/**
+ * Start the server-side transcoding player for streams with unsupported codecs.
+ * Uses the /transcode/:source/:name endpoint which runs ffmpeg on the server to
+ * convert MPEG-2/AC-3 MPEG-TS to H.264/AAC MPEG-TS that browsers can decode.
+ * The resulting stream is played via mpegts.js.
+ */
+async function setupTranscodePlayer() {
+  await nextTick();
+  const video = videoPlayerEl.value;
+  if (!video || !state.previewWatchingChannel) return;
+
+  // Clear the codec error so the player area is visible again
+  state.playerError = null;
+
+  // Destroy any existing player instances
+  if (hlsInstance) {
+    hlsInstance.destroy();
+    hlsInstance = null;
+  }
+  if (mpegtsInstance) {
+    mpegtsInstance.destroy();
+    mpegtsInstance = null;
+  }
+
+  if (!mpegts.getFeatureList().mseLivePlayback) {
+    state.playerError = 'Browser does not support media streaming (MSE unavailable).';
+    return;
+  }
+
+  const transcodeUrl = previewTranscodeUrl.value;
+  const player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: transcodeUrl });
+  mpegtsInstance = player;
+  player.attachMediaElement(video);
+
+  player.on(mpegts.Events.ERROR, (errorType, errorDetail, _errorInfo) => {
+    if (player !== mpegtsInstance) return; // stale callback from a previous player
+    console.warn('[player] transcode error:', errorType, errorDetail);
+    mpegtsInstance.destroy();
+    mpegtsInstance = null;
+    if (!state.playerError) {
+      state.playerError = ERR_TRANSCODE_FAILED;
+    }
+  });
+
+  player.load();
+  player.play().catch(err => {
+    if (player !== mpegtsInstance) return; // stale callback from a previous player
+
+    if (isAutoplayBlocked(err)) {
+      // Autoplay blocked — user can click the video element to start playback.
+      console.warn('[player] transcode autoplay blocked by browser policy:', err);
+      return;
+    }
+
+    console.warn('[player] transcode playback failed:', err);
+    mpegtsInstance.destroy();
+    mpegtsInstance = null;
+    if (!state.playerError) {
+      state.playerError = ERR_TRANSCODE_FAILED;
+    }
+  });
 }
 
 function watchChannel(channel) {
@@ -2273,6 +2354,18 @@ const previewStreamUrl = computed(() => {
   // from the HDHomeRun device, which re-encodes to browser-compatible H.264+AAC.
   return ch.hdhomerun ? `${base}?streamMode=hls` : base;
 });
+
+const previewTranscodeUrl = computed(() => {
+  const ch = state.previewWatchingChannel;
+  if (!ch) return '';
+  // Server-side transcoding endpoint — converts MPEG-2/AC-3 MPEG-TS to H.264/AAC
+  // using ffmpeg so the browser can play the stream natively via mpegts.js.
+  return `/transcode/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+});
+
+// Show the transcoding button only when the unsupported-codec error is active
+// (i.e. the stream is live but uses codecs the browser cannot decode).
+const showTranscodeButton = computed(() => state.playerError === ERR_UNSUPPORTED_CODEC);
 
 const previewColumns = [
   {

@@ -17,6 +17,10 @@ LABEL org.opencontainers.image.source="https://github.com/cbulock/iptv-proxy"
 LABEL org.opencontainers.image.description="IPTV Proxy - Unified Channel and EPG Aggregator"
 LABEL org.opencontainers.image.licenses="MIT"
 
+# Install ffmpeg for server-side transcoding of MPEG-TS streams
+# (converts MPEG-2/AC-3 from HDHomeRun to H.264/AAC for browser playback)
+RUN apk add --no-cache ffmpeg
+
 # Create app directory
 WORKDIR /usr/src/app
 
