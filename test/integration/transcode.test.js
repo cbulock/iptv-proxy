@@ -1,0 +1,164 @@
+import { describe, it, before, after, afterEach } from 'mocha';
+import { expect } from 'chai';
+import express from 'express';
+import axios from 'axios';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
+import { getDataPath } from '../../libs/paths.js';
+import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
+import { setupTranscodeRoutes } from '../../server/transcode.js';
+import { errorHandler } from '../../server/error-handler.js';
+
+/**
+ * Create a minimal Node.js script that exits with the given code and optionally
+ * writes bytes to stdout first. Using Node.js avoids any shell-escaping concerns
+ * with the stdout data. Returns the path to the script.
+ */
+async function makeFFmpegStub(tmpDir, { exitCode = 0, stdoutData = null } = {}) {
+  const bin = path.join(tmpDir, 'ffmpeg');
+  let script = '#!/usr/bin/env node\n';
+  if (stdoutData !== null) {
+    script += `process.stdout.write(${JSON.stringify(stdoutData)});\n`;
+  }
+  script += `process.exit(${exitCode});\n`;
+  await fs.writeFile(bin, script, { mode: 0o755 });
+  return bin;
+}
+
+describe('Transcode Route Integration', () => {
+  const channelsFile = getDataPath('channels.json');
+  let originalChannels = null;
+  let hadOriginalChannelsFile = false;
+  let server = null;
+  let baseUrl = '';
+  let tmpBinDir = null;
+  let originalPath = '';
+
+  before(async () => {
+    // Preserve original channels file
+    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
+    try {
+      originalChannels = await fs.readFile(channelsFile, 'utf8');
+      hadOriginalChannelsFile = true;
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+
+    const testChannels = [
+      {
+        name: 'OTA Channel',
+        tvg_id: 'ota.1',
+        source: 'Antenna',
+        original_url: 'http://hdhomerun.local/auto/v6.1',
+        hdhomerun: { deviceID: 'AABB1122' },
+      },
+    ];
+
+    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+    await initChannelsCache();
+
+    // Create a temporary directory for fake ffmpeg binaries
+    tmpBinDir = await fs.mkdtemp(path.join(os.tmpdir(), 'transcode-test-'));
+    originalPath = process.env.PATH || '';
+
+    const app = express();
+    setupTranscodeRoutes(app);
+    app.use(errorHandler);
+
+    await new Promise(resolve => {
+      server = app.listen(0, '127.0.0.1', () => {
+        const address = server.address();
+        baseUrl = `http://127.0.0.1:${address.port}`;
+        resolve();
+      });
+    });
+  });
+
+  after(async () => {
+    // Restore PATH
+    process.env.PATH = originalPath;
+
+    if (server) {
+      await new Promise(resolve => server.close(resolve));
+    }
+    cleanupCache();
+
+    if (hadOriginalChannelsFile && originalChannels !== null) {
+      await fs.writeFile(channelsFile, originalChannels, 'utf8');
+    } else {
+      try {
+        await fs.unlink(channelsFile);
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+      }
+    }
+
+    if (tmpBinDir) {
+      await fs.rm(tmpBinDir, { recursive: true, force: true });
+    }
+  });
+
+  afterEach(async () => {
+    // Remove any ffmpeg stub placed in tmpBinDir between tests
+    try {
+      await fs.unlink(path.join(tmpBinDir, 'ffmpeg'));
+    } catch (_) {
+      // not present — that's fine
+    }
+    // Restore PATH to its original value
+    process.env.PATH = originalPath;
+  });
+
+  it('returns 404 for an unknown channel', async () => {
+    const response = await axios.get(`${baseUrl}/transcode/NoSource/NoChannel`, {
+      validateStatus: () => true,
+    });
+    expect(response.status).to.equal(404);
+  });
+
+  it('returns 503 when ffmpeg is not installed (ENOENT)', async () => {
+    // Remove tmpBinDir from PATH so that the real ffmpeg (if present) cannot be used
+    // and the stub is also absent, guaranteeing an ENOENT spawn error.
+    process.env.PATH = '/nonexistent-path-for-test';
+
+    const response = await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
+      validateStatus: () => true,
+    });
+
+    expect(response.status).to.equal(503);
+    expect(response.data).to.have.property('error');
+    expect(response.data.error).to.include('ffmpeg');
+  });
+
+  it('returns 502 when ffmpeg exits non-zero before writing any output', async () => {
+    // Place a stub that exits immediately with code 1 (no stdout)
+    await makeFFmpegStub(tmpBinDir, { exitCode: 1 });
+    process.env.PATH = `${tmpBinDir}:${originalPath}`;
+
+    const response = await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
+      validateStatus: () => true,
+    });
+
+    expect(response.status).to.equal(502);
+    expect(response.data).to.have.property('error');
+    expect(response.data.error).to.include('Transcoding failed');
+    expect(response.data).to.have.property('details');
+    expect(response.data.details).to.include('1');
+  });
+
+  it('pipes ffmpeg stdout to the response', async () => {
+    // Place a stub that writes known bytes to stdout and exits cleanly
+    await makeFFmpegStub(tmpBinDir, { exitCode: 0, stdoutData: 'FAKEDATA' });
+    process.env.PATH = `${tmpBinDir}:${originalPath}`;
+
+    const response = await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
+      responseType: 'arraybuffer',
+      validateStatus: () => true,
+    });
+
+    expect(response.status).to.equal(200);
+    expect(response.headers['content-type']).to.match(/video\/mp2t/i);
+    expect(Buffer.from(response.data).toString()).to.equal('FAKEDATA');
+  });
+});
