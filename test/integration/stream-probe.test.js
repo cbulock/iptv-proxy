@@ -166,7 +166,7 @@ describe('parseMpegTsCodecs', () => {
     expect(parseMpegTsCodecs(Buffer.alloc(0))).to.equal(null);
   });
 
-  it('handles a buffer that begins with one full packet of garbage before the sync boundary', () => {
+  it('handles a buffer that begins with one full packet of null padding before the sync boundary', () => {
     const realData = buildMpegTsBuffer(256, 0x02, 0x81);
     // Prepend 188 bytes of zeros (all-null TS padding).  findSyncOffset will confirm
     // the boundary at offset 188 (where buf[188] = 0x47 and buf[376] = 0x47).

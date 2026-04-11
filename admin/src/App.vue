@@ -1714,7 +1714,12 @@ async function setupVideoPlayer() {
     if (isStale()) return;
     if (probe && !probe.browserCompatible) {
       setupTranscodePlayer().catch(err => {
-        console.warn('[player] probe-triggered transcode setup failed:', err);
+        console.warn(
+          '[player] probe-triggered transcode setup failed for %s/%s:',
+          probeChannel?.source,
+          probeChannel?.name,
+          err,
+        );
       });
     } else {
       setupMpegtsPlayer(video, streamUrl);
@@ -1747,7 +1752,12 @@ async function setupVideoPlayer() {
         video.removeAttribute('src');
         video.load();
         setupTranscodePlayer().catch(err => {
-          console.warn('[player] probe-triggered transcode setup failed:', err);
+          console.warn(
+            '[player] probe-triggered transcode setup failed for %s/%s:',
+            probeChannel?.source,
+            probeChannel?.name,
+            err,
+          );
         });
       }
     })
