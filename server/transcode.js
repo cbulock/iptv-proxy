@@ -1,5 +1,19 @@
 import { spawn } from 'child_process';
+import RateLimit from 'express-rate-limit';
 import { getChannels } from '../libs/channels-cache.js';
+import { requireAuth } from './auth.js';
+
+// Rate limiter for the transcoding endpoint — each ffmpeg process consumes significant
+// CPU and network resources, so keep the per-IP limit stricter than other endpoints.
+const transcodeLimiter = RateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 5, // limit each IP to 5 concurrent-ish transcode requests per minute
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
+  message: {
+    error: 'Too many transcoding requests from this IP, please try again later.',
+  },
+});
 
 /**
  * Set up the server-side transcoding route.
@@ -9,13 +23,16 @@ import { getChannels } from '../libs/channels-cache.js';
  * ffmpeg, allowing browsers to play streams that use unsupported codecs
  * (e.g. MPEG-2 video / AC-3 audio from HDHomeRun OTA tuners).
  *
+ * Requires authentication (when configured) and is rate-limited to prevent
+ * resource exhaustion from spawning excessive ffmpeg processes.
+ *
  * Requires ffmpeg to be installed on the server.
  * Returns 503 when ffmpeg is unavailable.
  *
  * @param {import('express').Application} app
  */
 export function setupTranscodeRoutes(app) {
-  app.get('/transcode/:source/:name', (req, res) => {
+  app.get('/transcode/:source/:name', requireAuth, transcodeLimiter, (req, res) => {
     const { source, name } = req.params;
     const channels = getChannels();
     const channel = channels.find(c => c.source === source && c.name === name);
@@ -56,7 +73,14 @@ export function setupTranscodeRoutes(app) {
     res.setHeader('Content-Type', 'video/MP2T');
     res.setHeader('Cache-Control', 'no-cache, no-store');
 
-    // Register error handler before piping to ensure it fires before any response data is written.
+    // Track whether any stdout data has been written to the response.  We cannot
+    // use pipe() directly because pipe() auto-calls res.end() when stdout ends,
+    // which fires before the 'exit' event — making it impossible to detect a
+    // non-zero exit code before headers are committed.
+    let responseStarted = false;
+
+    // Register error handler before attaching stdout to ensure it fires before
+    // any response data is written (handles ENOENT / spawn failures).
     ffmpegProcess.on('error', err => {
       console.warn('[transcode] spawn error %s/%s: %s', source, name, err.message);
       if (!res.headersSent) {
@@ -77,9 +101,30 @@ export function setupTranscodeRoutes(app) {
       console.warn('[transcode] ffmpeg: %s/%s: %s', source, name, data.toString().trim());
     });
 
+    ffmpegProcess.stdout.on('data', chunk => {
+      // Guard against writing to a destroyed/closed response (e.g. client disconnected).
+      if (!res.writable) return;
+      responseStarted = true;
+      res.write(chunk);
+    });
+
+    // Only finalize when data was already sent; the exit handler owns the
+    // no-data error path and will call res.end() when appropriate.
+    ffmpegProcess.stdout.on('end', () => {
+      if (responseStarted && !res.writableEnded) {
+        res.end();
+      }
+    });
+
     ffmpegProcess.on('exit', (code, signal) => {
       if (code !== 0 && code !== null) {
         console.warn('[transcode] ffmpeg exited with code %d for %s/%s', code, source, name);
+        if (!responseStarted && !res.headersSent) {
+          return res.status(502).json({
+            error: 'Transcoding failed',
+            details: `ffmpeg exited with code ${code}`,
+          });
+        }
       } else if (signal) {
         console.info('[transcode] ffmpeg stopped (%s) for %s/%s', signal, source, name);
       }
@@ -87,8 +132,6 @@ export function setupTranscodeRoutes(app) {
         res.end();
       }
     });
-
-    ffmpegProcess.stdout.pipe(res);
 
     // Kill ffmpeg when the client disconnects to free up CPU/network resources.
     // Guard against calling kill() on a process that has already exited naturally.
