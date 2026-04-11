@@ -4,11 +4,13 @@ import express from 'express';
 import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import nock from 'nock';
 import { getDataPath } from '../../libs/paths.js';
 import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
 import { setupStreamProbeRoutes, parseMpegTsCodecs } from '../../server/stream-probe.js';
 import { errorHandler } from '../../server/error-handler.js';
+import { invalidateAuthCache } from '../../server/auth.js';
 
 // ---------------------------------------------------------------------------
 // MPEG-TS test data builders
@@ -191,6 +193,10 @@ describe('Stream Probe Route Integration', () => {
   let hadOriginalChannelsFile = false;
   let server = null;
   let baseUrl = '';
+  // CONFIG_PATH isolation — keeps the real app.yaml untouched and ensures
+  // requireAuth sees no admin_auth regardless of local developer config.
+  let tmpConfigDir = null;
+  let originalConfigPath = undefined;
 
   const testChannels = [
     {
@@ -209,6 +215,15 @@ describe('Stream Probe Route Integration', () => {
   ];
 
   before(async () => {
+    // Point CONFIG_PATH at a temp dir with an empty app.yaml so requireAuth
+    // always passes through (no admin_auth present), regardless of the
+    // developer's local config/app.yaml.
+    tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stream-probe-test-'));
+    await fs.writeFile(path.join(tmpConfigDir, 'app.yaml'), '{}\n', 'utf8');
+    originalConfigPath = process.env.CONFIG_PATH;
+    process.env.CONFIG_PATH = tmpConfigDir;
+    invalidateAuthCache();
+
     await fs.mkdir(path.dirname(channelsFile), { recursive: true });
     try {
       originalChannels = await fs.readFile(channelsFile, 'utf8');
@@ -249,6 +264,18 @@ describe('Stream Probe Route Integration', () => {
       } catch (err) {
         if (err.code !== 'ENOENT') throw err;
       }
+    }
+
+    // Restore CONFIG_PATH and auth cache
+    if (originalConfigPath === undefined) {
+      delete process.env.CONFIG_PATH;
+    } else {
+      process.env.CONFIG_PATH = originalConfigPath;
+    }
+    invalidateAuthCache();
+
+    if (tmpConfigDir) {
+      await fs.rm(tmpConfigDir, { recursive: true, force: true });
     }
   });
 
