@@ -142,57 +142,149 @@ function parsePMTSection(section) {
  * @param {Buffer} buf - raw MPEG-TS bytes
  * @returns {{ videoStreamType: number|null, audioStreamType: number|null, browserCompatible: boolean } | null}
  */
+function getPsiSectionTotalLength(section) {
+  if (!section || section.length < 3) return null;
+
+  const sectionLength = ((section[1] & 0x0f) << 8) | section[2];
+  if (sectionLength <= 0) return null;
+
+  return 3 + sectionLength;
+}
+
+function appendPsiSectionBytes(state, bytes, completeSections) {
+  if (!bytes || bytes.length === 0) return;
+
+  state.buffer = state.buffer ? Buffer.concat([state.buffer, bytes]) : Buffer.from(bytes);
+
+  while (state.buffer.length >= 3) {
+    const totalLength = getPsiSectionTotalLength(state.buffer);
+    if (totalLength === null) {
+      state.buffer = null;
+      return;
+    }
+
+    if (state.buffer.length < totalLength) return;
+
+    completeSections.push(state.buffer.slice(0, totalLength));
+    state.buffer = state.buffer.length === totalLength ? null : state.buffer.slice(totalLength);
+  }
+}
+
+function extractPsiSectionsFromPacketPayload(state, payload, payloadUnitStartIndicator) {
+  const completeSections = [];
+  if (!payload || payload.length === 0) return completeSections;
+
+  if (!payloadUnitStartIndicator) {
+    appendPsiSectionBytes(state, payload, completeSections);
+    return completeSections;
+  }
+
+  const pointer = payload[0];
+  let cursor = 1;
+  const nextSectionStart = Math.min(payload.length, cursor + pointer);
+
+  if (state.buffer && nextSectionStart > cursor) {
+    appendPsiSectionBytes(state, payload.slice(cursor, nextSectionStart), completeSections);
+  }
+
+  cursor = nextSectionStart;
+  state.buffer = null;
+
+  while (cursor < payload.length) {
+    const remaining = payload.slice(cursor);
+    const totalLength = getPsiSectionTotalLength(remaining);
+
+    if (totalLength === null) break;
+
+    if (remaining.length >= totalLength) {
+      completeSections.push(remaining.slice(0, totalLength));
+      cursor += totalLength;
+      continue;
+    }
+
+    state.buffer = Buffer.from(remaining);
+    break;
+  }
+
+  return completeSections;
+}
+
 export function parseMpegTsCodecs(buf) {
   const syncOffset = findSyncOffset(buf);
   if (syncOffset === -1) return null;
 
   const packets = Math.floor((buf.length - syncOffset) / TS_PACKET_SIZE);
 
-  // Pass 1: locate the PAT packet (PID 0) and collect PMT PIDs.
+  // Pass 1: locate PAT sections (PID 0) and collect PMT PIDs.
   const pmtPids = new Set();
+  const patState = { buffer: null };
+
   for (let i = 0; i < packets; i++) {
     const offset = syncOffset + i * TS_PACKET_SIZE;
     const pid = ((buf[offset + 1] & 0x1f) << 8) | buf[offset + 2];
     if (pid !== PAT_PID) continue;
 
-    const result = getTsPacketPayload(buf, offset, true /* requirePusi */);
+    const hasPayload = (buf[offset + 3] & 0x10) !== 0;
+    if (!hasPayload) continue;
+
+    const payloadUnitStartIndicator = (buf[offset + 1] & 0x40) !== 0;
+    const result = getTsPacketPayload(buf, offset, false /* requirePusi */);
     if (!result) continue;
 
-    // The first byte of the payload is the pointer_field.
-    const pointer = result.payload[0];
-    const sectionStart = pointer + 1;
-    if (sectionStart >= result.payload.length) continue;
+    const sections = extractPsiSectionsFromPacketPayload(
+      patState,
+      result.payload,
+      payloadUnitStartIndicator
+    );
 
-    const programs = parsePATSection(result.payload.slice(sectionStart));
-    for (const { pmtPid } of programs) pmtPids.add(pmtPid);
+    for (const section of sections) {
+      const programs = parsePATSection(section);
+      for (const { pmtPid } of programs) pmtPids.add(pmtPid);
+    }
+
     if (pmtPids.size > 0) break; // PAT found; no need to scan further
   }
 
   if (pmtPids.size === 0) return null;
 
-  // Pass 2: locate the PMT packet(s) and extract elementary stream types.
+  // Pass 2: locate PMT section(s) and extract elementary stream types.
   let videoStreamType = null;
   let audioStreamType = null;
+  const pmtStates = new Map();
 
   for (let i = 0; i < packets; i++) {
     const offset = syncOffset + i * TS_PACKET_SIZE;
     const pid = ((buf[offset + 1] & 0x1f) << 8) | buf[offset + 2];
     if (!pmtPids.has(pid)) continue;
 
-    const result = getTsPacketPayload(buf, offset, true /* requirePusi */);
+    const hasPayload = (buf[offset + 3] & 0x10) !== 0;
+    if (!hasPayload) continue;
+
+    const payloadUnitStartIndicator = (buf[offset + 1] & 0x40) !== 0;
+    const result = getTsPacketPayload(buf, offset, false /* requirePusi */);
     if (!result) continue;
 
-    const pointer = result.payload[0];
-    const sectionStart = pointer + 1;
-    if (sectionStart >= result.payload.length) continue;
+    let state = pmtStates.get(pid);
+    if (!state) {
+      state = { buffer: null };
+      pmtStates.set(pid, state);
+    }
 
-    const streams = parsePMTSection(result.payload.slice(sectionStart));
-    for (const { streamType } of streams) {
-      if (videoStreamType === null && KNOWN_VIDEO_STREAM_TYPES.has(streamType)) {
-        videoStreamType = streamType;
-      }
-      if (audioStreamType === null && KNOWN_AUDIO_STREAM_TYPES.has(streamType)) {
-        audioStreamType = streamType;
+    const sections = extractPsiSectionsFromPacketPayload(
+      state,
+      result.payload,
+      payloadUnitStartIndicator
+    );
+
+    for (const section of sections) {
+      const streams = parsePMTSection(section);
+      for (const { streamType } of streams) {
+        if (videoStreamType === null && KNOWN_VIDEO_STREAM_TYPES.has(streamType)) {
+          videoStreamType = streamType;
+        }
+        if (audioStreamType === null && KNOWN_AUDIO_STREAM_TYPES.has(streamType)) {
+          audioStreamType = streamType;
+        }
       }
     }
 
