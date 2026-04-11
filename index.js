@@ -12,6 +12,7 @@ import { getConfigPath } from './libs/paths.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes, invalidateLineupCaches } from './server/lineup.js';
 import { setupTranscodeRoutes } from './server/transcode.js';
+import { setupStreamProbeRoutes } from './server/stream-probe.js';
 import { setupEPGRoutes } from './server/epg.js';
 import { imageProxyRoute } from './libs/proxy-image.js';
 import { setupMCPRoutes } from './server/mcp.js';
@@ -261,6 +262,7 @@ imageProxyRoute(app);
 setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
 setupTranscodeRoutes(app);
+setupStreamProbeRoutes(app);
 await setupEPGRoutes(app);
 setupMCPRoutes(app);
 

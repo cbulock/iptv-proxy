@@ -1674,74 +1674,95 @@ async function setupVideoPlayer() {
     return;
   }
 
-  // HDHomeRun OTA channels (ATSC 1.0) return raw MPEG-TS with MPEG-2 video even
-  // when ?streamMode=hls is requested. mpegts.js can parse the TS container but
-  // silently drops MPEG-2 video (stream type 0x02) without emitting an error,
-  // leaving a black screen. Start a HEAD probe in parallel so playback setup is
-  // not delayed on every preview, and only interrupt if the probe confirms TS.
-  // The probe is only issued for HDHomeRun channels since the result is only used
-  // for this check — other providers skip the probe and start playback immediately.
-  if (state.previewWatchingChannel?.hdhomerun) {
-    const previewChannel = state.previewWatchingChannel;
+  // Start a parallel codec probe for all channels.  The server-side probe reads
+  // a small header of the upstream stream and parses the MPEG-TS PAT/PMT tables
+  // to identify the video and audio stream types.  If the codecs are incompatible
+  // with browser MSE (e.g. MPEG-2 video or AC-3 audio from ATSC OTA broadcasts),
+  // the probe returns { browserCompatible: false } and we automatically switch to
+  // server-side transcoding via ffmpeg.
+  //
+  // For HDHomeRun channels the probe URL includes ?streamMode=hls so the server
+  // probes the same content the browser will receive (modern HDHomeRun firmware
+  // re-encodes to HLS when that parameter is present; older firmware ignores it
+  // and returns raw MPEG-TS regardless).
+  //
+  // The probe runs in parallel with HLS.js so it does not add latency when the
+  // stream is already HLS or the codecs are browser-compatible.
+  const probeChannel = state.previewWatchingChannel;
+  const probeBase = `/api/stream-probe/${encodeURIComponent(probeChannel?.source || '')}/${encodeURIComponent(probeChannel?.name || '')}`;
+  const probeUrl = probeChannel?.hdhomerun ? `${probeBase}?streamMode=hls` : probeBase;
 
-    // Shared teardown used by both the HEAD and GET probe paths.
-    function handleMpegTsDetected() {
-      // Ignore stale probe results if the user closed/switched the player.
-      if (
-        videoPlayerEl.value !== video ||
-        state.previewWatchingChannel !== previewChannel ||
-        previewStreamUrl.value !== streamUrl
-      ) {
-        return;
-      }
-      if (hlsInstance) {
-        hlsInstance.destroy();
-        hlsInstance = null;
-      }
-      if (mpegtsInstance) {
-        mpegtsInstance.destroy();
-        mpegtsInstance = null;
-      }
-      video.removeAttribute('src');
-      video.load();
-      // Automatically fall back to server-side transcoding rather than
-      // waiting for the user to click "Try Server Transcoding".  HDHomeRun OTA
-      // channels broadcast MPEG-2 video and AC-3 audio which browsers cannot
-      // decode natively; ffmpeg re-encodes to H.264/AAC on the fly.
-      setupTranscodePlayer().catch(() => {});
-    }
+  // probeSettled / probeResult track the async probe lifecycle.
+  // pendingAfterProbe is set by the HLS.js error handler when the probe has not
+  // yet returned and it needs to defer the player-type decision.
+  let probeSettled = false;
+  let probeResult = null;
+  let pendingAfterProbe = null;
 
-    fetch(streamUrl, { method: 'HEAD', signal: AbortSignal.timeout(1000) })
-      .then((probeResponse) => {
-        if (!probeResponse.ok) return;
-        const contentType = (probeResponse.headers.get('content-type') || '').toLowerCase();
-        const isMpegTs =
-          contentType.startsWith('video/mpeg') || contentType.startsWith('video/mp2t');
-        if (isMpegTs) handleMpegTsDetected();
-      })
-      .catch(() => {
-        // HEAD not supported by the upstream device — fall back to a GET probe.
-        // The body is cancelled immediately after reading headers so we don't
-        // download the stream alongside HLS.js.
-        fetch(streamUrl, { signal: AbortSignal.timeout(3000) })
-          .then(async getResponse => {
-            const ct = (getResponse.headers.get('content-type') || '').toLowerCase();
-            await getResponse.body?.cancel().catch(() => {});
-            if (!getResponse.ok) return;
-            const isMpegTs =
-              ct.startsWith('video/mpeg') || ct.startsWith('video/mp2t');
-            if (isMpegTs) handleMpegTsDetected();
-          })
-          .catch(() => {}); // GET also failed — give up and leave HLS.js running.
-      });
+  // Return true when the channel has changed or the player was replaced since
+  // setupVideoPlayer() was called — used to discard stale async results.
+  function isStale() {
+    return (
+      videoPlayerEl.value !== video ||
+      state.previewWatchingChannel !== probeChannel ||
+      previewStreamUrl.value !== streamUrl
+    );
   }
+
+  // Choose the right player once the probe result is available.
+  function applyProbeResult(probe) {
+    if (isStale()) return;
+    if (probe && !probe.browserCompatible) {
+      setupTranscodePlayer().catch(() => {});
+    } else {
+      setupMpegtsPlayer(video, streamUrl);
+    }
+  }
+
+  fetch(probeUrl, { signal: AbortSignal.timeout(15000) })
+    .then(r => (r.ok ? r.json() : null))
+    .then(result => {
+      if (isStale()) return;
+      probeResult = result;
+      probeSettled = true;
+
+      if (pendingAfterProbe) {
+        // HLS.js already reported a manifest error while the probe was in flight.
+        pendingAfterProbe();
+        pendingAfterProbe = null;
+      } else if (result && !result.browserCompatible && result.container === 'mpeg-ts') {
+        // Codec probe identified incompatible streams before HLS.js fired an error
+        // (e.g. an old HDHomeRun tuner that ignores ?streamMode=hls and returns
+        // MPEG-2/AC-3).  Pre-empt the running player and switch to transcoding.
+        if (hlsInstance) {
+          hlsInstance.destroy();
+          hlsInstance = null;
+        }
+        if (mpegtsInstance) {
+          mpegtsInstance.destroy();
+          mpegtsInstance = null;
+        }
+        video.removeAttribute('src');
+        video.load();
+        setupTranscodePlayer().catch(() => {});
+      }
+    })
+    .catch(() => {
+      if (isStale()) return;
+      probeSettled = true;
+      // Probe failed — if the HLS.js error handler is already waiting, unblock it.
+      if (pendingAfterProbe) {
+        pendingAfterProbe();
+        pendingAfterProbe = null;
+      }
+    });
 
   // Use bundled HLS.js for other browsers.
   // For HDHomeRun channels the stream URL includes ?streamMode=hls (see previewStreamUrl),
   // so HLS.js receives the server-proxied HLS playlist from the device.  If the device
   // returns raw MPEG-TS instead (older firmware that ignores ?streamMode=hls), HLS.js
-  // will fire a MANIFEST_PARSING_ERROR and the error handler below triggers server-side
-  // transcoding via ffmpeg (HDHomeRun) or falls back to mpegts.js (other sources).
+  // will fire a MANIFEST_PARSING_ERROR.  We then use the codec probe result to decide
+  // whether to route to mpegts.js (compatible codecs) or ffmpeg transcoding (incompatible).
   if (Hls.isSupported()) {
     hlsInstance = new Hls();
     hlsInstance.loadSource(streamUrl);
@@ -1760,20 +1781,23 @@ async function setupVideoPlayer() {
         Hls.ErrorDetails.LEVEL_PARSING_ERROR,
       ];
 
-      // Only fall back to mpegts.js when the response is not a valid HLS playlist
+      // Only route to an alternative player when the response is not a valid HLS
+      // playlist (as opposed to a network/auth error, which shows a stream-unavailable
+      // message instead).
       const isManifestFormatError = manifestFormatErrorDetails.includes(data.details);
 
       hlsInstance.destroy();
       hlsInstance = null;
 
       if (isManifestFormatError) {
-        if (state.previewWatchingChannel?.hdhomerun) {
-          // HDHomeRun OTA channels use MPEG-2/AC-3 which mpegts.js cannot
-          // decode; skip straight to server-side transcoding via ffmpeg.
-          setupTranscodePlayer().catch(() => {});
+        // Stream is raw MPEG-TS (or some other non-HLS format).  Use the codec
+        // probe result to choose between mpegts.js (compatible) and server
+        // transcoding (incompatible codecs such as MPEG-2 video or AC-3 audio).
+        if (probeSettled) {
+          applyProbeResult(probeResult);
         } else {
-          // Stream is not HLS (e.g. raw MPEG-TS from a non-HDHomeRun source); try mpegts.js
-          setupMpegtsPlayer(video, streamUrl);
+          // Probe is still in flight — defer the decision until it resolves.
+          pendingAfterProbe = () => applyProbeResult(probeResult);
         }
       } else {
         showPlayerError(ERR_STREAM_UNAVAILABLE);
