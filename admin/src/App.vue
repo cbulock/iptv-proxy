@@ -1704,7 +1704,11 @@ async function setupVideoPlayer() {
       }
       video.removeAttribute('src');
       video.load();
-      showPlayerError(ERR_UNSUPPORTED_CODEC);
+      // Automatically fall back to server-side transcoding rather than
+      // waiting for the user to click "Try Server Transcoding".  HDHomeRun OTA
+      // channels broadcast MPEG-2 video and AC-3 audio which browsers cannot
+      // decode natively; ffmpeg re-encodes to H.264/AAC on the fly.
+      setupTranscodePlayer().catch(() => {});
     }
 
     fetch(streamUrl, { method: 'HEAD', signal: AbortSignal.timeout(1000) })
@@ -1736,7 +1740,8 @@ async function setupVideoPlayer() {
   // For HDHomeRun channels the stream URL includes ?streamMode=hls (see previewStreamUrl),
   // so HLS.js receives the server-proxied HLS playlist from the device.  If the device
   // returns raw MPEG-TS instead (older firmware that ignores ?streamMode=hls), HLS.js
-  // will fire a MANIFEST_PARSING_ERROR and the error handler below falls back to mpegts.js.
+  // will fire a MANIFEST_PARSING_ERROR and the error handler below triggers server-side
+  // transcoding via ffmpeg (HDHomeRun) or falls back to mpegts.js (other sources).
   if (Hls.isSupported()) {
     hlsInstance = new Hls();
     hlsInstance.loadSource(streamUrl);
@@ -1762,8 +1767,14 @@ async function setupVideoPlayer() {
       hlsInstance = null;
 
       if (isManifestFormatError) {
-        // Stream is not HLS (e.g. raw MPEG-TS from HDHomeRun); try mpegts.js
-        setupMpegtsPlayer(video, streamUrl);
+        if (state.previewWatchingChannel?.hdhomerun) {
+          // HDHomeRun OTA channels use MPEG-2/AC-3 which mpegts.js cannot
+          // decode; skip straight to server-side transcoding via ffmpeg.
+          setupTranscodePlayer().catch(() => {});
+        } else {
+          // Stream is not HLS (e.g. raw MPEG-TS from a non-HDHomeRun source); try mpegts.js
+          setupMpegtsPlayer(video, streamUrl);
+        }
       } else {
         showPlayerError(ERR_STREAM_UNAVAILABLE);
       }
