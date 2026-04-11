@@ -166,17 +166,18 @@ describe('parseMpegTsCodecs', () => {
     expect(parseMpegTsCodecs(Buffer.alloc(0))).to.equal(null);
   });
 
-  it('handles a buffer that begins with garbage before the first sync byte', () => {
+  it('handles a buffer that begins with one full packet of garbage before the sync boundary', () => {
     const realData = buildMpegTsBuffer(256, 0x02, 0x81);
-    // Prepend 47 bytes of garbage followed by the real data (sync still at offset > 0).
-    // The two-sync-byte confirmation will find the offset once the second packet aligns.
-    const garbage = Buffer.alloc(188, 0x00);
+    // Prepend 188 bytes of zeros (all-null TS padding).  findSyncOffset will confirm
+    // the boundary at offset 188 (where buf[188] = 0x47 and buf[376] = 0x47).
+    const garbage = Buffer.alloc(TS_PACKET_SIZE, 0x00);
     const buf = Buffer.concat([garbage, realData]);
-    // The parser may return null here (no valid two-sync confirmation in the leading
-    // garbage + start of data) — this is acceptable; just ensure it doesn't throw.
     const result = parseMpegTsCodecs(buf);
-    // result can be null or a valid codec info — both are fine, no crash expected
-    expect(typeof result === 'object').to.equal(true);
+    // With a full-packet-aligned garbage prefix the parser should still find PAT/PMT.
+    expect(result).to.not.equal(null);
+    expect(result.browserCompatible).to.equal(false);
+    expect(result.videoStreamType).to.equal(0x02);
+    expect(result.audioStreamType).to.equal(0x81);
   });
 });
 
