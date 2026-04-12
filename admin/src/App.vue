@@ -575,6 +575,47 @@
                   >
                 </div>
 
+                <!-- Player debug panel -->
+                <div
+                  v-if="state.playerDebug"
+                  style="margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden;"
+                >
+                  <div
+                    style="display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.6rem; background: rgba(255,255,255,0.06); cursor: pointer; user-select: none;"
+                    @click="state.showPlayerDebug = !state.showPlayerDebug"
+                  >
+                    <span style="font-size: 0.8em; opacity: 0.75;">
+                      🔍 Stream Debug
+                      <span
+                        v-if="state.playerDebug.playerMode"
+                        style="margin-left: 0.5em; opacity: 0.6;"
+                      >— player: {{ state.playerDebug.playerMode }}</span>
+                    </span>
+                    <span style="font-size: 0.75em; opacity: 0.5;">{{ state.showPlayerDebug ? '▲ hide' : '▼ show' }}</span>
+                  </div>
+                  <div v-if="state.showPlayerDebug" style="padding: 0.5rem 0.6rem; font-size: 0.75em; opacity: 0.85;">
+                    <div style="display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.6rem; margin-bottom: 0.5rem;">
+                      <span style="opacity: 0.6;">HDHomeRun</span>
+                      <span>{{ state.playerDebug.hdhomerun }}</span>
+                      <span style="opacity: 0.6;">Player mode</span>
+                      <span>{{ state.playerDebug.playerMode ?? '(pending)' }}</span>
+                      <span style="opacity: 0.6;">Probe URL</span>
+                      <code style="word-break: break-all; font-size: 0.9em;">{{ state.playerDebug.probeUrl }}</code>
+                      <span style="opacity: 0.6;">Probe result</span>
+                      <code style="word-break: break-all; font-size: 0.9em;">{{ state.playerDebug.probeResult ? JSON.stringify(state.playerDebug.probeResult) : '(pending)' }}</code>
+                      <template v-if="state.playerDebug.hlsError">
+                        <span style="opacity: 0.6;">HLS.js error</span>
+                        <code style="word-break: break-all; font-size: 0.9em;">{{ JSON.stringify(state.playerDebug.hlsError) }}</code>
+                      </template>
+                    </div>
+                    <div style="margin-bottom: 0.4rem; opacity: 0.6; font-size: 0.9em;">Events:</div>
+                    <pre style="font-size: 0.85em; line-height: 1.4; max-height: 140px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; background: rgba(0,0,0,0.3); padding: 0.4rem; border-radius: 3px; margin: 0;">{{ state.playerDebug.events.join('\n') }}</pre>
+                    <div style="margin-top: 0.5rem;">
+                      <n-button size="tiny" secondary @click="copyPlayerDebug">Copy debug info</n-button>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Guide / EPG -->
                 <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 0.75rem">
                   <div style="font-weight: 600; margin-bottom: 0.5rem">Guide</div>
@@ -835,6 +876,9 @@ const state = reactive({
   previewGuide: [],
   loadingGuide: false,
   playerError: null,
+  // Player debug info — populated during playback setup so issues can be reported
+  showPlayerDebug: false,
+  playerDebug: null,
 });
 
 function setStatus(msg, ok = true) {
@@ -1654,6 +1698,7 @@ async function setupVideoPlayer() {
   if (!video || !state.previewWatchingChannel) return;
 
   const streamUrl = previewStreamUrl.value;
+  const ch = state.previewWatchingChannel;
 
   // Destroy any previous instances before resetting state
   if (hlsInstance) {
@@ -1665,11 +1710,33 @@ async function setupVideoPlayer() {
     mpegtsInstance = null;
   }
 
-  // Clear any error from the previous player session
+  // Clear any error and debug state from the previous player session
   state.playerError = null;
+  state.playerDebug = {
+    channel: ch.name,
+    source: ch.source,
+    hdhomerun: Boolean(ch.hdhomerun),
+    streamUrl,
+    transcodeUrl: `/transcode/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`,
+    probeUrl: null,
+    probeResult: null,
+    playerMode: null,
+    hlsError: null,
+    events: [],
+  };
+
+  const dbg = state.playerDebug;
+  function dbgEvent(msg) {
+    console.log('[player:debug]', msg);
+    dbg.events.push(`${new Date().toISOString().slice(11, 23)} ${msg}`);
+  }
+
+  dbgEvent(`setupVideoPlayer hdhomerun=${dbg.hdhomerun} streamUrl=${streamUrl}`);
 
   // Safari / iOS — native HLS support
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    dbgEvent('browser supports HLS natively → video.src');
+    dbg.playerMode = 'native-hls';
     video.src = streamUrl;
     return;
   }
@@ -1696,6 +1763,7 @@ async function setupVideoPlayer() {
   const probeBase = `/api/stream-probe/${encodeURIComponent(probeChannel?.source || '')}/${encodeURIComponent(probeChannel?.name || '')}`;
   // Do NOT append ?streamMode=hls for HDHomeRun — see comment above.
   const probeUrl = probeBase;
+  dbg.probeUrl = probeUrl;
 
   // probeSettled / probeResult track the async probe lifecycle.
   // pendingAfterProbe is set by the HLS.js error handler when the probe has not
@@ -1724,6 +1792,11 @@ async function setupVideoPlayer() {
     // fallback regardless of the probe result (which checks only the raw stream).
     // This also covers the case where the probe itself failed and returned null.
     if ((probe && !probe.browserCompatible) || probeChannel?.hdhomerun) {
+      const reason = probeChannel?.hdhomerun
+        ? 'hdhomerun channel — always transcode after HLS.js error'
+        : `probe browserCompatible=false (container=${probe?.container})`;
+      dbgEvent(`applyProbeResult: choosing transcode — ${reason}`);
+      dbg.playerMode = 'transcode';
       setupTranscodePlayer().catch(err => {
         console.warn(
           '[player] probe-triggered transcode setup failed for %s/%s:',
@@ -1731,27 +1804,37 @@ async function setupVideoPlayer() {
           probeChannel?.name,
           err,
         );
+        dbgEvent(`transcode setup error: ${err?.message}`);
       });
     } else {
+      dbgEvent('applyProbeResult: choosing mpegts.js (probe compatible or null, not HDHomeRun)');
+      dbg.playerMode = 'mpegts';
       setupMpegtsPlayer(video, streamUrl);
     }
   }
 
+  dbgEvent(`starting probe: ${probeUrl}`);
   fetch(probeUrl, { signal: AbortSignal.timeout(15000) })
     .then(r => (r.ok ? r.json() : null))
     .then(result => {
       if (isStale()) return;
       probeResult = result;
       probeSettled = true;
+      dbg.probeResult = result;
+      dbgEvent(
+        `probe settled: container=${result?.container} browserCompatible=${result?.browserCompatible} video=0x${(result?.videoStreamType ?? 0).toString(16)} audio=0x${(result?.audioStreamType ?? 0).toString(16)}`
+      );
 
       if (pendingAfterProbe) {
         // HLS.js already reported a manifest error while the probe was in flight.
+        dbgEvent('probe settled after HLS.js error — running deferred applyProbeResult');
         pendingAfterProbe();
         pendingAfterProbe = null;
       } else if (result && !result.browserCompatible && result.container === 'mpeg-ts') {
         // Codec probe identified incompatible codecs (e.g. MPEG-2/AC-3 from an
         // HDHomeRun OTA tuner) before HLS.js fired an error.  Pre-empt the running
         // player and switch immediately to server-side transcoding.
+        dbgEvent('probe pre-empt: incompatible mpeg-ts — destroying current player, switching to transcode');
         if (hlsInstance) {
           hlsInstance.destroy();
           hlsInstance = null;
@@ -1762,6 +1845,7 @@ async function setupVideoPlayer() {
         }
         video.removeAttribute('src');
         video.load();
+        dbg.playerMode = 'transcode';
         setupTranscodePlayer().catch(err => {
           console.warn(
             '[player] probe-triggered transcode setup failed for %s/%s:',
@@ -1769,14 +1853,17 @@ async function setupVideoPlayer() {
             probeChannel?.name,
             err,
           );
+          dbgEvent(`transcode setup error: ${err?.message}`);
         });
       }
     })
-    .catch(() => {
+    .catch(err => {
       if (isStale()) return;
       probeSettled = true;
+      dbgEvent(`probe failed: ${err?.message || String(err)}`);
       // Probe failed — if the HLS.js error handler is already waiting, unblock it.
       if (pendingAfterProbe) {
+        dbgEvent('probe failed after HLS.js error — running deferred applyProbeResult with null');
         pendingAfterProbe();
         pendingAfterProbe = null;
       }
@@ -1792,10 +1879,14 @@ async function setupVideoPlayer() {
   // the pending probe result is applied (applyProbeResult) to decide whether to
   // transcode (HDHomeRun or incompatible codecs) or use mpegts.js.
   if (Hls.isSupported()) {
+    dbgEvent('starting HLS.js');
+    dbg.playerMode = 'hls';
     hlsInstance = new Hls();
     hlsInstance.loadSource(streamUrl);
     hlsInstance.attachMedia(video);
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+      dbgEvent('HLS.js MANIFEST_PARSED — stream is live HLS, playing');
+      dbg.playerMode = 'hls';
       video.play().catch(() => {});
     });
     hlsInstance.on(Hls.Events.ERROR, (_evt, data) => {
@@ -1814,6 +1905,11 @@ async function setupVideoPlayer() {
       // message instead).
       const isManifestFormatError = manifestFormatErrorDetails.includes(data.details);
 
+      dbgEvent(
+        `HLS.js fatal error: type=${data.type} details=${data.details} isManifestFormatError=${isManifestFormatError} probeSettled=${probeSettled}`
+      );
+      dbg.hlsError = { type: data.type, details: data.details };
+
       hlsInstance.destroy();
       hlsInstance = null;
 
@@ -1822,12 +1918,15 @@ async function setupVideoPlayer() {
         // probe result to choose between mpegts.js (compatible) and server
         // transcoding (incompatible codecs such as MPEG-2 video or AC-3 audio).
         if (probeSettled) {
+          dbgEvent('HLS.js manifest error — probe already settled, applying now');
           applyProbeResult(probeResult);
         } else {
           // Probe is still in flight — defer the decision until it resolves.
+          dbgEvent('HLS.js manifest error — probe still in flight, deferring');
           pendingAfterProbe = () => applyProbeResult(probeResult);
         }
       } else {
+        dbgEvent(`HLS.js non-format fatal error (${data.details}) — showing stream unavailable`);
         showPlayerError(ERR_STREAM_UNAVAILABLE);
       }
     });
@@ -1835,6 +1934,8 @@ async function setupVideoPlayer() {
   }
 
   // Last resort: direct src (works for MP4/MPEG-TS in some browsers)
+  dbgEvent('HLS.js not supported — using direct video.src');
+  dbg.playerMode = 'direct-src';
   video.src = streamUrl;
 }
 
@@ -1854,6 +1955,8 @@ function stopVideoPlayer() {
     video.load();
   }
   state.playerError = null;
+  state.showPlayerDebug = false;
+  state.playerDebug = null;
 }
 
 /**
@@ -1936,6 +2039,19 @@ function copyStreamUrl() {
   navigator.clipboard.writeText(url).then(
     () => message.success('Stream URL copied to clipboard'),
     () => message.error('Failed to copy URL')
+  );
+}
+
+function copyPlayerDebug() {
+  const d = state.playerDebug;
+  if (!d) {
+    message.error('No debug info available');
+    return;
+  }
+  const text = JSON.stringify(d, null, 2);
+  navigator.clipboard.writeText(text).then(
+    () => message.success('Debug info copied to clipboard'),
+    () => message.error('Failed to copy debug info')
   );
 }
 
