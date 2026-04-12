@@ -306,6 +306,8 @@ describe('Stream Probe Route Integration', () => {
     expect(res.data.browserCompatible).to.equal(false);
     expect(res.data.videoStreamType).to.equal(0x02);
     expect(res.data.audioStreamType).to.equal(0x81);
+    // Confirm the probe hit the raw upstream URL without any ?streamMode=hls param.
+    expect(nock.isDone()).to.equal(true);
   });
 
   it('returns { container: mpeg-ts, browserCompatible: true } for H.264/AAC stream', async () => {
@@ -340,24 +342,6 @@ describe('Stream Probe Route Integration', () => {
     expect(res.status).to.equal(200);
     expect(res.data.container).to.equal('hls');
     expect(res.data.browserCompatible).to.equal(true);
-  });
-
-  it('appends ?streamMode=hls to upstream URL for HDHomeRun channels when requested', async () => {
-    const mpegTsBuf = buildMpegTsBuffer(256, 0x1b, 0x0f);
-
-    nock('http://hdhomerun-probe.local')
-      .get('/auto/v6.1')
-      .query({ streamMode: 'hls' })
-      .reply(200, mpegTsBuf, { 'content-type': 'video/mp2t' });
-
-    const res = await axios.get(
-      `${baseUrl}/api/stream-probe/Antenna/OTA%20Channel?streamMode=hls`,
-      { validateStatus: () => true },
-    );
-
-    expect(res.status).to.equal(200);
-    expect(res.data.container).to.equal('mpeg-ts');
-    expect(nock.isDone()).to.equal(true);
   });
 
   it('returns 502 when the upstream stream is unreachable', async () => {

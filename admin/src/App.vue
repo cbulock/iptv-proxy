@@ -580,8 +580,10 @@
                   v-if="state.playerDebug"
                   style="margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden;"
                 >
-                  <div
-                    style="display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.6rem; background: rgba(255,255,255,0.06); cursor: pointer; user-select: none;"
+                  <button
+                    type="button"
+                    style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.6rem; background: rgba(255,255,255,0.06); cursor: pointer; user-select: none; border: none; color: inherit; font: inherit; text-align: left;"
+                    :aria-expanded="state.showPlayerDebug"
                     @click="state.showPlayerDebug = !state.showPlayerDebug"
                   >
                     <span style="font-size: 0.8em; opacity: 0.75;">
@@ -592,7 +594,7 @@
                       >— player: {{ state.playerDebug.playerMode }}</span>
                     </span>
                     <span style="font-size: 0.75em; opacity: 0.5;">{{ state.showPlayerDebug ? '▲ hide' : '▼ show' }}</span>
-                  </div>
+                  </button>
                   <div v-if="state.showPlayerDebug" style="padding: 0.5rem 0.6rem; font-size: 0.75em; opacity: 0.85;">
                     <div style="display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.6rem; margin-bottom: 0.5rem;">
                       <span style="opacity: 0.6;">HDHomeRun</span>
@@ -1821,7 +1823,17 @@ async function setupVideoPlayer() {
   }
 
   dbgEvent(`starting probe: ${probeUrl}`);
-  fetch(probeUrl, { signal: AbortSignal.timeout(15000) })
+  // AbortSignal.timeout() is not available in all browsers; fall back to an
+  // AbortController + setTimeout pair where necessary.
+  const probeAbortSignal =
+    typeof AbortSignal.timeout === 'function'
+      ? AbortSignal.timeout(15000)
+      : (() => {
+          const ac = new AbortController();
+          setTimeout(() => ac.abort(), 15000);
+          return ac.signal;
+        })();
+  fetch(probeUrl, { signal: probeAbortSignal })
     .then(r => (r.ok ? r.json() : null))
     .then(result => {
       if (isStale()) return;

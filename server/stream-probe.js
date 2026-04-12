@@ -9,6 +9,26 @@ const TS_PACKET_SIZE = 188;
 const TS_SYNC_BYTE = 0x47;
 const PAT_PID = 0x0000;
 
+/**
+ * Return a URL string safe to write to logs: strips any basic-auth credentials
+ * (username:password@host) so they are never exposed in server logs.
+ * @param {string} rawUrl
+ * @returns {string}
+ */
+function safeUrlForLog(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.username || url.password) {
+      url.username = '***';
+      url.password = '***';
+    }
+    return url.toString();
+  } catch {
+    // Not a valid URL — return as-is (no credentials to strip).
+    return rawUrl;
+  }
+}
+
 // Video stream types the browser cannot decode natively via MSE.
 const INCOMPATIBLE_VIDEO_STREAM_TYPES = new Set([
   0x01, // ISO/IEC 11172-2 — MPEG-1 video
@@ -353,30 +373,22 @@ export function setupStreamProbeRoutes(app) {
     if (!upstreamUrl) return res.status(404).json({ error: 'No upstream URL for channel' });
 
     const isHdhomerun = Boolean(channel.hdhomerun);
-    const requestedStreamMode = String(req.query.streamMode || '').toLowerCase();
 
-    // Mirror the stream proxy's ?streamMode=hls behaviour: when probing an
-    // HDHomeRun channel that the browser will request with HLS mode, we must
-    // probe the same URL the device will actually serve — otherwise modern
-    // firmware that supports HLS would appear incompatible.
-    let probeUrl = upstreamUrl;
-    if (isHdhomerun && requestedStreamMode === 'hls') {
-      try {
-        const url = new URL(upstreamUrl);
-        url.searchParams.set('streamMode', 'hls');
-        probeUrl = url.toString();
-      } catch {
-        // Malformed upstream URL — probe without modification.
-      }
-    }
+    // Always probe the raw upstream stream regardless of the caller's ?streamMode
+    // query parameter.  HDHomeRun devices that support HLS mode wrap their MPEG-TS
+    // packets into an HLS playlist but do NOT re-encode the video — the segments
+    // still carry the original MPEG-2/AC-3 codecs.  Probing via ?streamMode=hls
+    // would receive an HLS content-type and incorrectly report browserCompatible:true,
+    // causing the player to skip transcoding and produce a black screen.  The raw
+    // stream must be probed so the PAT/PMT parser can detect the underlying codecs.
+    const probeUrl = upstreamUrl;
 
     console.info(
-      '[stream-probe] %s/%s hdhomerun=%s streamMode=%s probeUrl=%s',
+      '[stream-probe] %s/%s hdhomerun=%s probeUrl=%s',
       source,
       name,
       isHdhomerun,
-      requestedStreamMode || '(none)',
-      probeUrl
+      safeUrlForLog(probeUrl)
     );
 
     let response;
