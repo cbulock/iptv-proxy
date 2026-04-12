@@ -1735,11 +1735,12 @@ async function setupVideoPlayer() {
 
   dbgEvent(`setupVideoPlayer hdhomerun=${dbg.hdhomerun} streamUrl=${streamUrl}`);
 
-  // Safari / iOS — native HLS support.
+  // Safari / iOS and modern Chrome — native HLS support.
   // Skip for HDHomeRun channels: their HLS segments still carry MPEG-2/AC-3 codecs
-  // that Safari cannot decode natively (the device wraps MPEG-TS in an HLS playlist
-  // but does NOT re-encode the video).  Falling through to the HLS.js + probe +
-  // transcode path lets macOS Safari recover via server-side transcoding.
+  // that browsers cannot decode natively (the device wraps MPEG-TS in an HLS
+  // playlist but does NOT re-encode the video).  Falling through to the HLS.js +
+  // probe + transcode path allows server-side transcoding to recover regardless of
+  // which browser is used.
   if (video.canPlayType('application/vnd.apple.mpegurl') && !ch.hdhomerun) {
     dbgEvent('browser supports HLS natively → video.src');
     dbg.playerMode = 'native-hls';
