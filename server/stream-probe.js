@@ -9,6 +9,26 @@ const TS_PACKET_SIZE = 188;
 const TS_SYNC_BYTE = 0x47;
 const PAT_PID = 0x0000;
 
+/**
+ * Return a URL string safe to write to logs: strips any basic-auth credentials
+ * (username:password@host) so they are never exposed in server logs.
+ * @param {string} rawUrl
+ * @returns {string}
+ */
+function safeUrlForLog(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.username || url.password) {
+      url.username = '***';
+      url.password = '***';
+    }
+    return url.toString();
+  } catch {
+    // Not a valid URL — return as-is (no credentials to strip).
+    return rawUrl;
+  }
+}
+
 // Video stream types the browser cannot decode natively via MSE.
 const INCOMPATIBLE_VIDEO_STREAM_TYPES = new Set([
   0x01, // ISO/IEC 11172-2 — MPEG-1 video
@@ -352,20 +372,24 @@ export function setupStreamProbeRoutes(app) {
     const upstreamUrl = channel.original_url;
     if (!upstreamUrl) return res.status(404).json({ error: 'No upstream URL for channel' });
 
-    // Mirror the stream proxy's ?streamMode=hls behaviour: when probing an
-    // HDHomeRun channel that the browser will request with HLS mode, we must
-    // probe the same URL the device will actually serve — otherwise modern
-    // firmware that supports HLS would appear incompatible.
-    let probeUrl = upstreamUrl;
-    if (channel.hdhomerun && String(req.query.streamMode || '').toLowerCase() === 'hls') {
-      try {
-        const url = new URL(upstreamUrl);
-        url.searchParams.set('streamMode', 'hls');
-        probeUrl = url.toString();
-      } catch {
-        // Malformed upstream URL — probe without modification.
-      }
-    }
+    const isHdhomerun = Boolean(channel.hdhomerun);
+
+    // Always probe the raw upstream stream regardless of the caller's ?streamMode
+    // query parameter.  HDHomeRun devices that support HLS mode wrap their MPEG-TS
+    // packets into an HLS playlist but do NOT re-encode the video — the segments
+    // still carry the original MPEG-2/AC-3 codecs.  Probing via ?streamMode=hls
+    // would receive an HLS content-type and incorrectly report browserCompatible:true,
+    // causing the player to skip transcoding and produce a black screen.  The raw
+    // stream must be probed so the PAT/PMT parser can detect the underlying codecs.
+    const probeUrl = upstreamUrl;
+
+    console.info(
+      '[stream-probe] %s/%s hdhomerun=%s probeUrl=%s',
+      source,
+      name,
+      isHdhomerun,
+      safeUrlForLog(probeUrl)
+    );
 
     let response;
     try {
@@ -383,12 +407,23 @@ export function setupStreamProbeRoutes(app) {
     // An HLS content-type means the upstream is serving a playlist — no need to
     // read the body; the browser can play HLS natively (via HLS.js in the UI).
     const contentType = (response.headers['content-type'] || '').toLowerCase();
+    const upstreamStatus = response.status;
+
+    console.info(
+      '[stream-probe] %s/%s upstream status=%d content-type="%s"',
+      source,
+      name,
+      upstreamStatus,
+      contentType || '(empty)'
+    );
+
     if (
       contentType.includes('application/vnd.apple.mpegurl') ||
       contentType.includes('application/x-mpegurl') ||
       contentType.includes('audio/mpegurl')
     ) {
       response.data.destroy();
+      console.info('[stream-probe] %s/%s -> container=hls browserCompatible=true', source, name);
       return res.json({
         container: 'hls',
         browserCompatible: true,
@@ -414,15 +449,38 @@ export function setupStreamProbeRoutes(app) {
       }
     }
 
+    const syncOffset = findSyncOffset(buf);
+    console.info(
+      '[stream-probe] %s/%s read %d bytes isMpegTsContentType=%s syncOffset=%d',
+      source,
+      name,
+      buf.length,
+      isMpegTsContentType,
+      syncOffset
+    );
+
     // Attempt MPEG-TS PAT/PMT parsing when the content-type signals MPEG-TS or
     // when the raw bytes look like a TS stream (sync byte at position 0 or 188).
-    if (isMpegTsContentType || findSyncOffset(buf) !== -1) {
+    if (isMpegTsContentType || syncOffset !== -1) {
       const codecInfo = parseMpegTsCodecs(buf);
       if (codecInfo) {
+        console.info(
+          '[stream-probe] %s/%s -> container=mpeg-ts browserCompatible=%s video=0x%s audio=0x%s',
+          source,
+          name,
+          codecInfo.browserCompatible,
+          (codecInfo.videoStreamType ?? 0).toString(16).padStart(2, '0'),
+          (codecInfo.audioStreamType ?? 0).toString(16).padStart(2, '0')
+        );
         return res.json({ container: 'mpeg-ts', ...codecInfo });
       }
       // PAT/PMT not found within the probed range.  Assume compatible to avoid
       // incorrectly routing a live stream to transcoding.
+      console.info(
+        '[stream-probe] %s/%s -> container=mpeg-ts browserCompatible=true (no PAT/PMT found)',
+        source,
+        name
+      );
       return res.json({
         container: 'mpeg-ts',
         browserCompatible: true,
@@ -432,6 +490,11 @@ export function setupStreamProbeRoutes(app) {
     }
 
     // Unknown format — assume compatible.
+    console.info(
+      '[stream-probe] %s/%s -> container=unknown browserCompatible=true (unrecognised format)',
+      source,
+      name
+    );
     return res.json({
       container: 'unknown',
       browserCompatible: true,

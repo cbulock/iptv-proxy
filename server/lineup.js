@@ -471,6 +471,17 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         ? isLikelyHlsPlaylist(contentType, '')
         : !channel.hdhomerun && isLikelyHlsPlaylist(contentType, responseUrl);
 
+      console.info(
+        '[stream] %s/%s upstream status=%d content-type="%s" hdhomerun=%s requestedHlsMode=%s isHlsResponse=%s',
+        source,
+        name,
+        response.status,
+        contentType || '(empty)',
+        Boolean(channel.hdhomerun),
+        requestedHlsMode,
+        isHlsResponse
+      );
+
       if (isHlsResponse) {
         // HLS playlist/key/segment requests are short-lived; keep session alive via touch + idle TTL.
         await touchViewer();
