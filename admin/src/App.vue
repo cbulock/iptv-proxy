@@ -1783,6 +1783,13 @@ async function setupVideoPlayer() {
   }
 
   // Choose the right player once the probe result is available.
+  // NOTE: applyProbeResult is ONLY ever called from the HLS.js fatal-error path —
+  // either directly (when the probe settled before HLS.js fired) or via
+  // pendingAfterProbe (when HLS.js fired before the probe settled).  The probe
+  // pre-emption path (probe fires first, incompatible MPEG-TS) calls
+  // setupTranscodePlayer() directly and never goes through this function.  So the
+  // `probeChannel?.hdhomerun` guard below fires exclusively when HLS.js has already
+  // reported that it cannot play the stream.
   function applyProbeResult(probe) {
     if (isStale()) return;
     // For HDHomeRun channels, always fall back to server-side transcoding when
@@ -1822,7 +1829,7 @@ async function setupVideoPlayer() {
       probeSettled = true;
       dbg.probeResult = result;
       dbgEvent(
-        `probe settled: container=${result?.container} browserCompatible=${result?.browserCompatible} video=0x${(result?.videoStreamType ?? 0).toString(16)} audio=0x${(result?.audioStreamType ?? 0).toString(16)}`
+        `probe settled: container=${result?.container} browserCompatible=${result?.browserCompatible} video=0x${(result?.videoStreamType ?? 0).toString(16).padStart(2, '0')} audio=0x${(result?.audioStreamType ?? 0).toString(16).padStart(2, '0')}`
       );
 
       if (pendingAfterProbe) {
