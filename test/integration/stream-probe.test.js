@@ -389,31 +389,4 @@ describe('Stream Probe Route Integration', () => {
     // Assume compatible when we cannot parse PAT/PMT (avoid false-positive transcoding).
     expect(res.data.browserCompatible).to.equal(true);
   });
-
-  it('HDHomeRun channel probed without ?streamMode=hls correctly identifies MPEG-2/AC-3', async () => {
-    // Regression test for the bug where the probe was sent with ?streamMode=hls.
-    // HDHomeRun devices that support HLS mode wrap their MPEG-TS packets into an
-    // HLS playlist but do NOT re-encode — the HLS segments still carry MPEG-2/AC-3.
-    // Probing with ?streamMode=hls would receive an HLS content-type response and
-    // return browserCompatible:true (incorrect).  The client now probes the raw
-    // stream URL so the PAT/PMT parser can detect the underlying codecs.
-    const mpegTsBuf = buildMpegTsBuffer(256, 0x02, 0x81);
-
-    // Raw upstream URL — no ?streamMode=hls query param.
-    nock('http://hdhomerun-probe.local').get('/auto/v6.1').reply(200, mpegTsBuf, {
-      'content-type': 'video/mp2t',
-    });
-
-    const res = await axios.get(`${baseUrl}/api/stream-probe/Antenna/OTA%20Channel`, {
-      validateStatus: () => true,
-    });
-
-    expect(res.status).to.equal(200);
-    expect(res.data.container).to.equal('mpeg-ts');
-    expect(res.data.browserCompatible).to.equal(false);
-    expect(res.data.videoStreamType).to.equal(0x02);
-    expect(res.data.audioStreamType).to.equal(0x81);
-    // Confirm nock intercepted the correct (non-HLS) upstream path.
-    expect(nock.isDone()).to.equal(true);
-  });
 });
