@@ -21,7 +21,6 @@ async function makeFFmpegStub(tmpDir, { exitCode = 0, stdoutData = null, argsFil
   if (argsFile !== null) {
     // The stub runs in a temp dir with no package.json, so Node.js treats it as
     // CommonJS.  Using require() here is intentional and correct for that context.
-    script += `// eslint-disable-next-line @typescript-eslint/no-require-imports\n`;
     script += `const _fs = require('fs');\n`;
     script += `_fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));\n`;
   }
