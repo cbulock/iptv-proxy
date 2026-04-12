@@ -1994,13 +1994,15 @@ async function setupTranscodePlayer() {
   const video = videoPlayerEl.value;
   if (!video || !state.previewWatchingChannel) return;
 
-  // Push a timestamped message into the debug event log when one is active.
+  // Append a timestamped message to the debug event log.
   // setupTranscodePlayer() may be called from outside setupVideoPlayer() (e.g. via
-  // the manual "Transcode" button), so playerDebug may not be present.
+  // the manual "Transcode" button), so playerDebug may not be present; only log when
+  // the debug session is active.
   function dbgEvent(msg) {
-    console.log('[player:debug]', msg);
     const events = state.playerDebug?.events;
-    if (events) events.push(`${new Date().toISOString().slice(11, 23)} ${msg}`);
+    if (!events) return;
+    console.log('[player:debug]', msg);
+    events.push(`${new Date().toISOString().slice(11, 23)} ${msg}`);
   }
 
   // Clear the codec error so the player area is visible again
