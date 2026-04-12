@@ -1735,8 +1735,12 @@ async function setupVideoPlayer() {
 
   dbgEvent(`setupVideoPlayer hdhomerun=${dbg.hdhomerun} streamUrl=${streamUrl}`);
 
-  // Safari / iOS — native HLS support
-  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+  // Safari / iOS — native HLS support.
+  // Skip for HDHomeRun channels: their HLS segments still carry MPEG-2/AC-3 codecs
+  // that Safari cannot decode natively (the device wraps MPEG-TS in an HLS playlist
+  // but does NOT re-encode the video).  Falling through to the HLS.js + probe +
+  // transcode path lets macOS Safari recover via server-side transcoding.
+  if (video.canPlayType('application/vnd.apple.mpegurl') && !ch.hdhomerun) {
     dbgEvent('browser supports HLS natively → video.src');
     dbg.playerMode = 'native-hls';
     video.src = streamUrl;
@@ -2549,7 +2553,9 @@ const previewStreamUrl = computed(() => {
   const base = `/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
   // HDHomeRun OTA broadcasts use MPEG-2 video and AC-3 audio — codecs not supported
   // by browser MSE.  Append ?streamMode=hls so the server requests the HLS variant
-  // from the HDHomeRun device, which re-encodes to browser-compatible H.264+AAC.
+  // from the HDHomeRun device.  Note: HLS mode wraps the MPEG-TS in an HLS playlist
+  // but does NOT re-encode; codecs are still MPEG-2/AC-3.  HLS.js will detect the
+  // format/codec mismatch and the probe + transcode path will handle playback.
   return ch.hdhomerun ? `${base}?streamMode=hls` : base;
 });
 
