@@ -50,6 +50,11 @@ export function setupTranscodeRoutes(app) {
 
     // Transcode the upstream stream to H.264/AAC in MPEG-TS format.
     // -preset ultrafast and -tune zerolatency minimise encoder latency for live streams.
+    // -pix_fmt yuv420p ensures 8-bit 4:2:0 output required by browser MSE decoders.
+    // -ac 2 downmixes to stereo so all browsers can decode the AAC track; HDHomeRun
+    //   OTA broadcasts often carry AC-3 5.1 which would otherwise be re-encoded as
+    //   6-channel AAC — a format rejected by some browser MSE implementations.
+    // -b:a 128k provides a consistent, broadly-supported audio bitrate.
     const ffmpegArgs = [
       '-loglevel',
       'error',
@@ -61,8 +66,14 @@ export function setupTranscodeRoutes(app) {
       'ultrafast',
       '-tune',
       'zerolatency',
+      '-pix_fmt',
+      'yuv420p',
       '-c:a',
       'aac',
+      '-ac',
+      '2',
+      '-b:a',
+      '128k',
       '-f',
       'mpegts',
       'pipe:1',

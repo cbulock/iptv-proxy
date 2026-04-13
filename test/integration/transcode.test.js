@@ -15,9 +15,15 @@ import { errorHandler } from '../../server/error-handler.js';
  * writes bytes to stdout first. Using Node.js avoids any shell-escaping concerns
  * with the stdout data. Returns the path to the script.
  */
-async function makeFFmpegStub(tmpDir, { exitCode = 0, stdoutData = null } = {}) {
+async function makeFFmpegStub(tmpDir, { exitCode = 0, stdoutData = null, argsFile = null } = {}) {
   const bin = path.join(tmpDir, 'ffmpeg');
   let script = '#!/usr/bin/env node\n';
+  if (argsFile !== null) {
+    // The stub runs in a temp dir with no package.json, so Node.js treats it as
+    // CommonJS.  Using require() here is intentional and correct for that context.
+    script += `const _fs = require('fs');\n`;
+    script += `_fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));\n`;
+  }
   if (stdoutData !== null) {
     script += `process.stdout.write(${JSON.stringify(stdoutData)});\n`;
   }
@@ -160,5 +166,38 @@ describe('Transcode Route Integration', () => {
     expect(response.status).to.equal(200);
     expect(response.headers['content-type']).to.match(/video\/mp2t/i);
     expect(Buffer.from(response.data).toString()).to.equal('FAKEDATA');
+  });
+
+  it('passes browser-compatible encoding flags to ffmpeg', async () => {
+    const argsFile = path.join(tmpBinDir, 'ffmpeg-args.json');
+    await makeFFmpegStub(tmpBinDir, { exitCode: 0, stdoutData: 'X', argsFile });
+    process.env.PATH = `${tmpBinDir}:${originalPath}`;
+
+    await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
+      responseType: 'arraybuffer',
+      validateStatus: () => true,
+    });
+
+    const args = JSON.parse(await fs.readFile(argsFile, 'utf8'));
+
+    // Stereo downmix (-ac 2) must be present so 5.1 AC-3 is not re-encoded as
+    // 6-channel AAC, which many browser MSE implementations reject.
+    expect(args).to.include('-ac');
+    expect(args[args.indexOf('-ac') + 1]).to.equal('2');
+
+    // Explicit audio bitrate (-b:a 128k) for consistent, broadly-supported output.
+    expect(args).to.include('-b:a');
+    expect(args[args.indexOf('-b:a') + 1]).to.equal('128k');
+
+    // yuv420p pixel format required by browser MSE H.264 decoders.
+    expect(args).to.include('-pix_fmt');
+    expect(args[args.indexOf('-pix_fmt') + 1]).to.equal('yuv420p');
+
+    // libx264 encoder must still be used.
+    expect(args).to.include('libx264');
+
+    // Output must be MPEG-TS piped to stdout.
+    expect(args).to.include('mpegts');
+    expect(args[args.length - 1]).to.equal('pipe:1');
   });
 });

@@ -1994,6 +1994,17 @@ async function setupTranscodePlayer() {
   const video = videoPlayerEl.value;
   if (!video || !state.previewWatchingChannel) return;
 
+  // Append a timestamped message to the debug event log.
+  // setupTranscodePlayer() may be called from outside setupVideoPlayer() (e.g. via
+  // the manual "Transcode" button), so playerDebug may not be present; only log when
+  // the debug session is active.
+  function dbgEvent(msg) {
+    const events = state.playerDebug?.events;
+    if (!events) return;
+    console.log('[player:debug]', msg);
+    events.push(`${new Date().toISOString().slice(11, 23)} ${msg}`);
+  }
+
   // Clear the codec error so the player area is visible again
   state.playerError = null;
 
@@ -2013,6 +2024,7 @@ async function setupTranscodePlayer() {
   }
 
   const transcodeUrl = previewTranscodeUrl.value;
+  dbgEvent(`starting transcode player: ${transcodeUrl}`);
   const player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: transcodeUrl });
   mpegtsInstance = player;
   player.attachMediaElement(video);
@@ -2020,6 +2032,7 @@ async function setupTranscodePlayer() {
   player.on(mpegts.Events.ERROR, (errorType, errorDetail, _errorInfo) => {
     if (player !== mpegtsInstance) return; // stale callback from a previous player
     console.warn('[player] transcode error:', errorType, errorDetail);
+    dbgEvent(`transcode error: ${errorType} ${errorDetail}`);
     mpegtsInstance.destroy();
     mpegtsInstance = null;
     if (!state.playerError) {
@@ -2038,6 +2051,7 @@ async function setupTranscodePlayer() {
     }
 
     console.warn('[player] transcode playback failed:', err);
+    dbgEvent(`transcode play() failed: ${err?.name} ${err?.message}`);
     mpegtsInstance.destroy();
     mpegtsInstance = null;
     if (!state.playerError) {
