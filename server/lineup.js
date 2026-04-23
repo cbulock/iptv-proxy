@@ -124,8 +124,9 @@ function resolveGuideNumberForLineup(channel) {
   if (channel?.guideNumber) {
     return channel.guideNumber;
   }
-  // For HDHomeRun channels without an explicit guideNumber, fall back to tvg_id
-  // so subchannels like 6.1/23.1 align with XMLTV channel ids.
+  // Fallback for HDHomeRun channels whose GuideNumber was absent: use tvg_id
+  // (which applyMapping may have set from the guideNumber or the mapping).
+  // This keeps subchannels like 6.1/23.1 aligned with XMLTV channel ids.
   if (channel?.hdhomerun && channel?.tvg_id) {
     return channel.tvg_id;
   }
