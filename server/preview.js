@@ -60,6 +60,20 @@ function applyMapping(channel, map) {
     }
   }
 
+  // If still not found, match by guideNumber against mapping tvg_id.
+  // HDHomeRun channels have a guide number (e.g. "10.6") but no tvg_id, so the
+  // reverse lookup above is skipped. Matching guideNumber against a mapping's
+  // tvg_id lets users map OTA channels by their subchannel number.
+  if (!mapping && !channel.tvg_id && channel.guideNumber && map && typeof map === 'object') {
+    for (const [key, value] of Object.entries(map)) {
+      if (value && value.tvg_id === channel.guideNumber) {
+        mapping = value;
+        matchedKey = key;
+        break;
+      }
+    }
+  }
+
   if (mapping) {
     const inferredName =
       matchedKey && matchedKey !== channel.name && matchedKey !== channel.tvg_id
