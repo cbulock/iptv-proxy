@@ -121,6 +121,55 @@ describe('M3U Parser - applyMapping', () => {
       expect(result.guideNumber).to.equal('6');
       expect(result.logo).to.equal('http://example.com/cbs.png');
     });
+
+    it('should map HDHomeRun channel by guideNumber matching mapping tvg_id when no tvg_id set', () => {
+      // HDHomeRun channels start with tvg_id='' and a guide number like "10.6".
+      // The channel map entry uses tvg_id: "10.6" as the EPG identifier.
+      // This lookup allows the mapping to be applied via the guide number.
+      const channel = createMockChannel({
+        name: 'CRIME TV',
+        tvg_id: '',
+        guideNumber: '10.6',
+        hdhomerun: { deviceID: 'ABCD1234' },
+      });
+
+      const mapping = {
+        CRIME: {
+          number: '15',
+          tvg_id: '10.6',
+        },
+      };
+
+      const result = applyMapping(channel, mapping);
+
+      expect(result.name).to.equal('CRIME');
+      expect(result.tvg_id).to.equal('10.6');
+      expect(result.guideNumber).to.equal('15');
+    });
+
+    it('should not match by guideNumber when tvg_id is already set', () => {
+      // When the channel already has a tvg_id, only that tvg_id is used for
+      // reverse lookup — the guideNumber must not trigger a second match.
+      const channel = createMockChannel({
+        name: 'Some Channel',
+        tvg_id: '99.9',
+        guideNumber: '10.6',
+      });
+
+      const mapping = {
+        CRIME: {
+          number: '15',
+          tvg_id: '10.6',
+        },
+      };
+
+      // tvg_id "99.9" does not match any mapping value, so no mapping is applied.
+      const result = applyMapping(channel, mapping);
+
+      expect(result.name).to.equal('Some Channel');
+      expect(result.guideNumber).to.equal('10.6');
+      expect(result.tvg_id).to.equal('99.9');
+    });
   });
 
   describe('Fallback behavior', () => {

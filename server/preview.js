@@ -10,6 +10,7 @@ import axios from 'axios';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import RateLimit from 'express-rate-limit';
 import { validateConfigData } from '../libs/config-loader.js';
+import { applyMapping, buildReverseIndex } from '../libs/channel-mapping.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import { requireAuth } from './auth.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
@@ -38,52 +39,9 @@ const builder = new XMLBuilder({
 });
 
 /**
- * Apply channel mapping to a channel object
- */
-function applyMapping(channel, map) {
-  let matchedKey = null;
-
-  let mapping = map[channel.name];
-  if (mapping) matchedKey = channel.name;
-  if (!mapping && channel.tvg_id) {
-    mapping = map[channel.tvg_id];
-    if (mapping) matchedKey = channel.tvg_id;
-  }
-
-  if (!mapping && channel.tvg_id && map && typeof map === 'object') {
-    for (const [key, value] of Object.entries(map)) {
-      if (value && value.tvg_id === channel.tvg_id) {
-        mapping = value;
-        matchedKey = key;
-        break;
-      }
-    }
-  }
-
-  if (mapping) {
-    const inferredName =
-      matchedKey && matchedKey !== channel.name && matchedKey !== channel.tvg_id
-        ? matchedKey
-        : channel.name;
-    channel.name = mapping.name || inferredName;
-    channel.tvg_id = mapping.tvg_id || channel.tvg_id;
-    channel.logo = mapping.logo || channel.logo;
-    channel.url = mapping.url || channel.url;
-    channel.guideNumber = mapping.number || channel.guideNumber;
-    channel.group = mapping.group || channel.group;
-  }
-
-  if (!channel.tvg_id && channel.guideNumber) {
-    channel.tvg_id = channel.guideNumber;
-  }
-
-  return channel;
-}
-
-/**
  * Parse M3U data from string
  */
-function parseM3UData(data, sourceName, channelMap) {
+function parseM3UData(data, sourceName, channelMap, reverseIndex) {
   const channels = [];
   const lines = data.split('\n');
 
@@ -121,7 +79,7 @@ function parseM3UData(data, sourceName, channelMap) {
       if (current.name) {
         current.url = trimmedLine;
         current.original_url = trimmedLine;
-        channels.push(applyMapping(current, channelMap));
+        channels.push(applyMapping(current, channelMap, reverseIndex));
         current = {};
       }
     }
@@ -135,6 +93,9 @@ function parseM3UData(data, sourceName, channelMap) {
  */
 async function processM3USources(sources, channelMap) {
   const allChannels = [];
+  // Build the reverse index once per preview request so per-channel lookups
+  // are O(1) rather than O(map size).
+  const reverseIndex = buildReverseIndex(channelMap);
 
   for (const source of sources) {
     try {
@@ -152,7 +113,7 @@ async function processM3USources(sources, channelMap) {
         data = response.data;
       }
 
-      const channels = parseM3UData(data, source.name, channelMap);
+      const channels = parseM3UData(data, source.name, channelMap, reverseIndex);
       allChannels.push(...channels);
     } catch (err) {
       console.error(`Failed to process source ${source.name}:`, err.message);

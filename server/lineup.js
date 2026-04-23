@@ -119,19 +119,21 @@ function rewriteHlsPlaylist(body, playlistUrl, req, source, name) {
 }
 
 function resolveGuideNumberForLineup(channel) {
-  // HDHomeRun clients often match XMLTV by GuideNumber; use tvg_id when present
-  // so subchannels like 6.1/23.1 align with XMLTV channel ids.
+  // Always prefer an explicitly set guideNumber (from the channel map's "number"
+  // field or from the HDHomeRun tuner's own GuideNumber).
+  if (channel?.guideNumber) {
+    return channel.guideNumber;
+  }
+  // Fallback for HDHomeRun channels whose GuideNumber was absent: use tvg_id
+  // (which applyMapping may have set from the guideNumber or the mapping).
+  // This keeps subchannels like 6.1/23.1 aligned with XMLTV channel ids.
   if (channel?.hdhomerun && channel?.tvg_id) {
     return channel.tvg_id;
   }
-  return channel?.guideNumber || channel?.tvg_id || channel?.name;
+  return channel?.tvg_id || channel?.name;
 }
 
 function isChannelMapped(channel, map, mapKeys) {
-  // HDHomeRun channels come from a hardware tuner and are always included
-  // without requiring an explicit channel-map entry.
-  if (channel?.hdhomerun) return true;
-
   const name = channel?.name || '';
   const tvgId = channel?.tvg_id || '';
 

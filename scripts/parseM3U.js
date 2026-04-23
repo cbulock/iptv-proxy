@@ -3,6 +3,7 @@ import axios from 'axios';
 import pLimit from 'p-limit';
 import { loadConfig } from '../libs/config-loader.js';
 import { getDataPath, DATA_DIR } from '../libs/paths.js';
+import { applyMapping as _applyMapping, buildReverseIndex } from '../libs/channel-mapping.js';
 
 const outputPath = getDataPath('channels.json');
 
@@ -15,53 +16,9 @@ export function setStatusCallback(callback) {
   statusCallback = callback;
 }
 
-export function applyMapping(channel, map) {
-  let matchedKey = null;
-
-  // Try name-based mapping first
-  let mapping = map[channel.name];
-  if (mapping) matchedKey = channel.name;
-
-  // If not found, fall back to tvg_id
-  if (!mapping && channel.tvg_id) {
-    mapping = map[channel.tvg_id];
-    if (mapping) matchedKey = channel.tvg_id;
-  }
-
-  // If still not found, allow reverse lookup by mapping value tvg_id.
-  // This supports admin UI mappings keyed by EPG channel name.
-  if (!mapping && channel.tvg_id && map && typeof map === 'object') {
-    for (const [key, value] of Object.entries(map)) {
-      if (value && value.tvg_id === channel.tvg_id) {
-        mapping = value;
-        matchedKey = key;
-        break;
-      }
-    }
-  }
-
-  if (mapping) {
-    // If mapping.name is omitted and the matched key is not the source name/tvg_id,
-    // treat that key as the canonical EPG/display name.
-    const inferredName =
-      matchedKey && matchedKey !== channel.name && matchedKey !== channel.tvg_id
-        ? matchedKey
-        : channel.name;
-    channel.name = mapping.name || inferredName;
-    channel.tvg_id = mapping.tvg_id || channel.tvg_id;
-    channel.logo = mapping.logo || channel.logo;
-    channel.url = mapping.url || channel.url;
-    channel.guideNumber = mapping.number || channel.guideNumber;
-    channel.group = mapping.group || channel.group;
-  }
-
-  // 👇 Fallback: if still no tvg_id, use guideNumber
-  if (!channel.tvg_id && channel.guideNumber) {
-    channel.tvg_id = channel.guideNumber;
-  }
-
-  return channel;
-}
+// Re-export so existing callers (tests, etc.) can still import applyMapping
+// from this module without knowing about the shared lib.
+export { applyMapping } from '../libs/channel-mapping.js';
 
 export function proxyURL(channel) {
   return `/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
@@ -75,6 +32,8 @@ export function proxyURL(channel) {
  */
 async function processSource(source, map) {
   const channels = [];
+  // Build the reverse index once per source so per-channel lookups are O(1).
+  const reverseIndex = buildReverseIndex(map);
 
   try {
     console.log(`Processing source: ${source.name}...`);
@@ -113,7 +72,7 @@ async function processSource(source, map) {
           },
         };
 
-        channels.push(applyMapping(channel, map));
+        channels.push(_applyMapping(channel, map, reverseIndex));
       }
     } else {
       // Standard M3U - stream processing for large files
@@ -194,7 +153,7 @@ async function processSource(source, map) {
           if (current.name) {
             current.url = proxyURL(current);
             current.original_url = trimmedLine;
-            channels.push(applyMapping(current, map));
+            channels.push(_applyMapping(current, map, reverseIndex));
           }
           current = {};
         }

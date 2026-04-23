@@ -134,34 +134,34 @@ describe('Lineup Route Integration', () => {
     expect(body).to.not.include('Test Channel Two');
   });
 
-  it('uses tvg_id as GuideNumber for HDHomeRun channels in /lineup.json', async () => {
+  it('uses guideNumber as GuideNumber for HDHomeRun channels in /lineup.json', async () => {
     const response = await axios.get(`${baseUrl}/lineup.json?include_unmapped=1`);
     expect(response.status).to.equal(200);
 
     const wlns = response.data.find(ch => ch.GuideName === 'WLNS-TV');
     expect(wlns).to.exist;
-    expect(wlns.GuideNumber).to.equal('6.1');
+    // guideNumber ('6') must take precedence over tvg_id ('6.1')
+    expect(wlns.GuideNumber).to.equal('6');
   });
 
-  it('includes HDHomeRun channels in /lineup.json without include_unmapped', async () => {
-    // HDHomeRun channels come from a hardware tuner and should always appear in the
-    // lineup without requiring an explicit channel-map entry.
+  it('excludes unmapped HDHomeRun channels from /lineup.json without include_unmapped', async () => {
+    // HDHomeRun channels must now be in the channel map to appear in the lineup,
+    // the same as any other channel type.
     const response = await axios.get(`${baseUrl}/lineup.json`);
     expect(response.status).to.equal(200);
 
     const wlns = response.data.find(ch => ch.GuideName === 'WLNS-TV');
-    expect(wlns).to.exist;
-    expect(wlns.GuideNumber).to.equal('6.1');
+    expect(wlns).to.not.exist;
   });
 
-  it('includes HDHomeRun channels in /lineup.m3u without include_unmapped', async () => {
-    // HDHomeRun channels come from a hardware tuner and should always appear in the
-    // M3U playlist without requiring an explicit channel-map entry.
+  it('excludes unmapped HDHomeRun channels from /lineup.m3u without include_unmapped', async () => {
+    // HDHomeRun channels must now be in the channel map to appear in the M3U
+    // playlist, the same as any other channel type.
     const response = await axios.get(`${baseUrl}/lineup.m3u`);
     const body = response.data;
 
     expect(response.status).to.equal(200);
-    expect(body).to.include('WLNS-TV');
+    expect(body).to.not.include('WLNS-TV');
   });
 
   it('proxies HDHomeRun MPEG-TS streams directly without adding ?streamMode=hls by default', async () => {
