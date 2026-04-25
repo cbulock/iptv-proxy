@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="darkTheme">
+  <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides">
     <!-- Auth setup modal: shown when no credentials are configured -->
     <n-modal
       :show="showSetupModal"
@@ -36,731 +36,809 @@
           />
         </n-form-item>
       </n-form>
-      <div v-if="setupError" style="color: #d9534f; margin-bottom: 0.75rem">{{ setupError }}</div>
+      <div v-if="setupError" style="color: var(--danger); margin-bottom: 0.75rem">
+        {{ setupError }}
+      </div>
       <n-button type="primary" :loading="savingSetup" @click="submitSetup" block>{{
         savingSetup ? 'Saving...' : 'Save Credentials'
       }}</n-button>
     </n-modal>
 
-    <n-layout>
-      <n-layout-header
-        bordered
-        style="padding: 1rem; display: flex; align-items: center; gap: 1rem"
-      >
-        <h1 style="margin: 0; font-size: 1.2rem; flex: 1">IPTV Proxy Admin</h1>
+    <n-layout class="admin-shell">
+      <n-layout-header bordered class="admin-header">
+        <div class="brand-lockup">
+          <div class="brand-mark">IP</div>
+          <div class="brand-title">IPTV Proxy Admin</div>
+        </div>
         <n-button v-if="authConfigured" size="small" secondary @click="logout" :loading="loggingOut"
           >Sign Out</n-button
         >
       </n-layout-header>
-      <n-layout-content style="padding: 1rem">
-        <n-tabs v-model:value="tab" type="line" animated>
-          <n-tab-pane name="app" tab="App">
-            <n-form label-placement="left" label-width="120">
-              <n-form-item label="Base URL">
-                <n-input v-model:value="app.base_url" placeholder="https://example.com" />
-              </n-form-item>
-              <n-space>
-                <n-button type="primary" @click="saveApp" :loading="savingApp">{{
-                  savingApp ? 'Saving...' : 'Save App'
+      <n-layout-content class="admin-content">
+        <div class="workspace-frame">
+          <n-tabs
+            v-model:value="tab"
+            type="line"
+            animated
+            class="admin-tabs"
+            pane-wrapper-class="admin-tabs-pane-wrapper"
+          >
+            <n-tab-pane name="app" tab="App">
+              <n-form label-placement="left" label-width="120">
+                <n-form-item label="Base URL">
+                  <n-input v-model:value="app.base_url" placeholder="https://example.com" />
+                </n-form-item>
+                <n-space>
+                  <n-button type="primary" @click="saveApp" :loading="savingApp">{{
+                    savingApp ? 'Saving...' : 'Save App'
+                  }}</n-button>
+                </n-space>
+              </n-form>
+              <div class="foot">
+                Editing <code>config/app.yaml</code>. Used for absolute URL generation behind
+                proxies.
+              </div>
+
+              <!-- Security / Change Password section (shown when auth is configured) -->
+              <div v-if="authConfigured" style="margin-top: 2rem">
+                <h3 style="margin-bottom: 0.75rem">Security</h3>
+                <n-form label-placement="left" label-width="160" style="max-width: 520px">
+                  <n-form-item label="Current Password">
+                    <n-input
+                      v-model:value="passwordForm.current"
+                      type="password"
+                      show-password-on="click"
+                      placeholder="Enter current password"
+                      :disabled="savingPassword"
+                    />
+                  </n-form-item>
+                  <n-form-item label="New Password">
+                    <n-input
+                      v-model:value="passwordForm.newPass"
+                      type="password"
+                      show-password-on="click"
+                      placeholder="Min. 8 characters"
+                      :disabled="savingPassword"
+                    />
+                  </n-form-item>
+                  <n-form-item label="Confirm New Password">
+                    <n-input
+                      v-model:value="passwordForm.confirm"
+                      type="password"
+                      show-password-on="click"
+                      placeholder="Repeat new password"
+                      :disabled="savingPassword"
+                    />
+                  </n-form-item>
+                  <n-form-item>
+                    <n-button type="primary" :loading="savingPassword" @click="changePassword">{{
+                      savingPassword ? 'Saving...' : 'Change Password'
+                    }}</n-button>
+                  </n-form-item>
+                </n-form>
+              </div>
+            </n-tab-pane>
+
+            <n-tab-pane name="providers" tab="Providers">
+              <n-space align="center" wrap style="margin-bottom: 0.5rem">
+                <n-button type="primary" secondary @click="addProvider">Add Provider</n-button>
+                <n-button type="primary" @click="saveProviders" :loading="savingProviders">{{
+                  savingProviders ? 'Saving...' : 'Save Providers'
+                }}</n-button>
+                <n-button @click="loadEPGValidation" :loading="loadingEPGValidation">{{
+                  loadingEPGValidation ? 'Validating...' : 'Validate EPG'
                 }}</n-button>
               </n-space>
-            </n-form>
-            <div class="foot">
-              Editing <code>config/app.yaml</code>. Used for absolute URL generation behind proxies.
-            </div>
-
-            <!-- Security / Change Password section (shown when auth is configured) -->
-            <div v-if="authConfigured" style="margin-top: 2rem">
-              <h3 style="margin-bottom: 0.75rem">Security</h3>
-              <n-form label-placement="left" label-width="160" style="max-width: 520px">
-                <n-form-item label="Current Password">
-                  <n-input
-                    v-model:value="passwordForm.current"
-                    type="password"
-                    show-password-on="click"
-                    placeholder="Enter current password"
-                    :disabled="savingPassword"
-                  />
-                </n-form-item>
-                <n-form-item label="New Password">
-                  <n-input
-                    v-model:value="passwordForm.newPass"
-                    type="password"
-                    show-password-on="click"
-                    placeholder="Min. 8 characters"
-                    :disabled="savingPassword"
-                  />
-                </n-form-item>
-                <n-form-item label="Confirm New Password">
-                  <n-input
-                    v-model:value="passwordForm.confirm"
-                    type="password"
-                    show-password-on="click"
-                    placeholder="Repeat new password"
-                    :disabled="savingPassword"
-                  />
-                </n-form-item>
-                <n-form-item>
-                  <n-button type="primary" :loading="savingPassword" @click="changePassword">{{
-                    savingPassword ? 'Saving...' : 'Change Password'
-                  }}</n-button>
-                </n-form-item>
-              </n-form>
-            </div>
-          </n-tab-pane>
-
-          <n-tab-pane name="providers" tab="Providers">
-            <n-space align="center" wrap style="margin-bottom: 0.5rem">
-              <n-button type="primary" secondary @click="addProvider">Add Provider</n-button>
-              <n-button type="primary" @click="saveProviders" :loading="savingProviders">{{
-                savingProviders ? 'Saving...' : 'Save Providers'
-              }}</n-button>
-              <n-button @click="loadEPGValidation" :loading="loadingEPGValidation">{{
-                loadingEPGValidation ? 'Validating...' : 'Validate EPG'
-              }}</n-button>
-            </n-space>
-            <div
-              v-if="epgValidation"
-              style="
-                margin-bottom: 1rem;
-                padding: 0.75rem;
-                background: rgba(255, 255, 255, 0.05);
-                border-radius: 4px;
-              "
-            >
-              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem">
-                <span style="font-weight: 600; font-size: 1.1em">EPG Validation:</span>
-                <span v-if="epgValidation.valid" style="color: #21c35b; font-weight: 600"
-                  >✓ Valid</span
-                >
-                <span v-else style="color: #d9534f; font-weight: 600">✗ Invalid</span>
-              </div>
               <div
+                v-if="epgValidation"
                 style="
-                  display: grid;
-                  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                  gap: 0.5rem;
-                  margin-bottom: 0.5rem;
-                "
-              >
-                <div>
-                  <span style="opacity: 0.7">Channels:</span>
-                  {{ epgValidation.summary?.channels || 0 }}
-                  <span
-                    v-if="epgValidation.summary?.validChannels !== epgValidation.summary?.channels"
-                    style="color: #f0a020"
-                    >({{ epgValidation.summary?.validChannels || 0 }} valid)</span
-                  >
-                </div>
-                <div>
-                  <span style="opacity: 0.7">Programmes:</span>
-                  {{ epgValidation.summary?.programmes || 0 }}
-                  <span
-                    v-if="
-                      epgValidation.summary?.validProgrammes !== epgValidation.summary?.programmes
-                    "
-                    style="color: #f0a020"
-                    >({{ epgValidation.summary?.validProgrammes || 0 }} valid)</span
-                  >
-                </div>
-                <div>
-                  <span style="opacity: 0.7">Errors:</span>
-                  <span
-                    :style="{
-                      color: epgValidation.summary?.errorCount > 0 ? '#d9534f' : '#21c35b',
-                    }"
-                    >{{ epgValidation.summary?.errorCount || 0 }}</span
-                  >
-                </div>
-                <div>
-                  <span style="opacity: 0.7">Warnings:</span>
-                  <span
-                    :style="{
-                      color: epgValidation.summary?.warningCount > 0 ? '#f0a020' : '#21c35b',
-                    }"
-                    >{{ epgValidation.summary?.warningCount || 0 }}</span
-                  >
-                </div>
-              </div>
-              <div
-                v-if="epgValidation.coverage"
-                style="
-                  margin-top: 0.5rem;
-                  padding: 0.5rem;
+                  margin-bottom: 1rem;
+                  padding: 0.75rem;
                   background: rgba(255, 255, 255, 0.05);
                   border-radius: 4px;
                 "
               >
-                <div style="font-weight: 600; margin-bottom: 0.25rem">Coverage:</div>
-                <div>
-                  <span style="opacity: 0.7">Total Channels:</span>
-                  {{ epgValidation.coverage.total }}
-                </div>
-                <div>
-                  <span style="opacity: 0.7">With EPG:</span>
-                  {{ epgValidation.coverage.withEPG }} ({{ epgValidation.coverage.percentage }}%)
-                </div>
-                <div v-if="epgValidation.coverage.withoutEPG > 0" style="margin-top: 0.25rem">
-                  <span style="opacity: 0.7"
-                    >Missing EPG ({{ epgValidation.coverage.withoutEPG }}):</span
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem">
+                  <span style="font-weight: 600; font-size: 1.1em">EPG Validation:</span>
+                  <span v-if="epgValidation.valid" style="color: var(--success); font-weight: 600"
+                    >✓ Valid</span
                   >
+                  <span v-else style="color: var(--danger); font-weight: 600">✗ Invalid</span>
+                </div>
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                    gap: 0.5rem;
+                    margin-bottom: 0.5rem;
+                  "
+                >
+                  <div>
+                    <span style="opacity: 0.7">Channels:</span>
+                    {{ epgValidation.summary?.channels || 0 }}
+                    <span
+                      v-if="
+                        epgValidation.summary?.validChannels !== epgValidation.summary?.channels
+                      "
+                      style="color: var(--warning)"
+                      >({{ epgValidation.summary?.validChannels || 0 }} valid)</span
+                    >
+                  </div>
+                  <div>
+                    <span style="opacity: 0.7">Programmes:</span>
+                    {{ epgValidation.summary?.programmes || 0 }}
+                    <span
+                      v-if="
+                        epgValidation.summary?.validProgrammes !== epgValidation.summary?.programmes
+                      "
+                      style="color: var(--warning)"
+                      >({{ epgValidation.summary?.validProgrammes || 0 }} valid)</span
+                    >
+                  </div>
+                  <div>
+                    <span style="opacity: 0.7">Errors:</span>
+                    <span
+                      :style="{
+                        color:
+                          epgValidation.summary?.errorCount > 0
+                            ? 'var(--danger)'
+                            : 'var(--success)',
+                      }"
+                      >{{ epgValidation.summary?.errorCount || 0 }}</span
+                    >
+                  </div>
+                  <div>
+                    <span style="opacity: 0.7">Warnings:</span>
+                    <span
+                      :style="{
+                        color:
+                          epgValidation.summary?.warningCount > 0
+                            ? 'var(--warning)'
+                            : 'var(--success)',
+                      }"
+                      >{{ epgValidation.summary?.warningCount || 0 }}</span
+                    >
+                  </div>
+                </div>
+                <div
+                  v-if="epgValidation.coverage"
+                  style="
+                    margin-top: 0.5rem;
+                    padding: 0.5rem;
+                    background: rgba(255, 255, 255, 0.05);
+                    border-radius: 4px;
+                  "
+                >
+                  <div style="font-weight: 600; margin-bottom: 0.25rem">Coverage:</div>
+                  <div>
+                    <span style="opacity: 0.7">Total Channels:</span>
+                    {{ epgValidation.coverage.total }}
+                  </div>
+                  <div>
+                    <span style="opacity: 0.7">With EPG:</span>
+                    {{ epgValidation.coverage.withEPG }} ({{ epgValidation.coverage.percentage }}%)
+                  </div>
+                  <div v-if="epgValidation.coverage.withoutEPG > 0" style="margin-top: 0.25rem">
+                    <span style="opacity: 0.7"
+                      >Missing EPG ({{ epgValidation.coverage.withoutEPG }}):</span
+                    >
+                    <div
+                      v-for="(ch, idx) in epgValidation.coverage.channelsWithoutEPG"
+                      :key="idx"
+                      style="padding-left: 1rem; opacity: 0.7; font-size: 0.9em"
+                    >
+                      • {{ ch.name }}
+                      <span style="opacity: 0.6">({{ ch.tvg_id || 'no tvg-id' }})</span>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-if="epgValidation.errors && epgValidation.errors.length > 0"
+                  style="margin-top: 0.5rem; color: var(--danger)"
+                >
+                  <div style="font-weight: 600; margin-bottom: 0.25rem">Errors:</div>
                   <div
-                    v-for="(ch, idx) in epgValidation.coverage.channelsWithoutEPG"
+                    v-for="(err, idx) in epgValidation.errors.slice(0, 10)"
                     :key="idx"
+                    style="padding-left: 1rem; font-size: 0.9em"
+                  >
+                    • {{ err }}
+                  </div>
+                  <div
+                    v-if="epgValidation.errors.length > 10"
                     style="padding-left: 1rem; opacity: 0.7; font-size: 0.9em"
                   >
-                    • {{ ch.name }}
-                    <span style="opacity: 0.6">({{ ch.tvg_id || 'no tvg-id' }})</span>
+                    ... and {{ epgValidation.errors.length - 10 }} more
                   </div>
                 </div>
-              </div>
-              <div
-                v-if="epgValidation.errors && epgValidation.errors.length > 0"
-                style="margin-top: 0.5rem; color: #d9534f"
-              >
-                <div style="font-weight: 600; margin-bottom: 0.25rem">Errors:</div>
                 <div
-                  v-for="(err, idx) in epgValidation.errors.slice(0, 10)"
-                  :key="idx"
-                  style="padding-left: 1rem; font-size: 0.9em"
+                  v-if="epgValidation.warnings && epgValidation.warnings.length > 0"
+                  style="margin-top: 0.5rem; color: var(--warning)"
                 >
-                  • {{ err }}
-                </div>
-                <div
-                  v-if="epgValidation.errors.length > 10"
-                  style="padding-left: 1rem; opacity: 0.7; font-size: 0.9em"
-                >
-                  ... and {{ epgValidation.errors.length - 10 }} more
-                </div>
-              </div>
-              <div
-                v-if="epgValidation.warnings && epgValidation.warnings.length > 0"
-                style="margin-top: 0.5rem; color: #f0a020"
-              >
-                <div style="font-weight: 600; margin-bottom: 0.25rem">Warnings:</div>
-                <div
-                  v-for="(warn, idx) in epgValidation.warnings.slice(0, 10)"
-                  :key="idx"
-                  style="padding-left: 1rem; font-size: 0.9em"
-                >
-                  • {{ warn }}
-                </div>
-                <div
-                  v-if="epgValidation.warnings.length > 10"
-                  style="padding-left: 1rem; opacity: 0.7; font-size: 0.9em"
-                >
-                  ... and {{ epgValidation.warnings.length - 10 }} more
-                </div>
-              </div>
-            </div>
-            <n-data-table
-              v-if="Array.isArray(providers) && providers.length"
-              :columns="providerColumns"
-              :data="providers"
-              :bordered="false"
-              :row-key="rowKeyFn"
-            />
-            <div v-else style="margin-top: 1rem; opacity: 0.7">No providers configured yet.</div>
-            <div class="foot">
-              Editing <code>config/providers.yaml</code>. Each provider has a channel source and an
-              optional EPG URL.
-            </div>
-          </n-tab-pane>
-
-          <n-tab-pane name="mapping" tab="Mapping">
-            <n-space align="center" wrap style="margin-bottom: 0.5rem">
-              <n-button type="primary" secondary @click="addMappingRow">Add Mapping</n-button>
-              <n-button type="primary" @click="saveMapping" :loading="savingMapping">{{
-                savingMapping ? 'Saving...' : 'Save Mapping'
-              }}</n-button>
-              <n-button @click="reloadChannels" :loading="reloadingChannels"
-                >Reload Channels</n-button
-              >
-            </n-space>
-            <n-collapse>
-              <n-collapse-item title="Duplicates (click to expand)" name="duplicates">
-                <n-space align="center" wrap style="margin-bottom: 0.5rem">
-                  <n-button size="small" @click="loadDuplicates" :loading="loadingDuplicates">{{
-                    loadingDuplicates ? 'Loading...' : 'Refresh'
-                  }}</n-button>
-                </n-space>
-                <div
-                  v-if="
-                    duplicates.summary &&
-                    (duplicates.summary.duplicateNames > 0 ||
-                      duplicates.summary.duplicateTvgIds > 0)
-                  "
-                >
-                  <div style="margin-bottom: 1rem; opacity: 0.9">
-                    Found {{ duplicates.summary.duplicateNames }} duplicate names and
-                    {{ duplicates.summary.duplicateTvgIds }} duplicate tvg-ids
-                  </div>
-                  <div v-if="duplicates.byTvgId.length > 0">
-                    <h4 style="margin: 0.5rem 0">By TVG-ID:</h4>
-                    <div
-                      v-for="dup in duplicates.byTvgId"
-                      :key="dup.tvgId"
-                      style="
-                        margin-bottom: 1rem;
-                        padding: 0.5rem;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 4px;
-                      "
-                    >
-                      <div style="font-weight: 600; margin-bottom: 0.25rem">
-                        tvg-id: {{ dup.tvgId }} ({{ dup.count }} channels)
-                      </div>
-                      <div
-                        v-for="(ch, idx) in dup.channels"
-                        :key="idx"
-                        style="padding-left: 1rem; opacity: 0.8; margin: 0.25rem 0"
-                      >
-                        • {{ ch.name }} <span style="opacity: 0.6">({{ ch.source }})</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-if="duplicates.byName.length > 0" style="margin-top: 1rem">
-                    <h4 style="margin: 0.5rem 0">By Name:</h4>
-                    <div
-                      v-for="dup in duplicates.byName"
-                      :key="dup.name"
-                      style="
-                        margin-bottom: 1rem;
-                        padding: 0.5rem;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 4px;
-                      "
-                    >
-                      <div style="font-weight: 600; margin-bottom: 0.25rem">
-                        {{ dup.name }} ({{ dup.count }} channels)
-                      </div>
-                      <div
-                        v-for="(ch, idx) in dup.channels"
-                        :key="idx"
-                        style="padding-left: 1rem; opacity: 0.8; margin: 0.25rem 0"
-                      >
-                        • tvg-id: {{ ch.tvg_id || 'none' }}
-                        <span style="opacity: 0.6">({{ ch.source }})</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div v-else style="opacity: 0.6">No duplicates detected.</div>
-              </n-collapse-item>
-              <n-collapse-item title="Auto-Suggestions (click to expand)" name="suggestions">
-                <n-space align="center" wrap style="margin-bottom: 0.5rem">
-                  <n-button size="small" @click="loadSuggestions" :loading="loadingSuggestions">{{
-                    loadingSuggestions ? 'Loading...' : 'Refresh'
-                  }}</n-button>
-                </n-space>
-                <div v-if="Array.isArray(suggestions) && suggestions.length">
+                  <div style="font-weight: 600; margin-bottom: 0.25rem">Warnings:</div>
                   <div
-                    v-for="(s, i) in suggestions"
-                    :key="'s' + i"
+                    v-for="(warn, idx) in epgValidation.warnings.slice(0, 10)"
+                    :key="idx"
+                    style="padding-left: 1rem; font-size: 0.9em"
+                  >
+                    • {{ warn }}
+                  </div>
+                  <div
+                    v-if="epgValidation.warnings.length > 10"
+                    style="padding-left: 1rem; opacity: 0.7; font-size: 0.9em"
+                  >
+                    ... and {{ epgValidation.warnings.length - 10 }} more
+                  </div>
+                </div>
+              </div>
+              <n-data-table
+                v-if="Array.isArray(providers) && providers.length"
+                :columns="providerColumns"
+                :data="providers"
+                :bordered="false"
+                :row-key="rowKeyFn"
+              />
+              <div v-else style="margin-top: 1rem; opacity: 0.7">No providers configured yet.</div>
+              <div class="foot">
+                Editing <code>config/providers.yaml</code>. Each provider has a channel source and
+                an optional EPG URL.
+              </div>
+            </n-tab-pane>
+
+            <n-tab-pane name="mapping" tab="Mapping">
+              <n-space align="center" wrap style="margin-bottom: 0.5rem">
+                <n-button type="primary" secondary @click="addMappingRow">Add Mapping</n-button>
+                <n-button type="primary" @click="saveMapping" :loading="savingMapping">{{
+                  savingMapping ? 'Saving...' : 'Save Mapping'
+                }}</n-button>
+                <n-button @click="reloadChannels" :loading="reloadingChannels"
+                  >Reload Channels</n-button
+                >
+              </n-space>
+              <n-collapse>
+                <n-collapse-item title="Duplicates (click to expand)" name="duplicates">
+                  <n-space align="center" wrap style="margin-bottom: 0.5rem">
+                    <n-button size="small" @click="loadDuplicates" :loading="loadingDuplicates">{{
+                      loadingDuplicates ? 'Loading...' : 'Refresh'
+                    }}</n-button>
+                  </n-space>
+                  <div
+                    v-if="
+                      duplicates.summary &&
+                      (duplicates.summary.duplicateNames > 0 ||
+                        duplicates.summary.duplicateTvgIds > 0)
+                    "
+                  >
+                    <div style="margin-bottom: 1rem; opacity: 0.9">
+                      Found {{ duplicates.summary.duplicateNames }} duplicate names and
+                      {{ duplicates.summary.duplicateTvgIds }} duplicate tvg-ids
+                    </div>
+                    <div v-if="duplicates.byTvgId.length > 0">
+                      <h4 style="margin: 0.5rem 0">By TVG-ID:</h4>
+                      <div
+                        v-for="dup in duplicates.byTvgId"
+                        :key="dup.tvgId"
+                        style="
+                          margin-bottom: 1rem;
+                          padding: 0.5rem;
+                          background: rgba(255, 255, 255, 0.05);
+                          border-radius: 4px;
+                        "
+                      >
+                        <div style="font-weight: 600; margin-bottom: 0.25rem">
+                          tvg-id: {{ dup.tvgId }} ({{ dup.count }} channels)
+                        </div>
+                        <div
+                          v-for="(ch, idx) in dup.channels"
+                          :key="idx"
+                          style="padding-left: 1rem; opacity: 0.8; margin: 0.25rem 0"
+                        >
+                          • {{ ch.name }} <span style="opacity: 0.6">({{ ch.source }})</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="duplicates.byName.length > 0" style="margin-top: 1rem">
+                      <h4 style="margin: 0.5rem 0">By Name:</h4>
+                      <div
+                        v-for="dup in duplicates.byName"
+                        :key="dup.name"
+                        style="
+                          margin-bottom: 1rem;
+                          padding: 0.5rem;
+                          background: rgba(255, 255, 255, 0.05);
+                          border-radius: 4px;
+                        "
+                      >
+                        <div style="font-weight: 600; margin-bottom: 0.25rem">
+                          {{ dup.name }} ({{ dup.count }} channels)
+                        </div>
+                        <div
+                          v-for="(ch, idx) in dup.channels"
+                          :key="idx"
+                          style="padding-left: 1rem; opacity: 0.8; margin: 0.25rem 0"
+                        >
+                          • tvg-id: {{ ch.tvg_id || 'none' }}
+                          <span style="opacity: 0.6">({{ ch.source }})</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else style="opacity: 0.6">No duplicates detected.</div>
+                </n-collapse-item>
+                <n-collapse-item title="Auto-Suggestions (click to expand)" name="suggestions">
+                  <n-space align="center" wrap style="margin-bottom: 0.5rem">
+                    <n-button size="small" @click="loadSuggestions" :loading="loadingSuggestions">{{
+                      loadingSuggestions ? 'Loading...' : 'Refresh'
+                    }}</n-button>
+                  </n-space>
+                  <div v-if="Array.isArray(suggestions) && suggestions.length">
+                    <div
+                      v-for="(s, i) in suggestions"
+                      :key="'s' + i"
+                      style="
+                        margin-bottom: 1rem;
+                        padding: 0.5rem;
+                        background: rgba(255, 255, 255, 0.05);
+                        border-radius: 4px;
+                      "
+                    >
+                      <div style="font-weight: 600; margin-bottom: 0.5rem">
+                        {{ s.channel.name }}
+                        <span style="opacity: 0.6">({{ s.channel.tvg_id }})</span>
+                      </div>
+                      <div
+                        v-for="(sug, j) in s.suggestions"
+                        :key="'sg' + j"
+                        style="
+                          display: flex;
+                          gap: 0.5rem;
+                          align-items: center;
+                          margin: 0.25rem 0;
+                          padding-left: 1rem;
+                        "
+                      >
+                        <div style="flex: 1 1 auto; opacity: 0.9">
+                          → {{ sug.name }} <span style="opacity: 0.6">({{ sug.tvg_id }})</span>
+                          <span style="opacity: 0.5; margin-left: 0.5rem"
+                            >score: {{ (sug.score * 100).toFixed(0) }}%</span
+                          >
+                        </div>
+                        <n-button size="tiny" @click="applySuggestion(s.channel, sug)"
+                          >Apply</n-button
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else style="opacity: 0.6">
+                    No suggestions available. Try lowering the threshold or ensure you have unmapped
+                    channels.
+                  </div>
+                </n-collapse-item>
+                <n-collapse-item title="Unmapped (click to expand)" name="unmapped">
+                  <n-space align="center" wrap style="margin-bottom: 0.5rem">
+                    <n-select
+                      style="min-width: 220px"
+                      clearable
+                      placeholder="Filter by source"
+                      :options="providers.map(s => ({ label: s.name, value: s.name }))"
+                      v-model:value="unmappedSource"
+                    />
+                    <div style="display: flex; align-items: center; gap: 0.5rem">
+                      <n-switch v-model:value="hideAdded" />
+                      <span style="opacity: 0.8">Hide ones already added</span>
+                    </div>
+                    <n-button size="small" @click="refreshUnmapped">Refresh</n-button>
+                  </n-space>
+                  <div v-if="Array.isArray(unmapped) && unmapped.length">
+                    <n-space vertical>
+                      <div
+                        v-for="(s, i) in unmapped"
+                        :key="'u' + i"
+                        style="display: flex; gap: 0.5rem; align-items: center"
+                      >
+                        <n-button size="small" @click="quickAddMapping(s)">Add</n-button>
+                        <div style="flex: 1 1 auto; opacity: 0.9">
+                          {{ s.name }}
+                          <span v-if="s.tvg_id" style="opacity: 0.6">({{ s.tvg_id }})</span>
+                          <span v-if="s.source" style="opacity: 0.5; margin-left: 0.5rem"
+                            >— {{ s.source }}</span
+                          >
+                        </div>
+                      </div>
+                    </n-space>
+                  </div>
+                  <div v-else style="opacity: 0.6">No unmapped items detected.</div>
+                </n-collapse-item>
+              </n-collapse>
+              <n-data-table
+                v-if="Array.isArray(mappingRows) && mappingRows.length"
+                :columns="mappingColumns"
+                :data="sortedMappingRows"
+                :bordered="false"
+                :row-key="rowKeyFn"
+              />
+              <div v-else style="margin-top: 1rem; opacity: 0.7">
+                No mappings yet. Add one to map EPG names to tvg-id and numbers.
+              </div>
+              <div class="foot">
+                Editing <code>config/channel-map.yaml</code>. Save and then reload channels to
+                apply.
+              </div>
+            </n-tab-pane>
+            <n-tab-pane name="preview" tab="Preview">
+              <n-space align="center" wrap style="margin-bottom: 0.75rem">
+                <n-input
+                  v-model:value="previewSearch"
+                  placeholder="Search channels by name, group, or tvg-id…"
+                  clearable
+                  style="min-width: 260px"
+                />
+                <n-button @click="loadPreviewChannels" :loading="loadingPreviewChannels">{{
+                  loadingPreviewChannels ? 'Loading…' : 'Refresh'
+                }}</n-button>
+                <span style="opacity: 0.6; font-size: 0.9em"
+                  >{{ filteredPreviewChannels.length }} channel{{
+                    filteredPreviewChannels.length !== 1 ? 's' : ''
+                  }}</span
+                >
+              </n-space>
+              <div
+                v-if="loadingPreviewChannels && !previewChannels.length"
+                style="opacity: 0.6; padding: 2rem 0; text-align: center"
+              >
+                Loading channels…
+              </div>
+              <div
+                v-else-if="!previewChannels.length"
+                style="opacity: 0.6; padding: 2rem 0; text-align: center"
+              >
+                No channels loaded. Check your provider configuration.
+              </div>
+              <n-data-table
+                v-else
+                :columns="previewColumns"
+                :data="filteredPreviewChannels"
+                :bordered="false"
+                :row-key="row => row.original_url || `${row.source}|${row.name}|${row.guideNumber}`"
+                size="small"
+                :max-height="500"
+                virtual-scroll
+              />
+              <div class="foot">
+                Mapped channels as they appear in the M3U output. Channel numbers reflect the
+                configured mapping. Click <strong>▶ Watch</strong> to preview a stream.
+              </div>
+
+              <!-- Video player modal -->
+              <n-modal
+                v-model:show="showVideoModal"
+                preset="card"
+                :title="previewWatchingChannel ? previewWatchingChannel.name : 'Watch Channel'"
+                style="max-width: 720px; width: 95vw"
+                @after-leave="stopVideoPlayer"
+              >
+                <div v-if="previewWatchingChannel">
+                  <!-- Logo + player area -->
+                  <div
+                    style="
+                      background: #000;
+                      border-radius: 4px;
+                      overflow: hidden;
+                      margin-bottom: 1rem;
+                      position: relative;
+                    "
+                  >
+                    <video
+                      ref="videoPlayerEl"
+                      controls
+                      autoplay
+                      style="width: 100%; max-height: 360px; display: block"
+                      preload="auto"
+                    />
+                    <div
+                      v-if="state.playerError"
+                      role="alert"
+                      aria-live="assertive"
+                      style="
+                        position: absolute;
+                        inset: 0;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        background: rgba(0, 0, 0, 0.85);
+                        color: #fff;
+                        padding: 1.5rem;
+                        text-align: center;
+                        gap: 0.5rem;
+                      "
+                    >
+                      <div aria-hidden="true" style="font-size: 1.5rem">⚠️</div>
+                      <div style="font-weight: 600">{{ state.playerError }}</div>
+                      <n-button
+                        v-if="showTranscodeButton"
+                        size="small"
+                        type="primary"
+                        style="margin-top: 0.25rem"
+                        @click="setupTranscodePlayer"
+                      >
+                        Try Server Transcoding
+                      </n-button>
+                      <div style="font-size: 0.8em; opacity: 0.7">
+                        Try opening the stream URL directly in VLC or another IPTV player.
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Stream URL row -->
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 0.5rem;
+                      margin-bottom: 1rem;
+                      flex-wrap: wrap;
+                    "
+                  >
+                    <span style="opacity: 0.7; font-size: 0.85em; flex-shrink: 0">Stream URL:</span>
+                    <code
+                      style="font-size: 0.78em; word-break: break-all; flex: 1; opacity: 0.85"
+                      >{{ previewStreamUrl }}</code
+                    >
+                    <n-button size="tiny" secondary @click="copyStreamUrl">Copy</n-button>
+                    <a
+                      :href="previewStreamUrl"
+                      target="_blank"
+                      rel="noopener"
+                      style="font-size: 0.8em; opacity: 0.7"
+                      >Open ↗</a
+                    >
+                  </div>
+
+                  <!-- Player debug panel -->
+                  <div
+                    v-if="state.playerDebug"
                     style="
                       margin-bottom: 1rem;
-                      padding: 0.5rem;
-                      background: rgba(255, 255, 255, 0.05);
+                      border: 1px solid rgba(255, 255, 255, 0.12);
                       border-radius: 4px;
+                      overflow: hidden;
                     "
                   >
-                    <div style="font-weight: 600; margin-bottom: 0.5rem">
-                      {{ s.channel.name }}
-                      <span style="opacity: 0.6">({{ s.channel.tvg_id }})</span>
-                    </div>
-                    <div
-                      v-for="(sug, j) in s.suggestions"
-                      :key="'sg' + j"
+                    <button
+                      type="button"
                       style="
+                        width: 100%;
                         display: flex;
-                        gap: 0.5rem;
                         align-items: center;
-                        margin: 0.25rem 0;
-                        padding-left: 1rem;
+                        justify-content: space-between;
+                        padding: 0.35rem 0.6rem;
+                        background: rgba(255, 255, 255, 0.06);
+                        cursor: pointer;
+                        user-select: none;
+                        border: none;
+                        color: inherit;
+                        font: inherit;
+                        text-align: left;
                       "
+                      :aria-expanded="state.showPlayerDebug"
+                      @click="state.showPlayerDebug = !state.showPlayerDebug"
                     >
-                      <div style="flex: 1 1 auto; opacity: 0.9">
-                        → {{ sug.name }} <span style="opacity: 0.6">({{ sug.tvg_id }})</span>
-                        <span style="opacity: 0.5; margin-left: 0.5rem"
-                          >score: {{ (sug.score * 100).toFixed(0) }}%</span
+                      <span style="font-size: 0.8em; opacity: 0.75">
+                        🔍 Stream Debug
+                        <span
+                          v-if="state.playerDebug.playerMode"
+                          style="margin-left: 0.5em; opacity: 0.6"
+                          >— player: {{ state.playerDebug.playerMode }}</span
                         >
-                      </div>
-                      <n-button size="tiny" @click="applySuggestion(s.channel, sug)"
-                        >Apply</n-button
-                      >
-                    </div>
-                  </div>
-                </div>
-                <div v-else style="opacity: 0.6">
-                  No suggestions available. Try lowering the threshold or ensure you have unmapped
-                  channels.
-                </div>
-              </n-collapse-item>
-              <n-collapse-item title="Unmapped (click to expand)" name="unmapped">
-                <n-space align="center" wrap style="margin-bottom: 0.5rem">
-                  <n-select
-                    style="min-width: 220px"
-                    clearable
-                    placeholder="Filter by source"
-                    :options="providers.map(s => ({ label: s.name, value: s.name }))"
-                    v-model:value="unmappedSource"
-                  />
-                  <div style="display: flex; align-items: center; gap: 0.5rem">
-                    <n-switch v-model:value="hideAdded" />
-                    <span style="opacity: 0.8">Hide ones already added</span>
-                  </div>
-                  <n-button size="small" @click="refreshUnmapped">Refresh</n-button>
-                </n-space>
-                <div v-if="Array.isArray(unmapped) && unmapped.length">
-                  <n-space vertical>
+                      </span>
+                      <span style="font-size: 0.75em; opacity: 0.5">{{
+                        state.showPlayerDebug ? '▲ hide' : '▼ show'
+                      }}</span>
+                    </button>
                     <div
-                      v-for="(s, i) in unmapped"
-                      :key="'u' + i"
-                      style="display: flex; gap: 0.5rem; align-items: center"
+                      v-if="state.showPlayerDebug"
+                      style="padding: 0.5rem 0.6rem; font-size: 0.75em; opacity: 0.85"
                     >
-                      <n-button size="small" @click="quickAddMapping(s)">Add</n-button>
-                      <div style="flex: 1 1 auto; opacity: 0.9">
-                        {{ s.name }}
-                        <span v-if="s.tvg_id" style="opacity: 0.6">({{ s.tvg_id }})</span>
-                        <span v-if="s.source" style="opacity: 0.5; margin-left: 0.5rem"
-                          >— {{ s.source }}</span
-                        >
-                      </div>
-                    </div>
-                  </n-space>
-                </div>
-                <div v-else style="opacity: 0.6">No unmapped items detected.</div>
-              </n-collapse-item>
-            </n-collapse>
-            <n-data-table
-              v-if="Array.isArray(mappingRows) && mappingRows.length"
-              :columns="mappingColumns"
-              :data="sortedMappingRows"
-              :bordered="false"
-              :row-key="rowKeyFn"
-            />
-            <div v-else style="margin-top: 1rem; opacity: 0.7">
-              No mappings yet. Add one to map EPG names to tvg-id and numbers.
-            </div>
-            <div class="foot">
-              Editing <code>config/channel-map.yaml</code>. Save and then reload channels to apply.
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="preview" tab="Preview">
-            <n-space align="center" wrap style="margin-bottom: 0.75rem">
-              <n-input
-                v-model:value="previewSearch"
-                placeholder="Search channels by name, group, or tvg-id…"
-                clearable
-                style="min-width: 260px"
-              />
-              <n-button @click="loadPreviewChannels" :loading="loadingPreviewChannels">{{
-                loadingPreviewChannels ? 'Loading…' : 'Refresh'
-              }}</n-button>
-              <span style="opacity: 0.6; font-size: 0.9em"
-                >{{ filteredPreviewChannels.length }} channel{{
-                  filteredPreviewChannels.length !== 1 ? 's' : ''
-                }}</span
-              >
-            </n-space>
-            <div
-              v-if="loadingPreviewChannels && !previewChannels.length"
-              style="opacity: 0.6; padding: 2rem 0; text-align: center"
-            >
-              Loading channels…
-            </div>
-            <div
-              v-else-if="!previewChannels.length"
-              style="opacity: 0.6; padding: 2rem 0; text-align: center"
-            >
-              No channels loaded. Check your provider configuration.
-            </div>
-            <n-data-table
-              v-else
-              :columns="previewColumns"
-              :data="filteredPreviewChannels"
-              :bordered="false"
-              :row-key="row => row.original_url || `${row.source}|${row.name}|${row.guideNumber}`"
-              size="small"
-              :max-height="500"
-              virtual-scroll
-            />
-            <div class="foot">
-              Mapped channels as they appear in the M3U output. Channel numbers reflect the
-              configured mapping. Click <strong>▶ Watch</strong> to preview a stream.
-            </div>
-
-            <!-- Video player modal -->
-            <n-modal
-              v-model:show="showVideoModal"
-              preset="card"
-              :title="previewWatchingChannel ? previewWatchingChannel.name : 'Watch Channel'"
-              style="max-width: 720px; width: 95vw"
-              @after-leave="stopVideoPlayer"
-            >
-              <div v-if="previewWatchingChannel">
-                <!-- Logo + player area -->
-                <div
-                  style="
-                    background: #000;
-                    border-radius: 4px;
-                    overflow: hidden;
-                    margin-bottom: 1rem;
-                    position: relative;
-                  "
-                >
-                  <video
-                    ref="videoPlayerEl"
-                    controls
-                    autoplay
-                    style="width: 100%; max-height: 360px; display: block"
-                    preload="auto"
-                  />
-                  <div
-                    v-if="state.playerError"
-                    role="alert"
-                    aria-live="assertive"
-                    style="
-                      position: absolute;
-                      inset: 0;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      justify-content: center;
-                      background: rgba(0, 0, 0, 0.85);
-                      color: #fff;
-                      padding: 1.5rem;
-                      text-align: center;
-                      gap: 0.5rem;
-                    "
-                  >
-                    <div aria-hidden="true" style="font-size: 1.5rem">⚠️</div>
-                    <div style="font-weight: 600">{{ state.playerError }}</div>
-                    <n-button
-                      v-if="showTranscodeButton"
-                      size="small"
-                      type="primary"
-                      style="margin-top: 0.25rem"
-                      @click="setupTranscodePlayer"
-                    >
-                      Try Server Transcoding
-                    </n-button>
-                    <div style="font-size: 0.8em; opacity: 0.7">
-                      Try opening the stream URL directly in VLC or another IPTV player.
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Stream URL row -->
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    margin-bottom: 1rem;
-                    flex-wrap: wrap;
-                  "
-                >
-                  <span style="opacity: 0.7; font-size: 0.85em; flex-shrink: 0">Stream URL:</span>
-                  <code style="font-size: 0.78em; word-break: break-all; flex: 1; opacity: 0.85">{{
-                    previewStreamUrl
-                  }}</code>
-                  <n-button size="tiny" secondary @click="copyStreamUrl">Copy</n-button>
-                  <a
-                    :href="previewStreamUrl"
-                    target="_blank"
-                    rel="noopener"
-                    style="font-size: 0.8em; opacity: 0.7"
-                    >Open ↗</a
-                  >
-                </div>
-
-                <!-- Player debug panel -->
-                <div
-                  v-if="state.playerDebug"
-                  style="margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden;"
-                >
-                  <button
-                    type="button"
-                    style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.6rem; background: rgba(255,255,255,0.06); cursor: pointer; user-select: none; border: none; color: inherit; font: inherit; text-align: left;"
-                    :aria-expanded="state.showPlayerDebug"
-                    @click="state.showPlayerDebug = !state.showPlayerDebug"
-                  >
-                    <span style="font-size: 0.8em; opacity: 0.75;">
-                      🔍 Stream Debug
-                      <span
-                        v-if="state.playerDebug.playerMode"
-                        style="margin-left: 0.5em; opacity: 0.6;"
-                      >— player: {{ state.playerDebug.playerMode }}</span>
-                    </span>
-                    <span style="font-size: 0.75em; opacity: 0.5;">{{ state.showPlayerDebug ? '▲ hide' : '▼ show' }}</span>
-                  </button>
-                  <div v-if="state.showPlayerDebug" style="padding: 0.5rem 0.6rem; font-size: 0.75em; opacity: 0.85;">
-                    <div style="display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.6rem; margin-bottom: 0.5rem;">
-                      <span style="opacity: 0.6;">HDHomeRun</span>
-                      <span>{{ state.playerDebug.hdhomerun }}</span>
-                      <span style="opacity: 0.6;">Player mode</span>
-                      <span>{{ state.playerDebug.playerMode ?? '(pending)' }}</span>
-                      <span style="opacity: 0.6;">Probe URL</span>
-                      <code style="word-break: break-all; font-size: 0.9em;">{{ state.playerDebug.probeUrl }}</code>
-                      <span style="opacity: 0.6;">Probe result</span>
-                      <code style="word-break: break-all; font-size: 0.9em;">{{ state.playerDebug.probeResult ? JSON.stringify(state.playerDebug.probeResult) : '(pending)' }}</code>
-                      <template v-if="state.playerDebug.hlsError">
-                        <span style="opacity: 0.6;">HLS.js error</span>
-                        <code style="word-break: break-all; font-size: 0.9em;">{{ JSON.stringify(state.playerDebug.hlsError) }}</code>
-                      </template>
-                    </div>
-                    <div style="margin-bottom: 0.4rem; opacity: 0.6; font-size: 0.9em;">Events:</div>
-                    <pre style="font-size: 0.85em; line-height: 1.4; max-height: 140px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; background: rgba(0,0,0,0.3); padding: 0.4rem; border-radius: 3px; margin: 0;">{{ state.playerDebug.events.join('\n') }}</pre>
-                    <div style="margin-top: 0.5rem;">
-                      <n-button size="tiny" secondary @click="copyPlayerDebug">Copy debug info</n-button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Guide / EPG -->
-                <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 0.75rem">
-                  <div style="font-weight: 600; margin-bottom: 0.5rem">Guide</div>
-                  <div v-if="loadingGuide" style="opacity: 0.6; font-size: 0.9em">
-                    Loading guide data…
-                  </div>
-                  <div v-else-if="!previewGuide.length" style="opacity: 0.5; font-size: 0.9em">
-                    No guide data available for this channel.
-                  </div>
-                  <div v-else style="max-height: 220px; overflow-y: auto">
-                    <div
-                      v-for="(prog, idx) in previewGuide"
-                      :key="idx"
-                      style="
-                        display: flex;
-                        gap: 0.75rem;
-                        padding: 0.35rem 0;
-                        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-                      "
-                    >
-                      <span
+                      <div
                         style="
-                          opacity: 0.6;
-                          font-size: 0.85em;
-                          white-space: nowrap;
-                          min-width: 85px;
+                          display: grid;
+                          grid-template-columns: max-content 1fr;
+                          gap: 0.2rem 0.6rem;
+                          margin-bottom: 0.5rem;
                         "
-                        >{{ formatXMLTVTime(prog.start) }}</span
                       >
-                      <div style="flex: 1; min-width: 0">
-                        <div style="font-size: 0.9em; font-weight: 500">{{ prog.title }}</div>
-                        <div
-                          v-if="prog.desc"
-                          style="
-                            font-size: 0.8em;
-                            opacity: 0.55;
-                            margin-top: 0.1rem;
-                            overflow: hidden;
-                            text-overflow: ellipsis;
-                            white-space: nowrap;
-                          "
+                        <span style="opacity: 0.6">HDHomeRun</span>
+                        <span>{{ state.playerDebug.hdhomerun }}</span>
+                        <span style="opacity: 0.6">Player mode</span>
+                        <span>{{ state.playerDebug.playerMode ?? '(pending)' }}</span>
+                        <span style="opacity: 0.6">Probe URL</span>
+                        <code style="word-break: break-all; font-size: 0.9em">{{
+                          state.playerDebug.probeUrl
+                        }}</code>
+                        <span style="opacity: 0.6">Probe result</span>
+                        <code style="word-break: break-all; font-size: 0.9em">{{
+                          state.playerDebug.probeResult
+                            ? JSON.stringify(state.playerDebug.probeResult)
+                            : '(pending)'
+                        }}</code>
+                        <template v-if="state.playerDebug.hlsError">
+                          <span style="opacity: 0.6">HLS.js error</span>
+                          <code style="word-break: break-all; font-size: 0.9em">{{
+                            JSON.stringify(state.playerDebug.hlsError)
+                          }}</code>
+                        </template>
+                      </div>
+                      <div style="margin-bottom: 0.4rem; opacity: 0.6; font-size: 0.9em">
+                        Events:
+                      </div>
+                      <pre
+                        style="
+                          font-size: 0.85em;
+                          line-height: 1.4;
+                          max-height: 140px;
+                          overflow-y: auto;
+                          white-space: pre-wrap;
+                          word-break: break-all;
+                          background: rgba(0, 0, 0, 0.3);
+                          padding: 0.4rem;
+                          border-radius: 3px;
+                          margin: 0;
+                        "
+                        >{{ state.playerDebug.events.join('\n') }}</pre
+                      >
+                      <div style="margin-top: 0.5rem">
+                        <n-button size="tiny" secondary @click="copyPlayerDebug"
+                          >Copy debug info</n-button
                         >
-                          {{ prog.desc }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Guide / EPG -->
+                  <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 0.75rem">
+                    <div style="font-weight: 600; margin-bottom: 0.5rem">Guide</div>
+                    <div v-if="loadingGuide" style="opacity: 0.6; font-size: 0.9em">
+                      Loading guide data…
+                    </div>
+                    <div v-else-if="!previewGuide.length" style="opacity: 0.5; font-size: 0.9em">
+                      No guide data available for this channel.
+                    </div>
+                    <div v-else style="max-height: 220px; overflow-y: auto">
+                      <div
+                        v-for="(prog, idx) in previewGuide"
+                        :key="idx"
+                        style="
+                          display: flex;
+                          gap: 0.75rem;
+                          padding: 0.35rem 0;
+                          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+                        "
+                      >
+                        <span
+                          style="
+                            opacity: 0.6;
+                            font-size: 0.85em;
+                            white-space: nowrap;
+                            min-width: 85px;
+                          "
+                          >{{ formatXMLTVTime(prog.start) }}</span
+                        >
+                        <div style="flex: 1; min-width: 0">
+                          <div style="font-size: 0.9em; font-weight: 500">{{ prog.title }}</div>
+                          <div
+                            v-if="prog.desc"
+                            style="
+                              font-size: 0.8em;
+                              opacity: 0.55;
+                              margin-top: 0.1rem;
+                              overflow: hidden;
+                              text-overflow: ellipsis;
+                              white-space: nowrap;
+                            "
+                          >
+                            {{ prog.desc }}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </n-modal>
-          </n-tab-pane>
+              </n-modal>
+            </n-tab-pane>
 
-          <n-tab-pane name="health" tab="Health">
-            <n-space align="center" wrap style="margin-bottom: 0.75rem">
-              <n-button type="primary" @click="loadHealth" :loading="loadingHealth">{{
-                loadingHealth ? 'Loading...' : 'Refresh Status'
-              }}</n-button>
-              <n-button type="primary" secondary @click="runHealth" :loading="runningHealth">{{
-                runningHealth ? 'Running...' : 'Run Health Check'
-              }}</n-button>
-            </n-space>
-            <div v-if="formattedHealthUpdated" style="opacity: 0.75; margin-bottom: 0.5rem">
-              Last updated: {{ formattedHealthUpdated }}
-            </div>
-            <div v-if="healthDetails.length">
-              <n-data-table
-                :columns="healthColumns"
-                :data="healthDetails"
-                :bordered="false"
-                :row-key="row => row.id"
-              />
-            </div>
-            <div v-else style="opacity: 0.6">No health data yet. Run a health check.</div>
-            <div class="foot">
-              Channel health statuses are stored in <code>data/lineup_status.json</code>.
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="usage">
-            <template #tab>
-              <n-badge :value="activeUsage.length" :show="activeUsage.length > 0" :max="99">
-                Usage
-              </n-badge>
-            </template>
-            <n-space align="center" wrap style="margin-bottom: 0.75rem">
-              <n-button type="primary" @click="loadUsage" :loading="loadingUsage">{{
-                loadingUsage ? 'Loading...' : 'Refresh'
-              }}</n-button>
-            </n-space>
-            <div v-if="activeUsage.length">
-              <n-data-table
-                :columns="usageColumns"
-                :data="activeUsage"
-                :bordered="false"
-                :row-key="row => row.key"
-              />
-            </div>
-            <div v-else style="opacity: 0.6">No active viewers detected.</div>
-            <div class="foot">Active usage is tracked in-memory and refreshed periodically.</div>
-          </n-tab-pane>
-          <n-tab-pane name="tasks" tab="Tasks">
-            <n-space align="center" wrap style="margin-bottom: 0.75rem">
-              <n-button type="primary" @click="loadTasks" :loading="loadingTasks">{{
-                loadingTasks ? 'Loading...' : 'Refresh'
-              }}</n-button>
-            </n-space>
-            <div v-if="tasks.length">
-              <n-data-table
-                :columns="taskColumns"
-                :data="tasks"
-                :bordered="false"
-                :row-key="row => row.name"
-              />
-            </div>
-            <div v-else style="opacity: 0.6">No scheduled tasks found.</div>
-            <div class="foot">
-              Scheduled tasks run automatically. You can also trigger them manually.
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="backups" tab="Backups">
-            <n-space align="center" wrap style="margin-bottom: 0.75rem">
-              <n-button type="primary" @click="createBackup" :loading="creatingBackup">{{
-                creatingBackup ? 'Creating...' : 'Create Backup'
-              }}</n-button>
-              <n-button @click="loadBackups" :loading="loadingBackups">{{
-                loadingBackups ? 'Loading...' : 'Refresh'
-              }}</n-button>
-            </n-space>
-            <div v-if="backups.length">
-              <n-data-table
-                :columns="backupColumns"
-                :data="backups"
-                :bordered="false"
-                :row-key="row => row.name"
-              />
-            </div>
-            <div v-else style="opacity: 0.6">
-              No backups yet. Click "Create Backup" to save the current config.
-            </div>
-            <div class="foot">
-              Backups are stored in <code>data/backups/</code> and contain all YAML config files.
-            </div>
-          </n-tab-pane>
-        </n-tabs>
+            <n-tab-pane name="health" tab="Health">
+              <n-space align="center" wrap style="margin-bottom: 0.75rem">
+                <n-button type="primary" @click="loadHealth" :loading="loadingHealth">{{
+                  loadingHealth ? 'Loading...' : 'Refresh Status'
+                }}</n-button>
+                <n-button type="primary" secondary @click="runHealth" :loading="runningHealth">{{
+                  runningHealth ? 'Running...' : 'Run Health Check'
+                }}</n-button>
+              </n-space>
+              <div v-if="formattedHealthUpdated" style="opacity: 0.75; margin-bottom: 0.5rem">
+                Last updated: {{ formattedHealthUpdated }}
+              </div>
+              <div v-if="healthDetails.length">
+                <n-data-table
+                  :columns="healthColumns"
+                  :data="healthDetails"
+                  :bordered="false"
+                  :row-key="row => row.id"
+                />
+              </div>
+              <div v-else style="opacity: 0.6">No health data yet. Run a health check.</div>
+              <div class="foot">
+                Channel health statuses are stored in <code>data/lineup_status.json</code>.
+              </div>
+            </n-tab-pane>
+            <n-tab-pane name="usage">
+              <template #tab>
+                <n-badge :value="activeUsage.length" :show="activeUsage.length > 0" :max="99">
+                  Usage
+                </n-badge>
+              </template>
+              <n-space align="center" wrap style="margin-bottom: 0.75rem">
+                <n-button type="primary" @click="loadUsage" :loading="loadingUsage">{{
+                  loadingUsage ? 'Loading...' : 'Refresh'
+                }}</n-button>
+              </n-space>
+              <div v-if="activeUsage.length">
+                <n-data-table
+                  :columns="usageColumns"
+                  :data="activeUsage"
+                  :bordered="false"
+                  :row-key="row => row.key"
+                />
+              </div>
+              <div v-else style="opacity: 0.6">No active viewers detected.</div>
+              <div class="foot">Active usage is tracked in-memory and refreshed periodically.</div>
+            </n-tab-pane>
+            <n-tab-pane name="tasks" tab="Tasks">
+              <n-space align="center" wrap style="margin-bottom: 0.75rem">
+                <n-button type="primary" @click="loadTasks" :loading="loadingTasks">{{
+                  loadingTasks ? 'Loading...' : 'Refresh'
+                }}</n-button>
+              </n-space>
+              <div v-if="tasks.length">
+                <n-data-table
+                  :columns="taskColumns"
+                  :data="tasks"
+                  :bordered="false"
+                  :row-key="row => row.name"
+                />
+              </div>
+              <div v-else style="opacity: 0.6">No scheduled tasks found.</div>
+              <div class="foot">
+                Scheduled tasks run automatically. You can also trigger them manually.
+              </div>
+            </n-tab-pane>
+            <n-tab-pane name="backups" tab="Backups">
+              <n-space align="center" wrap style="margin-bottom: 0.75rem">
+                <n-button type="primary" @click="createBackup" :loading="creatingBackup">{{
+                  creatingBackup ? 'Creating...' : 'Create Backup'
+                }}</n-button>
+                <n-button @click="loadBackups" :loading="loadingBackups">{{
+                  loadingBackups ? 'Loading...' : 'Refresh'
+                }}</n-button>
+              </n-space>
+              <div v-if="backups.length">
+                <n-data-table
+                  :columns="backupColumns"
+                  :data="backups"
+                  :bordered="false"
+                  :row-key="row => row.name"
+                />
+              </div>
+              <div v-else style="opacity: 0.6">
+                No backups yet. Click "Create Backup" to save the current config.
+              </div>
+              <div class="foot">
+                Backups are stored in <code>data/backups/</code> and contain all YAML config files.
+              </div>
+            </n-tab-pane>
+          </n-tabs>
+        </div>
       </n-layout-content>
     </n-layout>
   </n-config-provider>
@@ -794,6 +872,70 @@ import {
   createDiscreteApi,
 } from 'naive-ui';
 const { message, dialog } = createDiscreteApi(['message', 'dialog']);
+
+const themeOverrides = {
+  common: {
+    fontFamily: 'var(--font-sans)',
+    fontFamilyMono: 'var(--font-mono)',
+    bodyColor: '#0f0e0c',
+    cardColor: '#161512',
+    modalColor: '#161512',
+    popoverColor: '#161512',
+    tableColor: '#161512',
+    primaryColor: '#e07d2c',
+    primaryColorHover: '#ec9f59',
+    primaryColorPressed: '#f4c496',
+    primaryColorSuppl: '#e07d2c',
+    infoColor: '#e07d2c',
+    successColor: '#7ac74f',
+    warningColor: '#d4a017',
+    errorColor: '#b91c1c',
+    textColorBase: '#f3f1ec',
+    textColor1: '#f3f1ec',
+    textColor2: '#b8b3a2',
+    textColor3: '#878273',
+    borderColor: '#2c2a26',
+    dividerColor: '#2c2a26',
+    inputColor: '#1d1c19',
+    actionColor: '#1d1c19',
+    hoverColor: 'rgba(243, 241, 236, 0.06)',
+  },
+  Button: {
+    borderRadiusSmall: '4px',
+    borderRadiusMedium: '4px',
+    borderRadiusLarge: '4px',
+    fontWeight: '500',
+  },
+  Card: {
+    borderRadius: '6px',
+    color: '#161512',
+  },
+  DataTable: {
+    thColor: '#161512',
+    tdColor: '#161512',
+    thTextColor: '#878273',
+    tdTextColor: '#f3f1ec',
+    borderColor: '#2c2a26',
+  },
+  Input: {
+    borderRadius: '4px',
+    color: '#1d1c19',
+  },
+  Select: {
+    peers: {
+      InternalSelection: {
+        color: '#1d1c19',
+      },
+    },
+  },
+  Tabs: {
+    tabBorderRadius: '4px',
+    tabColor: 'transparent',
+    tabTextColorLine: '#878273',
+    tabTextColorActiveLine: '#f3f1ec',
+    barColor: '#e07d2c',
+  },
+};
 
 // CSRF token for mutating API requests — fetched after login
 let _csrfToken = '';
@@ -1620,8 +1762,7 @@ let mpegtsInstance = null;
 
 const ERR_UNSUPPORTED_CODEC =
   'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.';
-const ERR_STREAM_UNAVAILABLE =
-  'Stream unavailable. The channel may be offline or unreachable.';
+const ERR_STREAM_UNAVAILABLE = 'Stream unavailable. The channel may be offline or unreachable.';
 const ERR_TRANSCODE_FAILED =
   'Server transcoding failed. Ensure ffmpeg is installed on the server, or open the stream URL in VLC.';
 
@@ -1816,7 +1957,7 @@ async function setupVideoPlayer() {
           '[player] probe-triggered transcode setup failed for %s/%s:',
           probeChannel?.source,
           probeChannel?.name,
-          err,
+          err
         );
         dbgEvent(`transcode setup error: ${err?.message}`);
       });
@@ -1858,7 +1999,9 @@ async function setupVideoPlayer() {
         // Codec probe identified incompatible codecs (e.g. MPEG-2/AC-3 from an
         // HDHomeRun OTA tuner) before HLS.js fired an error.  Pre-empt the running
         // player and switch immediately to server-side transcoding.
-        dbgEvent('probe pre-empt: incompatible mpeg-ts — destroying current player, switching to transcode');
+        dbgEvent(
+          'probe pre-empt: incompatible mpeg-ts — destroying current player, switching to transcode'
+        );
         if (hlsInstance) {
           hlsInstance.destroy();
           hlsInstance = null;
@@ -1875,7 +2018,7 @@ async function setupVideoPlayer() {
             '[player] probe-triggered transcode setup failed for %s/%s:',
             probeChannel?.source,
             probeChannel?.name,
-            err,
+            err
           );
           dbgEvent(`transcode setup error: ${err?.message}`);
         });
@@ -2252,7 +2395,9 @@ const healthColumns = [
     render(row) {
       return h(
         'span',
-        { style: `font-weight:600;color:${row.status === 'online' ? '#21c35b' : '#d9534f'}` },
+        {
+          style: `font-weight:600;color:${row.status === 'online' ? 'var(--success)' : 'var(--danger)'}`,
+        },
         row.status
       );
     },
@@ -2308,9 +2453,9 @@ const taskColumns = [
     key: 'status',
     render(row) {
       if (row.isRunning || state.runningTask === row.name)
-        return h('span', { style: 'color:#f0a020;font-weight:600' }, '⏳ Running');
+        return h('span', { style: 'color:var(--warning);font-weight:600' }, '⏳ Running');
       if (!row.lastStatus) return h('span', { style: 'opacity:.6' }, '—');
-      const color = row.lastStatus === 'success' ? '#21c35b' : '#d9534f';
+      const color = row.lastStatus === 'success' ? 'var(--success)' : 'var(--danger)';
       const icon = row.lastStatus === 'success' ? '✓' : '✗';
       return h('span', { style: `color:${color};font-weight:600` }, `${icon} ${row.lastStatus}`);
     },
@@ -2670,23 +2815,199 @@ const previewColumns = [
 <style>
 .foot {
   margin-top: 1rem;
-  font-size: 0.75rem;
-  opacity: 0.7;
+  color: var(--fg-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
 }
+
 html,
 body,
 #app {
   height: 100%;
   margin: 0;
 }
-n-layout {
+
+body {
+  background: radial-gradient(circle at top, rgba(224, 125, 44, 0.08), transparent 32%), var(--bg);
+  color: var(--fg);
+}
+
+#app {
   min-height: 100%;
 }
-n-layout-content {
-  flex: 1;
-  display: block;
+
+.mono {
+  font-family: var(--font-mono);
 }
-body {
-  background: #111;
+
+.admin-shell {
+  min-height: 100%;
+  background: transparent;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border) !important;
+  background: rgba(15, 14, 12, 0.9);
+  backdrop-filter: blur(10px);
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: var(--gradient-mark);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.brand-title {
+  color: var(--fg);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.admin-content {
+  padding: 24px;
+}
+
+.workspace-frame {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.admin-tabs .n-tabs-nav {
+  margin: 0 !important;
+  padding: 16px 20px 0;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-tabs .n-tabs-nav-scroll-wrapper {
+  padding-bottom: 12px;
+}
+
+.admin-tabs .n-tabs-tab {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-tabs-pane-wrapper {
+  padding: 0 32px 32px;
+}
+
+.admin-tabs .n-tab-pane {
+  padding-top: 28px;
+}
+
+.admin-tabs .n-form {
+  max-width: 760px;
+}
+
+.admin-tabs .n-form-item {
+  margin-bottom: 18px;
+}
+
+.admin-tabs .n-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.admin-tabs .n-space {
+  margin-top: 8px;
+}
+
+.admin-tabs h3 {
+  margin-top: 0;
+  margin-bottom: 16px !important;
+}
+
+.admin-tabs .n-data-table {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.admin-tabs .n-collapse {
+  margin-bottom: 16px;
+}
+
+.admin-tabs .n-input,
+.admin-tabs .n-base-selection,
+.admin-tabs .n-card,
+.admin-tabs .n-modal,
+.admin-tabs .n-data-table-wrapper {
+  font-family: var(--font-sans);
+}
+
+.admin-tabs .n-input .n-input-wrapper,
+.admin-tabs .n-base-selection .n-base-selection-label,
+.admin-tabs .n-base-selection .n-base-selection-tags {
+  background: var(--bg-muted);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.admin-tabs .n-input .n-input-wrapper:hover,
+.admin-tabs .n-base-selection:hover .n-base-selection-label,
+.admin-tabs .n-base-selection:hover .n-base-selection-tags {
+  box-shadow: inset 0 0 0 1px var(--fg-subtle);
+}
+
+.admin-tabs code,
+.admin-tabs pre {
+  font-family: var(--font-mono);
+}
+
+.admin-tabs .n-data-table-th {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-tabs .n-button {
+  letter-spacing: -0.005em;
+}
+
+@media (max-width: 900px) {
+  .admin-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-content {
+    padding: 14px;
+  }
+
+  .admin-tabs-pane-wrapper {
+    padding: 0 20px 20px;
+  }
+
+  .admin-tabs .n-tab-pane {
+    padding-top: 20px;
+  }
 }
 </style>

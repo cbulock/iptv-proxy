@@ -7,6 +7,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "emberline-design-system": "github:cbulock/design-system",
     "hls.js": "^1.5.15",
     "mpegts.js": "^1.8.0",
     "naive-ui": "^2.39.0",

@@ -6,110 +6,308 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <title>IPTV Proxy</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f0e0c;
+      --bg-subtle: #161512;
+      --bg-muted: #1d1c19;
+      --surface: #161512;
+      --fg: #f3f1ec;
+      --fg-muted: #b8b3a2;
+      --fg-subtle: #878273;
+      --border: #2c2a26;
+      --border-strong: #42403a;
+      --accent: #e07d2c;
+      --accent-hover: #ec9f59;
+      --accent-press: #f4c496;
+      --accent-muted: rgba(224, 125, 44, 0.12);
+      --success: #7ac74f;
+      --danger: #b91c1c;
+      --font-sans: 'Mona Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      --shadow-lg: 0 8px 24px rgba(15, 14, 12, 0.24);
+      --gradient-mark: linear-gradient(135deg, #c2410c 0%, #7a2a09 100%);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      color: #e0e0e0;
-      min-height: 100vh;
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
       display: flex;
-      justify-content: center;
       align-items: center;
-      padding: 2rem;
+      justify-content: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top, rgba(224, 125, 44, 0.14), transparent 30%),
+        linear-gradient(180deg, rgba(243, 241, 236, 0.02), transparent 38%),
+        var(--bg);
+      color: var(--fg);
+      font-family: var(--font-sans);
     }
-    .container {
-      max-width: 600px;
-      text-align: center;
+
+    a {
+      color: inherit;
+      text-decoration: none;
     }
-    h1 {
-      font-size: 2.5rem;
-      margin-bottom: 0.5rem;
-      color: #fff;
+
+    .shell {
+      width: min(100%, 1080px);
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero,
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: rgba(22, 21, 18, 0.94);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .hero {
+      padding: 28px;
+      background:
+        linear-gradient(180deg, rgba(224, 125, 44, 0.08), transparent 55%),
+        rgba(22, 21, 18, 0.96);
+    }
+
+    .hero-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 40px;
+      height: 40px;
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
+      justify-content: center;
+      border-radius: 4px;
+      background: var(--gradient-mark);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      flex-shrink: 0;
     }
-    .title-icon {
-      width: 2.25rem;
-      height: 2.25rem;
-      display: inline-block;
-      vertical-align: middle;
-    }
-    .subtitle {
-      color: #888;
-      margin-bottom: 2rem;
-    }
-    .links {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    a {
-      display: block;
-      padding: 1rem 1.5rem;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      color: #4fc3f7;
-      text-decoration: none;
-      transition: all 0.2s ease;
-    }
-    a:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: #4fc3f7;
-      transform: translateY(-2px);
-    }
-    .endpoint {
-      font-family: monospace;
-      font-size: 0.9rem;
-      color: #888;
-      margin-top: 0.25rem;
-    }
-    .admin-link {
-      background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
-      color: #000;
+
+    .title-wrap h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.35rem);
       font-weight: 600;
-      border: none;
+      line-height: 1.04;
+      letter-spacing: -0.03em;
     }
-    .admin-link:hover {
-      background: linear-gradient(135deg, #81d4fa 0%, #4fc3f7 100%);
+
+    .subtitle {
+      margin: 10px 0 0;
+      max-width: 660px;
+      color: var(--fg-muted);
+      font-size: 15px;
+      line-height: 1.6;
     }
-    .admin-link .endpoint {
-      color: rgba(0, 0, 0, 0.6);
+
+    .panel {
+      overflow: hidden;
+    }
+
+    .links {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+    }
+
+    .link-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+      padding: 18px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      transition:
+        background 150ms cubic-bezier(0.2, 0, 0, 1),
+        border-color 150ms cubic-bezier(0.2, 0, 0, 1),
+        transform 150ms cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .link-card:nth-child(2n) {
+      border-right: none;
+    }
+
+    .link-card:nth-last-child(-n + 2) {
+      border-bottom: none;
+    }
+
+    .link-card:hover {
+      background: var(--bg-muted);
+      transform: translateY(-1px);
+    }
+
+    .link-card.primary {
+      background:
+        linear-gradient(180deg, rgba(224, 125, 44, 0.08), transparent 80%),
+        rgba(224, 125, 44, 0.04);
+    }
+
+    .link-card.primary:hover {
+      background:
+        linear-gradient(180deg, rgba(224, 125, 44, 0.12), transparent 80%),
+        var(--accent-muted);
+      border-color: var(--border-strong);
+    }
+
+    .link-icon {
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: rgba(243, 241, 236, 0.04);
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      flex-shrink: 0;
+    }
+
+    .link-card.primary .link-icon {
+      border-color: rgba(224, 125, 44, 0.35);
+      background: rgba(224, 125, 44, 0.12);
+    }
+
+    .link-copy {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .link-title {
+      color: var(--fg);
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .endpoint {
+      margin-top: 4px;
+      color: var(--fg-subtle);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+
+    .arrow {
+      color: var(--fg-subtle);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 820px) {
+      .hero-head {
+        flex-direction: column;
+      }
+
+      .links {
+        grid-template-columns: 1fr;
+      }
+
+      .link-card,
+      .link-card:nth-child(2n) {
+        border-right: none;
+      }
+
+      .link-card:nth-last-child(-n + 2) {
+        border-bottom: 1px solid var(--border);
+      }
+
+      .link-card:last-child {
+        border-bottom: none;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1><img src="/favicon.svg" alt="" class="title-icon" aria-hidden="true">IPTV Proxy</h1>
-    <p class="subtitle">Unified IPTV source aggregation</p>
-    
-    <div class="links">
-      <a href="/admin" class="admin-link">
-        Admin UI
-        <div class="endpoint">/admin</div>
-      </a>
-      
-      <a href="/lineup.m3u">
-        M3U Playlist
-        <div class="endpoint">/lineup.m3u</div>
-      </a>
-      
-      <a href="/xmltv.xml">
-        XMLTV Guide
-        <div class="endpoint">/xmltv.xml</div>
-      </a>
-      
-      <a href="/discover.json">
-        HDHomeRun Discover
-        <div class="endpoint">/discover.json</div>
-      </a>
-      
-      <a href="/lineup.json">
-        HDHomeRun Lineup
-        <div class="endpoint">/lineup.json</div>
-      </a>
-    </div>
-  </div>
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-head">
+        <div class="brand">
+          <div class="brand-mark">IP</div>
+          <div class="title-wrap">
+            <h1>IPTV Proxy</h1>
+            <p class="subtitle">Unified IPTV source aggregation</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="links">
+        <a href="/admin" class="link-card primary">
+          <div class="link-icon">AD</div>
+          <div class="link-copy">
+            <div class="link-title">Admin UI</div>
+            <div class="endpoint">/admin</div>
+          </div>
+          <div class="arrow">-&gt;</div>
+        </a>
+
+        <a href="/lineup.m3u" class="link-card">
+          <div class="link-icon">M3</div>
+          <div class="link-copy">
+            <div class="link-title">M3U Playlist</div>
+            <div class="endpoint">/lineup.m3u</div>
+          </div>
+          <div class="arrow">-&gt;</div>
+        </a>
+
+        <a href="/xmltv.xml" class="link-card">
+          <div class="link-icon">EP</div>
+          <div class="link-copy">
+            <div class="link-title">XMLTV Guide</div>
+            <div class="endpoint">/xmltv.xml</div>
+          </div>
+          <div class="arrow">-&gt;</div>
+        </a>
+
+        <a href="/discover.json" class="link-card">
+          <div class="link-icon">DS</div>
+          <div class="link-copy">
+            <div class="link-title">HDHomeRun Discover</div>
+            <div class="endpoint">/discover.json</div>
+          </div>
+          <div class="arrow">-&gt;</div>
+        </a>
+
+        <a href="/lineup.json" class="link-card">
+          <div class="link-icon">LN</div>
+          <div class="link-copy">
+            <div class="link-title">HDHomeRun Lineup</div>
+            <div class="endpoint">/lineup.json</div>
+          </div>
+          <div class="arrow">-&gt;</div>
+        </a>
+      </div>
+    </section>
+  </main>
 </body>
 </html>
