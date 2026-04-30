@@ -305,13 +305,13 @@ export function listOutputProfileEntries(slug = DEFAULT_PROFILE_SLUG) {
       position: row.position,
       guideNumberOverride: row.guide_number_override,
       enabled: row.enabled === 1,
-        canonical: {
-          id: row.canonical_id,
-          name: row.canonical_name,
-          tvg_id: row.canonical_tvg_id,
-          guideNumber: row.canonical_guide_number,
-        },
-      }))
+      canonical: {
+        id: row.canonical_id,
+        name: row.canonical_name,
+        tvg_id: row.canonical_tvg_id,
+        guideNumber: row.canonical_guide_number,
+      },
+    }))
     .sort((left, right) =>
       compareOutputChannels(
         {
@@ -446,19 +446,19 @@ export function updateOutputProfileEntries(slug = DEFAULT_PROFILE_SLUG, channels
           AND canonical_channel_id = ?`
     );
 
-      for (const channel of nextChannels) {
-        const existing = existingByCanonicalId.get(channel.canonicalId);
-        const effectiveGuideNumber = resolveEffectiveGuideNumber(
-          { guideNumberOverride: channel.guideNumberOverride },
-          { guide_number: existing?.canonical_guide_number }
-        );
-        updateEntry.run(
-          channel.position,
-          channel.guideNumberOverride || null,
-          channel.enabled && effectiveGuideNumber ? 1 : 0,
-          profile.id,
-          channel.canonicalId
-        );
+    for (const channel of nextChannels) {
+      const existing = existingByCanonicalId.get(channel.canonicalId);
+      const effectiveGuideNumber = resolveEffectiveGuideNumber(
+        { guideNumberOverride: channel.guideNumberOverride },
+        { guide_number: existing?.canonical_guide_number }
+      );
+      updateEntry.run(
+        channel.position,
+        channel.guideNumberOverride || null,
+        channel.enabled && effectiveGuideNumber ? 1 : 0,
+        profile.id,
+        channel.canonicalId
+      );
     }
   });
 

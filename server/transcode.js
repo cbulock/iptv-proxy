@@ -81,8 +81,8 @@ export function setupTranscodeRoutes(app) {
     const ffmpegProcess =
       process.platform === 'win32'
         ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'ffmpeg', ...ffmpegArgs], {
-            windowsHide: true,
-          })
+          windowsHide: true,
+        })
         : spawn('ffmpeg', ffmpegArgs);
 
     res.setHeader('Content-Type', 'video/MP2T');

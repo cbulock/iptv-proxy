@@ -586,7 +586,7 @@ describe('output profile persistence', () => {
       .get('/one.m3u')
       .reply(
         200,
-        ['#EXTM3U', '#EXTINF:-1 tvg-id=\"raw.one\",Source One', 'http://streams.example/one'].join(
+        ['#EXTM3U', '#EXTINF:-1 tvg-id="raw.one",Source One', 'http://streams.example/one'].join(
           '\n'
         )
       );
@@ -594,7 +594,7 @@ describe('output profile persistence', () => {
       .get('/two.m3u')
       .reply(
         200,
-        ['#EXTM3U', '#EXTINF:-1 tvg-id=\"raw.two\",Source Two', 'http://streams.example/two'].join(
+        ['#EXTM3U', '#EXTINF:-1 tvg-id="raw.two",Source Two', 'http://streams.example/two'].join(
           '\n'
         )
       );

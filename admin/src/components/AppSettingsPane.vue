@@ -5,9 +5,11 @@
         <n-input v-model:value="appBaseUrl" placeholder="https://example.com" />
       </n-form-item>
       <n-space>
-        <n-button type="primary" @click="saveApp" :loading="savingApp">{{
+        <n-button type="primary" @click="saveApp" :loading="savingApp">
+{{
           savingApp ? 'Saving...' : 'Save App'
-        }}</n-button>
+        }}
+</n-button>
       </n-space>
     </n-form>
     <div class="foot">
@@ -45,9 +47,11 @@
           />
         </n-form-item>
         <n-form-item>
-          <n-button type="primary" :loading="savingPassword" @click="changePassword">{{
+          <n-button type="primary" :loading="savingPassword" @click="changePassword">
+{{
             savingPassword ? 'Saving...' : 'Change Password'
-          }}</n-button>
+          }}
+</n-button>
         </n-form-item>
       </n-form>
     </div>

@@ -2,12 +2,16 @@
   <div class="tab-panel">
     <n-space align="center" wrap style="margin-bottom: 0.5rem">
       <n-button type="primary" secondary @click="addProvider">Add Source</n-button>
-      <n-button type="primary" @click="saveProviders" :loading="savingProviders">{{
+      <n-button type="primary" @click="saveProviders" :loading="savingProviders">
+{{
         savingProviders ? 'Saving...' : 'Save Sources'
-      }}</n-button>
-      <n-button @click="loadEPGValidation" :loading="loadingEPGValidation">{{
+      }}
+</n-button>
+      <n-button @click="loadEPGValidation" :loading="loadingEPGValidation">
+{{
         loadingEPGValidation ? 'Validating...' : 'Validate EPG'
-      }}</n-button>
+      }}
+</n-button>
     </n-space>
     <div
       v-if="epgValidation"
@@ -20,9 +24,7 @@
     >
       <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem">
         <span style="font-weight: 600; font-size: 1.1em">EPG Validation:</span>
-        <span v-if="epgValidation.valid" style="color: var(--success); font-weight: 600"
-          >✓ Valid</span
-        >
+        <span v-if="epgValidation.valid" style="color: var(--success); font-weight: 600">✓ Valid</span>
         <span v-else style="color: var(--danger); font-weight: 600">✗ Invalid</span>
       </div>
       <div
@@ -39,8 +41,7 @@
           <span
             v-if="epgValidation.summary?.validChannels !== epgValidation.summary?.channels"
             style="color: var(--warning)"
-            >({{ epgValidation.summary?.validChannels || 0 }} valid)</span
-          >
+            >({{ epgValidation.summary?.validChannels || 0 }} valid)</span>
         </div>
         <div>
           <span style="opacity: 0.7">Programmes:</span>
@@ -48,8 +49,7 @@
           <span
             v-if="epgValidation.summary?.validProgrammes !== epgValidation.summary?.programmes"
             style="color: var(--warning)"
-            >({{ epgValidation.summary?.validProgrammes || 0 }} valid)</span
-          >
+            >({{ epgValidation.summary?.validProgrammes || 0 }} valid)</span>
         </div>
         <div>
           <span style="opacity: 0.7">Errors:</span>
@@ -57,8 +57,7 @@
             :style="{
               color: epgValidation.summary?.errorCount > 0 ? 'var(--danger)' : 'var(--success)',
             }"
-            >{{ epgValidation.summary?.errorCount || 0 }}</span
-          >
+            >{{ epgValidation.summary?.errorCount || 0 }}</span>
         </div>
         <div>
           <span style="opacity: 0.7">Warnings:</span>
@@ -66,8 +65,7 @@
             :style="{
               color: epgValidation.summary?.warningCount > 0 ? 'var(--warning)' : 'var(--success)',
             }"
-            >{{ epgValidation.summary?.warningCount || 0 }}</span
-          >
+            >{{ epgValidation.summary?.warningCount || 0 }}</span>
         </div>
       </div>
       <div

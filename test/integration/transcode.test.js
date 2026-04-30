@@ -20,7 +20,7 @@ async function makeFFmpegStub(tmpDir, { exitCode = 0, stdoutData = null, argsFil
   if (argsFile !== null) {
     // The stub runs in a temp dir with no package.json, so Node.js treats it as
     // CommonJS.  Using require() here is intentional and correct for that context.
-    script += `const _fs = require('fs');\n`;
+    script += 'const _fs = require(\'fs\');\n';
     script += `_fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));\n`;
   }
   if (stdoutData !== null) {
@@ -32,7 +32,7 @@ async function makeFFmpegStub(tmpDir, { exitCode = 0, stdoutData = null, argsFil
     const scriptPath = path.join(tmpDir, 'ffmpeg-stub.cjs');
     const bin = path.join(tmpDir, 'ffmpeg.cmd');
     await fs.writeFile(scriptPath, script, 'utf8');
-    await fs.writeFile(bin, `@echo off\r\nnode "%~dp0\\ffmpeg-stub.cjs" %*\r\n`, 'utf8');
+    await fs.writeFile(bin, '@echo off\r\nnode "%~dp0\\ffmpeg-stub.cjs" %*\r\n', 'utf8');
     return bin;
   }
 

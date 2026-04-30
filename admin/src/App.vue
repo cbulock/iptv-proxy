@@ -39,9 +39,11 @@
       <div v-if="setupError" style="color: var(--danger); margin-bottom: 0.75rem">
         {{ setupError }}
       </div>
-      <n-button type="primary" :loading="savingSetup" @click="submitSetup" block>{{
+      <n-button type="primary" :loading="savingSetup" @click="submitSetup" block>
+{{
         savingSetup ? 'Saving...' : 'Save Credentials'
-      }}</n-button>
+      }}
+</n-button>
     </n-modal>
 
     <n-layout class="admin-shell">
@@ -50,9 +52,9 @@
           <div class="brand-mark">IP</div>
           <div class="brand-title">IPTV Proxy Admin</div>
         </div>
-        <n-button v-if="authConfigured" size="small" secondary @click="logout" :loading="loggingOut"
-          >Sign Out</n-button
-        >
+        <n-button v-if="authConfigured" size="small" secondary @click="logout" :loading="loggingOut">
+Sign Out
+</n-button>
       </n-layout-header>
       <n-layout-content class="admin-content">
         <div class="workspace-frame">
@@ -148,14 +150,14 @@
                   clearable
                   style="min-width: 260px"
                 />
-                <n-button @click="loadPreviewChannels" :loading="loadingPreviewChannels">{{
+                <n-button @click="loadPreviewChannels" :loading="loadingPreviewChannels">
+{{
                   loadingPreviewChannels ? 'Loading…' : 'Refresh'
-                }}</n-button>
-                <span style="opacity: 0.6; font-size: 0.9em"
-                  >{{ filteredPreviewChannels.length }} channel{{
+                }}
+</n-button>
+                <span style="opacity: 0.6; font-size: 0.9em">{{ filteredPreviewChannels.length }} channel{{
                     filteredPreviewChannels.length !== 1 ? 's' : ''
-                  }}</span
-                >
+                  }}</span>
               </n-space>
               <div
                 v-if="loadingPreviewChannels && !previewChannels.length"
@@ -258,16 +260,14 @@
                     <span style="opacity: 0.7; font-size: 0.85em; flex-shrink: 0">Stream URL:</span>
                     <code
                       style="font-size: 0.78em; word-break: break-all; flex: 1; opacity: 0.85"
-                      >{{ previewStreamUrl }}</code
-                    >
+                      >{{ previewStreamUrl }}</code>
                     <n-button size="tiny" secondary @click="copyStreamUrl">Copy</n-button>
                     <a
                       :href="previewStreamUrl"
                       target="_blank"
                       rel="noopener"
                       style="font-size: 0.8em; opacity: 0.7"
-                      >Open ↗</a
-                    >
+                      >Open ↗</a>
                   </div>
 
                   <!-- Player debug panel -->
@@ -304,8 +304,7 @@
                         <span
                           v-if="state.playerDebug.playerMode"
                           style="margin-left: 0.5em; opacity: 0.6"
-                          >— player: {{ state.playerDebug.playerMode }}</span
-                        >
+                          >— player: {{ state.playerDebug.playerMode }}</span>
                       </span>
                       <span style="font-size: 0.75em; opacity: 0.5">{{
                         state.showPlayerDebug ? '▲ hide' : '▼ show'
@@ -360,12 +359,11 @@
                           border-radius: 3px;
                           margin: 0;
                         "
-                        >{{ state.playerDebug.events.join('\n') }}</pre
-                      >
+                        >{{ state.playerDebug.events.join('\n') }}</pre>
                       <div style="margin-top: 0.5rem">
-                        <n-button size="tiny" secondary @click="copyPlayerDebug"
-                          >Copy debug info</n-button
-                        >
+                        <n-button size="tiny" secondary @click="copyPlayerDebug">
+Copy debug info
+</n-button>
                       </div>
                     </div>
                   </div>
@@ -397,8 +395,7 @@
                             white-space: nowrap;
                             min-width: 85px;
                           "
-                          >{{ formatXMLTVTime(prog.start) }}</span
-                        >
+                          >{{ formatXMLTVTime(prog.start) }}</span>
                         <div style="flex: 1; min-width: 0">
                           <div style="font-size: 0.9em; font-weight: 500">{{ prog.title }}</div>
                           <div
@@ -424,12 +421,16 @@
 
             <n-tab-pane name="health" tab="Health">
               <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-button type="primary" @click="loadHealth" :loading="loadingHealth">{{
+                <n-button type="primary" @click="loadHealth" :loading="loadingHealth">
+{{
                   loadingHealth ? 'Loading...' : 'Refresh Status'
-                }}</n-button>
-                <n-button type="primary" secondary @click="runHealth" :loading="runningHealth">{{
+                }}
+</n-button>
+                <n-button type="primary" secondary @click="runHealth" :loading="runningHealth">
+{{
                   runningHealth ? 'Running...' : 'Run Health Check'
-                }}</n-button>
+                }}
+</n-button>
               </n-space>
               <div v-if="formattedHealthUpdated" style="opacity: 0.75; margin-bottom: 0.5rem">
                 Last updated: {{ formattedHealthUpdated }}
@@ -454,9 +455,11 @@
                 </n-badge>
               </template>
               <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-button type="primary" @click="loadUsage" :loading="loadingUsage">{{
+                <n-button type="primary" @click="loadUsage" :loading="loadingUsage">
+{{
                   loadingUsage ? 'Loading...' : 'Refresh'
-                }}</n-button>
+                }}
+</n-button>
               </n-space>
               <div v-if="activeUsage.length">
                 <n-data-table
@@ -471,9 +474,11 @@
             </n-tab-pane>
             <n-tab-pane name="tasks" tab="Tasks">
               <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-button type="primary" @click="loadTasks" :loading="loadingTasks">{{
+                <n-button type="primary" @click="loadTasks" :loading="loadingTasks">
+{{
                   loadingTasks ? 'Loading...' : 'Refresh'
-                }}</n-button>
+                }}
+</n-button>
               </n-space>
               <div v-if="tasks.length">
                 <n-data-table
@@ -490,12 +495,16 @@
             </n-tab-pane>
             <n-tab-pane name="backups" tab="Backups">
               <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-button type="primary" @click="createBackup" :loading="creatingBackup">{{
+                <n-button type="primary" @click="createBackup" :loading="creatingBackup">
+{{
                   creatingBackup ? 'Creating...' : 'Create Backup'
-                }}</n-button>
-                <n-button @click="loadBackups" :loading="loadingBackups">{{
+                }}
+</n-button>
+                <n-button @click="loadBackups" :loading="loadingBackups">
+{{
                   loadingBackups ? 'Loading...' : 'Refresh'
-                }}</n-button>
+                }}
+</n-button>
               </n-space>
               <div v-if="backups.length">
                 <n-data-table
@@ -815,10 +824,10 @@ async function loadOutputProfileEntries(slug = state.selectedOutputProfileSlug) 
 
     state.outputProfileEntries = Array.isArray(json?.channels)
       ? json.channels.map(channel => ({
-          ...channel,
-          canonical: { ...(channel.canonical || {}) },
-          guideNumberOverrideDraft: channel?.guideNumberOverride ?? '',
-        }))
+        ...channel,
+        canonical: { ...(channel.canonical || {}) },
+        guideNumberOverrideDraft: channel?.guideNumberOverride ?? '',
+      }))
       : [];
     state.outputProfileDirty = false;
     resetSelectedOutputProfileDraft();
@@ -1952,10 +1961,10 @@ async function setupVideoPlayer() {
     typeof AbortSignal.timeout === 'function'
       ? AbortSignal.timeout(15000)
       : (() => {
-          const ac = new AbortController();
-          setTimeout(() => ac.abort(), 15000);
-          return ac.signal;
-        })();
+        const ac = new AbortController();
+        setTimeout(() => ac.abort(), 15000);
+        return ac.signal;
+      })();
   fetch(probeUrl, { signal: probeAbortSignal })
     .then(r => (r.ok ? r.json() : null))
     .then(result => {
@@ -2581,9 +2590,9 @@ const channelWorkflowRows = computed(() => {
         guideBindingOptions,
         selectedGuideBindingValue: selectedGuideBinding
           ? JSON.stringify({
-              sourceId: selectedGuideBinding.source?.id || '',
-              epgChannelId: selectedGuideBinding.epgChannelId || '',
-            })
+            sourceId: selectedGuideBinding.source?.id || '',
+            epgChannelId: selectedGuideBinding.epgChannelId || '',
+          })
           : null,
         outputEnabled: hasGuideNumber ? (outputEntry?.enabled ?? false) : false,
         enableToggleDisabled: !hasGuideNumber,
@@ -2624,25 +2633,25 @@ const channelWorkflowStats = computed(() => ({
 const healthDetails = computed(() =>
   Array.isArray(health.value.details)
     ? health.value.details.map(d => ({
-        id: d.id,
-        status: d.healthy ? 'online' : 'offline',
-        ms: d.ms,
-        code: d.statusCode,
-        contentType: d.contentType,
-        error: d.error,
-        method: d.method,
-        path: d.path,
-      }))
+      id: d.id,
+      status: d.healthy ? 'online' : 'offline',
+      ms: d.ms,
+      code: d.statusCode,
+      contentType: d.contentType,
+      error: d.error,
+      method: d.method,
+      path: d.path,
+    }))
     : Object.entries(health.value.summary || {}).map(([id, status]) => ({
-        id,
-        status,
-        ms: '',
-        code: '',
-        contentType: '',
-        error: '',
-        method: '',
-        path: '',
-      }))
+      id,
+      status,
+      ms: '',
+      code: '',
+      contentType: '',
+      error: '',
+      method: '',
+      path: '',
+    }))
 );
 
 const healthColumns = [

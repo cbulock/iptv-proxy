@@ -31,24 +31,32 @@
         type="error"
         @click="deleteProfile"
         :disabled="loading || !selectedProfile || selectedProfile?.isDefault"
-        >Delete</n-button
-      >
-      <n-button @click="refreshChannels" :loading="loading">{{
+        >
+Delete
+</n-button>
+      <n-button @click="refreshChannels" :loading="loading">
+{{
         loading ? 'Refreshing...' : 'Refresh'
-      }}</n-button>
-      <n-button @click="reloadChannels" :loading="reloadingChannels">{{
+      }}
+</n-button>
+      <n-button @click="reloadChannels" :loading="reloadingChannels">
+{{
         reloadingChannels ? 'Reloading Channels...' : 'Reload Channels'
-      }}</n-button>
-      <n-button @click="reloadEPG" :loading="reloadingEPG">{{
+      }}
+</n-button>
+      <n-button @click="reloadEPG" :loading="reloadingEPG">
+{{
         reloadingEPG ? 'Reloading EPG...' : 'Reload EPG'
-      }}</n-button>
+      }}
+</n-button>
       <n-button
         type="primary"
         @click="saveProfileChanges"
         :disabled="!profileDirty"
         :loading="savingProfile"
-        >{{ savingProfile ? 'Saving Output...' : 'Save Output Changes' }}</n-button
-      >
+        >
+{{ savingProfile ? 'Saving Output...' : 'Save Output Changes' }}
+</n-button>
     </n-space>
 
     <div v-if="selectedProfile" class="profile-meta">
@@ -130,9 +138,11 @@
               <div class="channel-name">{{ row.name }}</div>
               <div class="meta-line">
                 <n-tag size="small" round :bordered="false">{{ row.tvg_id || 'no tvg-id' }}</n-tag>
-                <n-tag size="small" round :bordered="false" type="info">{{
+                <n-tag size="small" round :bordered="false" type="info">
+{{
                   row.guideNumber || 'no guide #'
-                }}</n-tag>
+                }}
+</n-tag>
                 <n-tag size="small" round :bordered="false" type="success">
                   {{ row.sourceBindings.length }} source{{
                     row.sourceBindings.length === 1 ? '' : 's'
