@@ -1,15 +1,12 @@
 import express from 'express';
-import fs from 'fs/promises';
-import yaml from 'yaml';
-import { loadConfig, validateConfigData } from '../libs/config-loader.js';
-import { getConfigPath } from '../libs/paths.js';
+import { validateConfigData } from '../libs/config-loader.js';
 import { parseAll } from '../scripts/parseM3U.js';
 import { invalidateCache } from '../libs/channels-cache.js';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from './auth.js';
+import { loadChannelMapFromStore, replaceChannelMap } from '../libs/channel-map-service.js';
 
 const router = express.Router();
-const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
 
 // Rate limiter for all authenticated channel management routes
 const channelsAuthLimiter = rateLimit({
@@ -43,7 +40,7 @@ const channelsWriteLimiter = rateLimit({
 async function saveChannelMapUpdates(updater) {
   let mapping = {};
   try {
-    mapping = loadConfig('channelMap');
+    mapping = loadChannelMapFromStore();
   } catch (err) {
     if (err.code !== 'ENOENT') console.warn('[Channels] Could not read channel map:', err.message);
   }
@@ -54,8 +51,7 @@ async function saveChannelMapUpdates(updater) {
   const validation = validateConfigData('channelMap', mapping);
   if (!validation.valid) return { error: validation.error };
 
-  const yamlText = yaml.stringify(validation.value || {});
-  await fs.writeFile(CHANNEL_MAP_PATH, yamlText, 'utf8');
+  replaceChannelMap(validation.value || {});
 
   await parseAll();
   await invalidateCache();

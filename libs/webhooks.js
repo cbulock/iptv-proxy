@@ -1,11 +1,11 @@
 import axios from 'axios';
-import { loadConfig } from './config-loader.js';
+import { loadAppConfigFromStore } from './app-settings-service.js';
 
 /**
  * Send a POST notification to all configured webhook URLs that subscribe to
  * the given event type.
  *
- * Webhooks are configured in app.yaml under the `webhooks` array:
+ * Webhooks are configured in the app config under the `webhooks` array:
  *
  *   webhooks:
  *     - url: https://example.com/hook
@@ -24,7 +24,7 @@ import { loadConfig } from './config-loader.js';
 export async function notifyWebhooks(event, data = {}) {
   let appConfig;
   try {
-    appConfig = loadConfig('app');
+    appConfig = loadAppConfigFromStore();
   } catch {
     return;
   }

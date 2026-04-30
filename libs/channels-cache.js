@@ -2,7 +2,9 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { getDataPath } from './paths.js';
 
-const CHANNELS_FILE = getDataPath('channels.json');
+function getChannelsFilePath() {
+  return getDataPath('channels.json');
+}
 
 // In-memory cache
 let channelsCache = null;
@@ -24,12 +26,13 @@ export function onChannelsUpdate(callback) {
  * @returns {Promise<Array>}
  */
 async function loadChannelsFromDisk() {
+  const channelsFile = getChannelsFilePath();
   try {
-    const data = await fsPromises.readFile(CHANNELS_FILE, 'utf8');
+    const data = await fsPromises.readFile(channelsFile, 'utf8');
     return JSON.parse(data);
   } catch (err) {
     if (err.code === 'ENOENT') {
-      console.warn(`Channels file not found: ${CHANNELS_FILE}`);
+      console.warn(`Channels file not found: ${channelsFile}`);
       return [];
     }
     throw err;
@@ -42,12 +45,13 @@ async function loadChannelsFromDisk() {
 export async function initChannelsCache() {
   // Load initial data
   channelsCache = await loadChannelsFromDisk();
+  const channelsFile = getChannelsFilePath();
 
   let reloadInProgress = false;
 
   // Watch for file changes to invalidate cache
-  if (!fileWatcher && fs.existsSync(CHANNELS_FILE)) {
-    fileWatcher = fs.watch(CHANNELS_FILE, { persistent: false }, async eventType => {
+  if (!fileWatcher && fs.existsSync(channelsFile)) {
+    fileWatcher = fs.watch(channelsFile, { persistent: false }, async eventType => {
       if (eventType === 'change') {
         // Prevent concurrent reloads
         if (reloadInProgress) {

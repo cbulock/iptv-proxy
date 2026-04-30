@@ -1,10 +1,10 @@
 import express from 'express';
 import fs from 'fs/promises';
-import { loadConfig } from '../libs/config-loader.js';
 import { getDataPath } from '../libs/paths.js';
 import { generateSuggestions, detectDuplicates } from '../libs/channel-matcher.js';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from './auth.js';
+import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
 
 const router = express.Router();
 const CHANNELS_FILE = getDataPath('channels.json');
@@ -51,7 +51,7 @@ router.get('/api/mapping/conflicts', requireAuth, conflictsLimiter, async (req, 
 
     let mapping = {};
     try {
-      mapping = loadConfig('channelMap');
+      mapping = loadChannelMapFromStore();
     } catch (err) {
       if (err.code !== 'ENOENT') console.warn('[Mapping] Could not read channel map:', err.message);
     }
@@ -118,7 +118,7 @@ router.get('/api/mapping/suggestions', requireAuth, suggestionsLimiter, async (r
 
     let mapping = {};
     try {
-      mapping = loadConfig('channelMap');
+      mapping = loadChannelMapFromStore();
     } catch (err) {
       if (err.code !== 'ENOENT') console.warn('[Mapping] Could not read channel map:', err.message);
     }

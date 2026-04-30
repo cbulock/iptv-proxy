@@ -1,16 +1,24 @@
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import express from 'express';
-import yaml from 'yaml';
 import axios from 'axios';
 import RateLimit from 'express-rate-limit';
 import { parseAll } from '../scripts/parseM3U.js';
 import { refreshEPG } from './epg.js';
-import { loadConfig, validateConfigData } from '../libs/config-loader.js';
+import { validateConfigData } from '../libs/config-loader.js';
 import { invalidateCache, getChannels } from '../libs/channels-cache.js';
-import { getConfigPath } from '../libs/paths.js';
 import { requireAuth, invalidateAuthCache } from './auth.js';
 import { notifyWebhooks } from '../libs/webhooks.js';
+import { loadAppConfigFromStore, replaceAppConfig } from '../libs/app-settings-service.js';
+import { loadChannelMapFromStore, replaceChannelMap } from '../libs/channel-map-service.js';
+import {
+  loadEPGConfigFromStore,
+  loadM3UConfigFromStore,
+  loadProvidersConfigFromStore,
+  replaceEPGConfig,
+  replaceM3UConfig,
+  replaceProvidersConfig,
+} from '../libs/source-service.js';
 
 const router = express.Router();
 
@@ -43,30 +51,24 @@ const readLimiter = RateLimit({
   keyGenerator: req => req.ip || 'unknown',
 });
 
-const M3U_PATH = getConfigPath('m3u.yaml');
-const EPG_PATH = getConfigPath('epg.yaml');
-const PROVIDERS_PATH = getConfigPath('providers.yaml');
-const APP_PATH = getConfigPath('app.yaml');
-const CHANNEL_MAP_PATH = getConfigPath('channel-map.yaml');
-
 function loadM3U() {
-  return loadConfig('m3u');
+  return loadM3UConfigFromStore();
 }
 
 function loadEPG() {
-  return loadConfig('epg');
+  return loadEPGConfigFromStore();
 }
 
 function loadProviders() {
-  return loadConfig('providers');
+  return loadProvidersConfigFromStore();
 }
 
 function loadAPP() {
-  return loadConfig('app');
+  return loadAppConfigFromStore();
 }
 
 function loadChannelMap() {
-  return loadConfig('channelMap');
+  return loadChannelMapFromStore();
 }
 
 router.get('/api/config/m3u', requireAuth, (req, res) => {
@@ -74,9 +76,9 @@ router.get('/api/config/m3u', requireAuth, (req, res) => {
     res.json(loadM3U());
   } catch (e) {
     res.status(500).json({
-      error: 'Failed to read m3u.yaml',
+      error: 'Failed to load M3U source compatibility view',
       detail: e.message,
-      fix: 'Check that m3u.yaml exists in the config directory and is valid YAML. See config/examples/m3u.example.yaml for reference.',
+      fix: 'Check that providers are configured correctly. The legacy M3U view is now synthesized from the SQLite-backed source store.',
     });
   }
 });
@@ -86,9 +88,9 @@ router.get('/api/config/epg', requireAuth, (req, res) => {
     res.json(loadEPG());
   } catch (e) {
     res.status(500).json({
-      error: 'Failed to read epg.yaml',
+      error: 'Failed to load EPG compatibility view',
       detail: e.message,
-      fix: 'Check that epg.yaml exists in the config directory and is valid YAML. See config/examples/epg.example.yaml for reference.',
+      fix: 'Check that providers and their EPG URLs are configured correctly. The legacy EPG view is now synthesized from the SQLite-backed source store.',
     });
   }
 });
@@ -110,9 +112,9 @@ router.get('/api/config/app', requireAuth, (req, res) => {
     res.json(loadAPP());
   } catch (e) {
     res.status(500).json({
-      error: 'Failed to read app.yaml',
+      error: 'Failed to load app config',
       detail: e.message,
-      fix: 'Check that app.yaml exists in the config directory and is valid YAML. See config/examples/app.example.yaml for reference.',
+      fix: 'Check that the SQLite data store is available. The compatibility export is written to app.yaml using the current config directory. See config/examples/app.example.yaml for the config shape.',
     });
   }
 });
@@ -122,9 +124,9 @@ router.get('/api/config/channel-map', requireAuth, (req, res) => {
     res.json(loadChannelMap());
   } catch (e) {
     res.status(500).json({
-      error: 'Failed to read channel-map.yaml',
+      error: 'Failed to load channel map',
       detail: e.message,
-      fix: 'Check that channel-map.yaml exists in the config directory and is valid YAML. See config/examples/channel-map.example.yaml for reference.',
+      fix: 'Check that the SQLite data store is available. The compatibility export is written to channel-map.yaml using the current config directory. See config/examples/channel-map.example.yaml for the mapping shape.',
     });
   }
 });
@@ -138,15 +140,14 @@ router.put('/api/config/m3u', requireAuth, configWriteLimiter, (req, res) => {
       fix: 'Ensure all M3U sources have required fields: name (string) and url (string). The type field is optional and defaults to "m3u". See config/examples/m3u.example.yaml for examples.',
     });
   try {
-    const yamlText = yaml.stringify(validation.value);
-    fs.writeFileSync(M3U_PATH, yamlText, 'utf8');
+    replaceM3UConfig(validation.value);
     res.json({ status: 'saved' });
   } catch (e) {
-    console.error('Error writing m3u.yaml:', e);
+    console.error('Error saving legacy M3U config view:', e);
     res.status(500).json({
-      error: 'Failed to write m3u.yaml',
+      error: 'Failed to save M3U source compatibility view',
       detail: e.message,
-      fix: 'Check file permissions on the config directory and ensure disk space is available.',
+      fix: 'Use /api/config/providers for the primary source model, or ensure the legacy M3U payload is valid.',
     });
   }
 });
@@ -160,15 +161,14 @@ router.put('/api/config/epg', requireAuth, configWriteLimiter, (req, res) => {
       fix: 'Ensure all EPG sources have required fields: name (string) and url (string). URLs can be HTTP(S) or file:// paths. See config/examples/epg.example.yaml for examples.',
     });
   try {
-    const yamlText = yaml.stringify(validation.value);
-    fs.writeFileSync(EPG_PATH, yamlText, 'utf8');
+    replaceEPGConfig(validation.value);
     res.json({ status: 'saved' });
   } catch (e) {
-    console.error('Error writing epg.yaml:', e);
-    res.status(500).json({
-      error: 'Failed to write epg.yaml',
+    console.error('Error saving legacy EPG config view:', e);
+    res.status(e.message?.startsWith('Unknown source') ? 400 : 500).json({
+      error: 'Failed to save EPG compatibility view',
       detail: e.message,
-      fix: 'Check file permissions on the config directory and ensure disk space is available.',
+      fix: 'Ensure each legacy EPG entry matches an existing source name, or use /api/config/providers to update sources directly.',
     });
   }
 });
@@ -182,13 +182,12 @@ router.put('/api/config/providers', requireAuth, configWriteLimiter, (req, res) 
       fix: 'Ensure all providers have required fields: name (string) and url (string). The type field is optional ("m3u" or "hdhomerun"). The epg field is optional. See config/examples/providers.example.yaml for examples.',
     });
   try {
-    const yamlText = yaml.stringify(validation.value);
-    fs.writeFileSync(PROVIDERS_PATH, yamlText, 'utf8');
+    replaceProvidersConfig(validation.value);
     res.json({ status: 'saved' });
   } catch (e) {
-    console.error('Error writing providers.yaml:', e);
+    console.error('Error saving providers:', e);
     res.status(500).json({
-      error: 'Failed to write providers.yaml',
+      error: 'Failed to save providers',
       detail: e.message,
       fix: 'Check file permissions on the config directory and ensure disk space is available.',
     });
@@ -223,16 +222,15 @@ router.put('/api/config/app', requireAuth, configWriteLimiter, (req, res) => {
     } catch (_) {
       /* ignore read errors */
     }
-    const yamlText = yaml.stringify(updated);
-    fs.writeFileSync(APP_PATH, yamlText, 'utf8');
+    replaceAppConfig(updated);
     invalidateAuthCache();
     res.json({ status: 'saved' });
   } catch (e) {
-    console.error('Error writing app.yaml:', e);
+    console.error('Error saving app config:', e);
     res.status(500).json({
-      error: 'Failed to write app.yaml',
+      error: 'Failed to save app config',
       detail: e.message,
-      fix: 'Check file permissions on the config directory and ensure disk space is available.',
+      fix: 'Check that the SQLite data store is writable and that the config directory allows updating the compatibility export.',
     });
   }
 });
@@ -243,16 +241,15 @@ router.put('/api/config/channel-map', requireAuth, configWriteLimiter, (req, res
   if (!validation.valid)
     return res.status(400).json({
       error: validation.error,
-      fix: 'Channel mappings must have at least one property: name, number, tvg_id, logo, or url. Keys should match channel names or tvg_ids from your sources. See config/examples/channel-map.example.yaml for examples.',
+      fix: 'Channel mappings must have at least one property: name, number, tvg_id, logo, or url. Keys should match channel names or tvg_ids from your sources. The mapping shape is still compatible with config/examples/channel-map.example.yaml.',
     });
   try {
-    const yamlText = yaml.stringify(validation.value || {});
-    fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    replaceChannelMap(validation.value || {});
     res.json({ status: 'saved' });
   } catch (e) {
-    console.error('Error writing channel-map.yaml:', e);
+    console.error('Error saving channel map:', e);
     res.status(500).json({
-      error: 'Failed to write channel-map.yaml',
+      error: 'Failed to save channel map',
       detail: e.message,
       fix: 'Check file permissions on the config directory and ensure disk space is available.',
     });
@@ -271,7 +268,7 @@ router.post('/api/reload/channels', requireAuth, async (req, res) => {
     res.status(500).json({
       error: 'Failed to reload channels',
       detail: e.message,
-      fix: 'Check that all M3U sources in m3u.yaml are accessible. Review server logs for specific source errors. See README.md troubleshooting section for common issues.',
+      fix: 'Check that all providers in providers.yaml are accessible. Review server logs for specific source errors. See README.md troubleshooting section for common issues.',
     });
   }
 });
@@ -287,7 +284,7 @@ router.post('/api/reload/epg', requireAuth, async (req, res) => {
     res.status(500).json({
       error: 'Failed to reload EPG',
       detail: e.message,
-      fix: 'Check that all EPG sources in epg.yaml are accessible and contain valid XMLTV data. Verify channel IDs match between M3U and EPG. See README.md troubleshooting section.',
+      fix: 'Check that provider EPG URLs in providers.yaml are accessible and contain valid XMLTV data. Verify channel IDs match between channel sources and EPG. See README.md troubleshooting section.',
     });
   }
 });
@@ -625,15 +622,14 @@ router.post('/api/mapping', requireAuth, writeLimiter, async (req, res) => {
     };
 
     // Save the updated mapping
-    const yamlText = yaml.stringify(channelMap);
-    fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    replaceChannelMap(channelMap);
 
     res.json({ status: 'saved', key, mapping: channelMap[key] });
   } catch (e) {
     res.status(500).json({
       error: 'Failed to save mapping',
       detail: e.message,
-      fix: 'Check file permissions on channel-map.yaml and ensure disk space is available.',
+      fix: 'Check that the SQLite data store is writable and that the config directory allows updating the compatibility export.',
     });
   }
 });
@@ -655,7 +651,7 @@ router.delete('/api/mapping/:key', requireAuth, writeLimiter, async (req, res) =
     if (!channelMap[key]) {
       return res.status(404).json({
         error: 'Mapping not found',
-        fix: `No mapping exists for key "${key}". Check the exact key name in your channel-map.yaml file.`,
+        fix: `No mapping exists for key "${key}". Check the exact key name in the current channel map.`,
       });
     }
 
@@ -663,15 +659,14 @@ router.delete('/api/mapping/:key', requireAuth, writeLimiter, async (req, res) =
     delete channelMap[key];
 
     // Save the updated mapping
-    const yamlText = yaml.stringify(channelMap);
-    fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    replaceChannelMap(channelMap);
 
     res.json({ status: 'deleted', key });
   } catch (e) {
     res.status(500).json({
       error: 'Failed to delete mapping',
       detail: e.message,
-      fix: 'Check file permissions on channel-map.yaml.',
+      fix: 'Check that the SQLite data store is writable and that the config directory allows updating the compatibility export.',
     });
   }
 });
@@ -702,15 +697,14 @@ router.post('/api/mapping/bulk', requireAuth, writeLimiter, async (req, res) => 
     }
 
     // Save the updated mapping
-    const yamlText = yaml.stringify(channelMap);
-    fs.writeFileSync(CHANNEL_MAP_PATH, yamlText, 'utf8');
+    replaceChannelMap(channelMap);
 
     res.json({ status: 'saved', count });
   } catch (e) {
     res.status(500).json({
       error: 'Failed to save bulk mappings',
       detail: e.message,
-      fix: 'Check file permissions on channel-map.yaml and ensure disk space is available.',
+      fix: 'Check that the SQLite data store is writable and that the config directory allows updating the compatibility export.',
     });
   }
 });

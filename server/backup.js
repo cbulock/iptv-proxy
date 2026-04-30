@@ -5,10 +5,31 @@ import path from 'path';
 import archiver from 'archiver';
 import { getConfigPath, getDataPath } from '../libs/paths.js';
 import { requireAuth, invalidateAuthCache } from './auth.js';
+import { closeDatabase, getDatabasePath, initDatabase } from '../libs/database.js';
+import { ensureAppConfigSeeded, loadAppConfigFromStore, replaceAppConfig } from '../libs/app-settings-service.js';
+import {
+  ensureSourcesSeeded,
+  loadProvidersConfigFromStore,
+  replaceProvidersConfig,
+} from '../libs/source-service.js';
+import {
+  ensureChannelMapSeeded,
+  loadChannelMapFromStore,
+  replaceChannelMap,
+} from '../libs/channel-map-service.js';
 
 const router = express.Router();
 
-const CONFIG_FILES = ['providers.yaml', 'm3u.yaml', 'epg.yaml', 'app.yaml', 'channel-map.yaml'];
+const PRIMARY_CONFIG_FILES = ['providers.yaml', 'app.yaml', 'channel-map.yaml'];
+const LEGACY_COMPAT_CONFIG_FILES = ['m3u.yaml', 'epg.yaml'];
+const DATABASE_FILENAME = path.basename(getDatabasePath());
+const DATABASE_RUNTIME_FILES = [
+  DATABASE_FILENAME,
+  `${DATABASE_FILENAME}-wal`,
+  `${DATABASE_FILENAME}-shm`,
+];
+const ADDITIONAL_RUNTIME_FILES = ['channels.json'];
+const RUNTIME_BACKUP_FILES = [...DATABASE_RUNTIME_FILES, ...ADDITIONAL_RUNTIME_FILES];
 const BACKUPS_DIR = getDataPath('backups');
 
 /** Ensure the backups directory exists. */
@@ -54,23 +75,39 @@ router.get('/api/config/backups', requireAuth, async (req, res) => {
  */
 export async function createBackupSnapshot() {
   await ensureBackupsDir();
+  ensureSourcesSeeded();
+  ensureChannelMapSeeded();
+  ensureAppConfigSeeded();
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const backupName = `backup-${timestamp}`;
   const backupDir = path.join(BACKUPS_DIR, backupName);
 
   await fs.mkdir(backupDir, { recursive: true });
+  closeDatabase();
 
-  const copied = [];
-  for (const file of CONFIG_FILES) {
-    const src = getConfigPath(file);
-    if (fsSync.existsSync(src)) {
-      await fs.copyFile(src, path.join(backupDir, file));
-      copied.push(file);
+  try {
+    const copied = [];
+    for (const file of [...PRIMARY_CONFIG_FILES, ...LEGACY_COMPAT_CONFIG_FILES]) {
+      const src = getConfigPath(file);
+      if (fsSync.existsSync(src)) {
+        await fs.copyFile(src, path.join(backupDir, file));
+        copied.push(file);
+      }
     }
-  }
 
-  return { name: backupName, files: copied };
+    for (const file of RUNTIME_BACKUP_FILES) {
+      const src = getDataPath(file);
+      if (fsSync.existsSync(src)) {
+        await fs.copyFile(src, path.join(backupDir, file));
+        copied.push(file);
+      }
+    }
+
+    return { name: backupName, files: copied };
+  } finally {
+    initDatabase();
+  }
 }
 
 /**
@@ -112,17 +149,53 @@ router.post('/api/config/backups/:name/restore', requireAuth, async (req, res) =
       return res.status(404).json({ error: 'Backup not found', name });
     }
 
+    const filesInBackup = await fs.readdir(backupDir);
+    const hasDatabaseSnapshot = filesInBackup.includes(DATABASE_FILENAME);
+
+    if (hasDatabaseSnapshot) {
+      closeDatabase();
+
+      for (const file of [...PRIMARY_CONFIG_FILES, ...DATABASE_RUNTIME_FILES]) {
+        await fs.rm(file.endsWith('.yaml') ? getConfigPath(file) : getDataPath(file), {
+          force: true,
+        });
+      }
+    }
+
     const restored = [];
-    for (const file of CONFIG_FILES) {
+    for (const file of filesInBackup) {
+      if (
+        hasDatabaseSnapshot &&
+        PRIMARY_CONFIG_FILES.includes(file) &&
+        !LEGACY_COMPAT_CONFIG_FILES.includes(file)
+      ) {
+        continue;
+      }
+
+      if (![...PRIMARY_CONFIG_FILES, ...LEGACY_COMPAT_CONFIG_FILES, ...RUNTIME_BACKUP_FILES].includes(file)) {
+        continue;
+      }
+
       const src = path.join(backupDir, file);
       if (fsSync.existsSync(src)) {
-        await fs.copyFile(src, getConfigPath(file));
+        const dest = [...PRIMARY_CONFIG_FILES, ...LEGACY_COMPAT_CONFIG_FILES].includes(file)
+          ? getConfigPath(file)
+          : getDataPath(file);
+        await fs.copyFile(src, dest);
         restored.push(file);
       }
     }
 
-    // If app.yaml was restored, the in-process auth config cache may now be stale.
-    if (restored.includes('app.yaml')) {
+    if (hasDatabaseSnapshot) {
+      initDatabase();
+      replaceProvidersConfig(loadProvidersConfigFromStore());
+      replaceChannelMap(loadChannelMapFromStore());
+      replaceAppConfig(loadAppConfigFromStore());
+      restored.push(...PRIMARY_CONFIG_FILES.filter(file => !restored.includes(file)));
+    }
+
+    // If app config was restored, the in-process auth config cache may now be stale.
+    if (restored.includes('app.yaml') || hasDatabaseSnapshot) {
       invalidateAuthCache();
     }
 

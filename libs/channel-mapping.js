@@ -32,6 +32,51 @@ export function buildReverseIndex(map) {
 }
 
 /**
+ * Resolve which mapping entry applies to a channel without mutating it.
+ *
+ * @param {Object} channel
+ * @param {Object} map
+ * @param {Map} [reverseIndex]
+ * @returns {{ matched: boolean, matchedKey: string|null, mapping: Object|null }}
+ */
+export function resolveChannelMapping(channel, map, reverseIndex) {
+  const idx = reverseIndex ?? buildReverseIndex(map);
+
+  let matchedKey = null;
+  let mapping = null;
+
+  mapping = map[channel.name];
+  if (mapping) matchedKey = channel.name;
+
+  if (!mapping && channel.tvg_id) {
+    mapping = map[channel.tvg_id];
+    if (mapping) matchedKey = channel.tvg_id;
+  }
+
+  if (!mapping && channel.tvg_id) {
+    const hit = idx.get(channel.tvg_id);
+    if (hit) {
+      mapping = hit.value;
+      matchedKey = hit.key;
+    }
+  }
+
+  if (!mapping && !channel.tvg_id && channel.guideNumber) {
+    const hit = idx.get(channel.guideNumber);
+    if (hit) {
+      mapping = hit.value;
+      matchedKey = hit.key;
+    }
+  }
+
+  return {
+    matched: Boolean(mapping),
+    matchedKey,
+    mapping,
+  };
+}
+
+/**
  * Apply a channel-map entry to a channel object (mutates and returns the channel).
  *
  * Lookup order:
@@ -49,40 +94,7 @@ export function buildReverseIndex(map) {
  * @returns {Object} The mutated channel
  */
 export function applyMapping(channel, map, reverseIndex) {
-  const idx = reverseIndex ?? buildReverseIndex(map);
-
-  let matchedKey = null;
-  let mapping = null;
-
-  // 1. Name-based lookup
-  mapping = map[channel.name];
-  if (mapping) matchedKey = channel.name;
-
-  // 2. tvg_id direct key lookup
-  if (!mapping && channel.tvg_id) {
-    mapping = map[channel.tvg_id];
-    if (mapping) matchedKey = channel.tvg_id;
-  }
-
-  // 3. Reverse lookup by tvg_id value (supports EPG-name keyed entries)
-  if (!mapping && channel.tvg_id) {
-    const hit = idx.get(channel.tvg_id);
-    if (hit) {
-      mapping = hit.value;
-      matchedKey = hit.key;
-    }
-  }
-
-  // 4. Reverse lookup by guideNumber → mapping tvg_id (HDHomeRun channels
-  //    start with an empty tvg_id so step 3 is skipped; their GuideNumber
-  //    often matches the EPG channel id stored in tvg_id of the map entry).
-  if (!mapping && !channel.tvg_id && channel.guideNumber) {
-    const hit = idx.get(channel.guideNumber);
-    if (hit) {
-      mapping = hit.value;
-      matchedKey = hit.key;
-    }
-  }
+  const { mapping, matchedKey } = resolveChannelMapping(channel, map, reverseIndex);
 
   if (mapping) {
     // If mapping.name is omitted and the matched key is not the source

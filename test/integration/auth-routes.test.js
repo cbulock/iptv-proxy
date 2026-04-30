@@ -22,6 +22,7 @@ const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === 'true';
 import authRouter from '../../server/auth-routes.js';
 import { invalidateAuthCache } from '../../server/auth.js';
 import { csrfMiddleware } from '../../server/csrf.js';
+import { closeDatabase } from '../../libs/database.js';
 
 function buildApp() {
   const app = express();
@@ -82,14 +83,19 @@ describe('Auth Routes Integration', () => {
   let server;
   let baseUrl;
   let tmpDir;
+  let tmpDataDir;
   let originalConfigPath;
+  let originalDataPath;
 
   before(async () => {
     // Point CONFIG_PATH at a throwaway temp directory.
     // Handlers call getConfigPath() at runtime, so they pick this up.
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-auth-test-'));
+    tmpDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-auth-data-test-'));
     originalConfigPath = process.env.CONFIG_PATH;
+    originalDataPath = process.env.DATA_PATH;
     process.env.CONFIG_PATH = tmpDir;
+    process.env.DATA_PATH = tmpDataDir;
 
     const app = buildApp();
     ({ server, baseUrl } = await startServer(app));
@@ -97,25 +103,39 @@ describe('Auth Routes Integration', () => {
 
   after(async () => {
     await stopServer(server);
+    closeDatabase();
     // Restore the original CONFIG_PATH (may be undefined)
     if (originalConfigPath === undefined) {
       delete process.env.CONFIG_PATH;
     } else {
       process.env.CONFIG_PATH = originalConfigPath;
     }
+    if (originalDataPath === undefined) {
+      delete process.env.DATA_PATH;
+    } else {
+      process.env.DATA_PATH = originalDataPath;
+    }
     // Clean up temp directory
     await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(tmpDataDir, { recursive: true, force: true });
   });
 
   // Reset app.yaml to empty before and after each test so every test starts
   // unconfigured and does not leave stale credentials for subsequent test suites.
-  // Also invalidate the in-process auth config cache so the file reset takes effect.
+  // Also reset the SQLite data dir and invalidate the in-process auth config cache
+  // so each test sees a clean source of truth.
   beforeEach(async () => {
+    closeDatabase();
+    await fs.rm(tmpDataDir, { recursive: true, force: true });
+    await fs.mkdir(tmpDataDir, { recursive: true });
     await fs.writeFile(path.join(tmpDir, 'app.yaml'), '{}\n', 'utf8');
     invalidateAuthCache();
   });
 
   afterEach(async () => {
+    closeDatabase();
+    await fs.rm(tmpDataDir, { recursive: true, force: true });
+    await fs.mkdir(tmpDataDir, { recursive: true });
     await fs.writeFile(path.join(tmpDir, 'app.yaml'), '{}\n', 'utf8');
     invalidateAuthCache();
   });

@@ -77,21 +77,17 @@ function buildFutureXMLTV(tvgId) {
 describe('GET /api/guide', () => {
   const TVG_ID = 'guide-test.1';
   let tmpConfigDir;
+  let tmpDataDir;
   let epgFilePath;
   let server;
   let baseUrl;
-  const channelsFile = getDataPath('channels.json');
-  let originalChannels = null;
-  let hadOriginalChannelsFile = false;
+  let channelsFile;
 
   before(async () => {
-    // Save existing channels.json if it exists
-    try {
-      originalChannels = await fs.readFile(channelsFile, 'utf8');
-      hadOriginalChannelsFile = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-    }
+    tmpDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-guide-data-'));
+    process.env.DATA_PATH = tmpDataDir;
+    process.env.CONFIG_PATH = tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-guide-test-'));
+    channelsFile = getDataPath('channels.json');
 
     // Write test channels
     await fs.mkdir(path.dirname(channelsFile), { recursive: true });
@@ -103,7 +99,6 @@ describe('GET /api/guide', () => {
     await initChannelsCache();
 
     // Create temp config dir with a providers.yaml referencing a local EPG file
-    tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-guide-test-'));
     epgFilePath = path.join(tmpConfigDir, 'guide-test.xml');
     await fs.writeFile(epgFilePath, buildFutureXMLTV(TVG_ID), 'utf8');
     await fs.writeFile(
@@ -113,8 +108,6 @@ describe('GET /api/guide', () => {
     );
     // app.yaml with no admin_auth so requireAuth passes through
     await fs.writeFile(path.join(tmpConfigDir, 'app.yaml'), '{}\n', 'utf8');
-
-    process.env.CONFIG_PATH = tmpConfigDir;
 
     // Build app and register EPG routes
     const app = express();
@@ -132,13 +125,11 @@ describe('GET /api/guide', () => {
   after(async () => {
     if (server) await stopServer(server);
     await cleanupCache();
-    // Restore original channels.json
-    if (hadOriginalChannelsFile) {
-      await fs.writeFile(channelsFile, originalChannels, 'utf8');
-    } else {
-      await fs.unlink(channelsFile).catch(() => {});
-    }
+    const { closeDatabase } = await import('../../libs/database.js');
+    closeDatabase();
+    await fs.rm(tmpDataDir, { recursive: true, force: true });
     await fs.rm(tmpConfigDir, { recursive: true, force: true });
+    delete process.env.DATA_PATH;
     delete process.env.CONFIG_PATH;
   });
 

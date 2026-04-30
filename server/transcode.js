@@ -1,7 +1,6 @@
 import { spawn } from 'child_process';
 import RateLimit from 'express-rate-limit';
 import { getChannels } from '../libs/channels-cache.js';
-import { requireAuth } from './auth.js';
 
 // Rate limiter for the transcoding endpoint — each ffmpeg process consumes significant
 // CPU and network resources, so keep the per-IP limit stricter than other endpoints.
@@ -23,8 +22,8 @@ const transcodeLimiter = RateLimit({
  * ffmpeg, allowing browsers to play streams that use unsupported codecs
  * (e.g. MPEG-2 video / AC-3 audio from HDHomeRun OTA tuners).
  *
- * Requires authentication (when configured) and is rate-limited to prevent
- * resource exhaustion from spawning excessive ffmpeg processes.
+ * This route is public and rate-limited to prevent resource exhaustion from
+ * spawning excessive ffmpeg processes.
  *
  * Requires ffmpeg to be installed on the server.
  * Returns 503 when ffmpeg is unavailable.
@@ -32,7 +31,7 @@ const transcodeLimiter = RateLimit({
  * @param {import('express').Application} app
  */
 export function setupTranscodeRoutes(app) {
-  app.get('/transcode/:source/:name', requireAuth, transcodeLimiter, (req, res) => {
+  app.get('/transcode/:source/:name', transcodeLimiter, (req, res) => {
     const { source, name } = req.params;
     const channels = getChannels();
     const channel = channels.find(c => c.source === source && c.name === name);
@@ -79,7 +78,12 @@ export function setupTranscodeRoutes(app) {
       'pipe:1',
     ];
 
-    const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
+    const ffmpegProcess =
+      process.platform === 'win32'
+        ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'ffmpeg', ...ffmpegArgs], {
+            windowsHide: true,
+          })
+        : spawn('ffmpeg', ffmpegArgs);
 
     res.setHeader('Content-Type', 'video/MP2T');
     res.setHeader('Cache-Control', 'no-cache, no-store');
@@ -89,6 +93,7 @@ export function setupTranscodeRoutes(app) {
     // which fires before the 'exit' event — making it impossible to detect a
     // non-zero exit code before headers are committed.
     let responseStarted = false;
+    let stderrText = '';
 
     // Register error handler before attaching stdout to ensure it fires before
     // any response data is written (handles ENOENT / spawn failures).
@@ -109,7 +114,9 @@ export function setupTranscodeRoutes(app) {
     });
 
     ffmpegProcess.stderr.on('data', data => {
-      console.warn('[transcode] ffmpeg: %s/%s: %s', source, name, data.toString().trim());
+      const text = data.toString();
+      stderrText += text;
+      console.warn('[transcode] ffmpeg: %s/%s: %s', source, name, text.trim());
     });
 
     ffmpegProcess.stdout.on('data', chunk => {
@@ -131,6 +138,15 @@ export function setupTranscodeRoutes(app) {
       if (code !== 0 && code !== null) {
         console.warn('[transcode] ffmpeg exited with code %d for %s/%s', code, source, name);
         if (!responseStarted && !res.headersSent) {
+          const ffmpegMissingOnWindows =
+            process.platform === 'win32' &&
+            /not recognized as an internal or external command/i.test(stderrText);
+          if (ffmpegMissingOnWindows) {
+            return res.status(503).json({
+              error:
+                'ffmpeg is not installed on this server. Install ffmpeg to enable server-side transcoding.',
+            });
+          }
           return res.status(502).json({
             error: 'Transcoding failed',
             details: `ffmpeg exited with code ${code}`,

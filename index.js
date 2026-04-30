@@ -7,7 +7,7 @@ import yaml from 'yaml';
 import session from 'express-session';
 import RateLimit from 'express-rate-limit';
 import { initConfig } from './server/init-config.js';
-import { loadAllConfigs } from './libs/config-loader.js';
+import { loadConfig } from './libs/config-loader.js';
 import { getConfigPath } from './libs/paths.js';
 import { setupHDHRRoutes } from './server/hdhr.js';
 import { setupLineupRoutes, invalidateLineupCaches } from './server/lineup.js';
@@ -22,6 +22,7 @@ import healthRouter from './server/health.js';
 import statusRouter from './server/status.js';
 import mappingRouter from './server/mapping.js';
 import channelsManagementRouter from './server/channels-management.js';
+import canonicalRouter from './server/canonical.js';
 import previewRouter from './server/preview.js';
 import cacheRouter from './server/cache.js';
 import { parseAll, setStatusCallback } from './scripts/parseM3U.js';
@@ -33,17 +34,19 @@ import { requireAuthHTML } from './server/auth.js';
 import { csrfMiddleware } from './server/csrf.js';
 import authRoutesRouter from './server/auth-routes.js';
 import backupRouter from './server/backup.js';
+import { initDatabase } from './libs/database.js';
 
 // Ensure config files exist before anything else
 initConfig();
+initDatabase();
 
 const app = express();
 const port = parseInt(process.env.PORT || '34400', 10);
 
 // Load and validate config first (needed for auth check and session secret)
-const configs = loadAllConfigs();
+const appConfig = loadConfig('app');
 
-const config = { ...configs.m3u, ...configs.app, host: 'localhost' };
+const config = { ...appConfig, host: 'localhost' };
 
 app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
@@ -51,7 +54,7 @@ app.use(express.json({ limit: '1mb' }));
 // Session middleware — secret is read from config or generated and saved on first run
 const sessionSecret = (() => {
   try {
-    const appCfg = configs.app || {};
+    const appCfg = appConfig || {};
     if (typeof appCfg.session_secret === 'string' && appCfg.session_secret.length >= 32) {
       return appCfg.session_secret;
     }
@@ -113,6 +116,7 @@ const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
 const builtAdminAssetsDir = path.join(builtAdminDir, 'assets');
 const builtAdminStatic = express.static(builtAdminDir, { index: false });
 const publicStaticForAdmin = express.static(publicDir, { index: false });
+const useAdminDevServer = process.env.IPTV_PROXY_USE_ADMIN_DEV === '1';
 
 /**
  * Resolve a hashed Vite entry asset (e.g. index-abc123.js) in public/admin/assets.
@@ -131,7 +135,8 @@ function resolveHashedAdminEntry(ext) {
 }
 
 // Try to load vite config for dev server info
-let adminDevPort = 5173;
+let adminDevPort = parseInt(process.env.ADMIN_DEV_PORT || '5173', 10);
+const adminDevHost = process.env.ADMIN_DEV_HOST || 'localhost';
 try {
   const viteConfig = await import('./admin/vite.config.js');
   adminDevPort = viteConfig.default?.server?.port || 5173;
@@ -140,6 +145,14 @@ try {
   if (process.env.DEBUG) {
     console.log(chalk.gray(`  Reason: ${err.message}`));
   }
+}
+
+const adminDevOrigin = `http://${adminDevHost}:${adminDevPort}`;
+
+function buildAdminDevRedirectUrl(req) {
+  const originalUrl = req.originalUrl || '/admin';
+  const normalizedPath = originalUrl === '/admin.html' ? '/admin/' : originalUrl;
+  return new URL(normalizedPath === '/admin' ? '/admin/' : normalizedPath, adminDevOrigin).toString();
 }
 
 // Rate limiter for admin interface access
@@ -153,6 +166,22 @@ const adminLimiter = RateLimit({
 // Serve all /admin assets with authentication.
 // Order: built admin files -> shared public files -> hashed entry fallback.
 app.use('/admin', adminLimiter, requireAuthHTML, (req, res, next) => {
+  if (useAdminDevServer && (req.path === '/' || req.path === '' || req.path === '/index.html')) {
+    return res.redirect(307, buildAdminDevRedirectUrl(req));
+  }
+
+  if (
+    req.path === '/' ||
+    req.path === '' ||
+    req.path === '/index.html' ||
+    req.path === '/assets/index.js' ||
+    req.path === '/assets/index.css'
+  ) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+
   builtAdminStatic(req, res, err => {
     if (err) {
       return next(err);
@@ -184,6 +213,13 @@ app.use('/admin', adminLimiter, requireAuthHTML, (req, res, next) => {
 
 // Serve admin HTML pages with authentication
 app.get(['/admin', '/admin.html'], adminLimiter, requireAuthHTML, (req, res) => {
+  if (useAdminDevServer) {
+    return res.redirect(307, buildAdminDevRedirectUrl(req));
+  }
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   if (isAdminBuilt()) {
     res.sendFile(builtAdminIndexPath);
   } else {
@@ -252,6 +288,7 @@ app.use('/channels', channelsRoute);
 app.use(configRoute);
 app.use(mappingRouter);
 app.use('/api/channels', channelsManagementRouter);
+app.use(canonicalRouter);
 app.use('/', healthRouter);
 app.use('/', statusRouter);
 app.use('/', usageRouter);

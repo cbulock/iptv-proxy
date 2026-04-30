@@ -64,409 +64,84 @@
             pane-wrapper-class="admin-tabs-pane-wrapper"
           >
             <n-tab-pane name="app" tab="App">
-              <n-form label-placement="left" label-width="120">
-                <n-form-item label="Base URL">
-                  <n-input v-model:value="app.base_url" placeholder="https://example.com" />
-                </n-form-item>
-                <n-space>
-                  <n-button type="primary" @click="saveApp" :loading="savingApp">{{
-                    savingApp ? 'Saving...' : 'Save App'
-                  }}</n-button>
-                </n-space>
-              </n-form>
-              <div class="foot">
-                Editing <code>config/app.yaml</code>. Used for absolute URL generation behind
-                proxies.
-              </div>
-
-              <!-- Security / Change Password section (shown when auth is configured) -->
-              <div v-if="authConfigured" style="margin-top: 2rem">
-                <h3 style="margin-bottom: 0.75rem">Security</h3>
-                <n-form label-placement="left" label-width="160" style="max-width: 520px">
-                  <n-form-item label="Current Password">
-                    <n-input
-                      v-model:value="passwordForm.current"
-                      type="password"
-                      show-password-on="click"
-                      placeholder="Enter current password"
-                      :disabled="savingPassword"
-                    />
-                  </n-form-item>
-                  <n-form-item label="New Password">
-                    <n-input
-                      v-model:value="passwordForm.newPass"
-                      type="password"
-                      show-password-on="click"
-                      placeholder="Min. 8 characters"
-                      :disabled="savingPassword"
-                    />
-                  </n-form-item>
-                  <n-form-item label="Confirm New Password">
-                    <n-input
-                      v-model:value="passwordForm.confirm"
-                      type="password"
-                      show-password-on="click"
-                      placeholder="Repeat new password"
-                      :disabled="savingPassword"
-                    />
-                  </n-form-item>
-                  <n-form-item>
-                    <n-button type="primary" :loading="savingPassword" @click="changePassword">{{
-                      savingPassword ? 'Saving...' : 'Change Password'
-                    }}</n-button>
-                  </n-form-item>
-                </n-form>
-              </div>
+              <app-settings-pane
+                :app-base-url="app.base_url"
+                :auth-configured="authConfigured"
+                :password-current="passwordForm.current"
+                :password-new="passwordForm.newPass"
+                :password-confirm="passwordForm.confirm"
+                :saving-app="savingApp"
+                :saving-password="savingPassword"
+                :save-app="saveApp"
+                :change-password="changePassword"
+                @update:app-base-url="app.base_url = $event"
+                @update:password-current="passwordForm.current = $event"
+                @update:password-new="passwordForm.newPass = $event"
+                @update:password-confirm="passwordForm.confirm = $event"
+              />
             </n-tab-pane>
 
-            <n-tab-pane name="providers" tab="Providers">
-              <n-space align="center" wrap style="margin-bottom: 0.5rem">
-                <n-button type="primary" secondary @click="addProvider">Add Provider</n-button>
-                <n-button type="primary" @click="saveProviders" :loading="savingProviders">{{
-                  savingProviders ? 'Saving...' : 'Save Providers'
-                }}</n-button>
-                <n-button @click="loadEPGValidation" :loading="loadingEPGValidation">{{
-                  loadingEPGValidation ? 'Validating...' : 'Validate EPG'
-                }}</n-button>
-              </n-space>
-              <div
-                v-if="epgValidation"
-                style="
-                  margin-bottom: 1rem;
-                  padding: 0.75rem;
-                  background: rgba(255, 255, 255, 0.05);
-                  border-radius: 4px;
-                "
-              >
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem">
-                  <span style="font-weight: 600; font-size: 1.1em">EPG Validation:</span>
-                  <span v-if="epgValidation.valid" style="color: var(--success); font-weight: 600"
-                    >✓ Valid</span
-                  >
-                  <span v-else style="color: var(--danger); font-weight: 600">✗ Invalid</span>
-                </div>
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                    gap: 0.5rem;
-                    margin-bottom: 0.5rem;
-                  "
-                >
-                  <div>
-                    <span style="opacity: 0.7">Channels:</span>
-                    {{ epgValidation.summary?.channels || 0 }}
-                    <span
-                      v-if="
-                        epgValidation.summary?.validChannels !== epgValidation.summary?.channels
-                      "
-                      style="color: var(--warning)"
-                      >({{ epgValidation.summary?.validChannels || 0 }} valid)</span
-                    >
-                  </div>
-                  <div>
-                    <span style="opacity: 0.7">Programmes:</span>
-                    {{ epgValidation.summary?.programmes || 0 }}
-                    <span
-                      v-if="
-                        epgValidation.summary?.validProgrammes !== epgValidation.summary?.programmes
-                      "
-                      style="color: var(--warning)"
-                      >({{ epgValidation.summary?.validProgrammes || 0 }} valid)</span
-                    >
-                  </div>
-                  <div>
-                    <span style="opacity: 0.7">Errors:</span>
-                    <span
-                      :style="{
-                        color:
-                          epgValidation.summary?.errorCount > 0
-                            ? 'var(--danger)'
-                            : 'var(--success)',
-                      }"
-                      >{{ epgValidation.summary?.errorCount || 0 }}</span
-                    >
-                  </div>
-                  <div>
-                    <span style="opacity: 0.7">Warnings:</span>
-                    <span
-                      :style="{
-                        color:
-                          epgValidation.summary?.warningCount > 0
-                            ? 'var(--warning)'
-                            : 'var(--success)',
-                      }"
-                      >{{ epgValidation.summary?.warningCount || 0 }}</span
-                    >
-                  </div>
-                </div>
-                <div
-                  v-if="epgValidation.coverage"
-                  style="
-                    margin-top: 0.5rem;
-                    padding: 0.5rem;
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 4px;
-                  "
-                >
-                  <div style="font-weight: 600; margin-bottom: 0.25rem">Coverage:</div>
-                  <div>
-                    <span style="opacity: 0.7">Total Channels:</span>
-                    {{ epgValidation.coverage.total }}
-                  </div>
-                  <div>
-                    <span style="opacity: 0.7">With EPG:</span>
-                    {{ epgValidation.coverage.withEPG }} ({{ epgValidation.coverage.percentage }}%)
-                  </div>
-                  <div v-if="epgValidation.coverage.withoutEPG > 0" style="margin-top: 0.25rem">
-                    <span style="opacity: 0.7"
-                      >Missing EPG ({{ epgValidation.coverage.withoutEPG }}):</span
-                    >
-                    <div
-                      v-for="(ch, idx) in epgValidation.coverage.channelsWithoutEPG"
-                      :key="idx"
-                      style="padding-left: 1rem; opacity: 0.7; font-size: 0.9em"
-                    >
-                      • {{ ch.name }}
-                      <span style="opacity: 0.6">({{ ch.tvg_id || 'no tvg-id' }})</span>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  v-if="epgValidation.errors && epgValidation.errors.length > 0"
-                  style="margin-top: 0.5rem; color: var(--danger)"
-                >
-                  <div style="font-weight: 600; margin-bottom: 0.25rem">Errors:</div>
-                  <div
-                    v-for="(err, idx) in epgValidation.errors.slice(0, 10)"
-                    :key="idx"
-                    style="padding-left: 1rem; font-size: 0.9em"
-                  >
-                    • {{ err }}
-                  </div>
-                  <div
-                    v-if="epgValidation.errors.length > 10"
-                    style="padding-left: 1rem; opacity: 0.7; font-size: 0.9em"
-                  >
-                    ... and {{ epgValidation.errors.length - 10 }} more
-                  </div>
-                </div>
-                <div
-                  v-if="epgValidation.warnings && epgValidation.warnings.length > 0"
-                  style="margin-top: 0.5rem; color: var(--warning)"
-                >
-                  <div style="font-weight: 600; margin-bottom: 0.25rem">Warnings:</div>
-                  <div
-                    v-for="(warn, idx) in epgValidation.warnings.slice(0, 10)"
-                    :key="idx"
-                    style="padding-left: 1rem; font-size: 0.9em"
-                  >
-                    • {{ warn }}
-                  </div>
-                  <div
-                    v-if="epgValidation.warnings.length > 10"
-                    style="padding-left: 1rem; opacity: 0.7; font-size: 0.9em"
-                  >
-                    ... and {{ epgValidation.warnings.length - 10 }} more
-                  </div>
-                </div>
-              </div>
-              <n-data-table
-                v-if="Array.isArray(providers) && providers.length"
-                :columns="providerColumns"
-                :data="providers"
-                :bordered="false"
-                :row-key="rowKeyFn"
+            <n-tab-pane name="providers" tab="Sources">
+              <sources-pane
+                :providers="providers"
+                :epg-validation="epgValidation"
+                :provider-columns="providerColumns"
+                :row-key-fn="rowKeyFn"
+                :saving-providers="savingProviders"
+                :loading-e-p-g-validation="loadingEPGValidation"
+                :add-provider="addProvider"
+                :save-providers="saveProviders"
+                :load-e-p-g-validation="loadEPGValidation"
               />
-              <div v-else style="margin-top: 1rem; opacity: 0.7">No providers configured yet.</div>
-              <div class="foot">
-                Editing <code>config/providers.yaml</code>. Each provider has a channel source and
-                an optional EPG URL.
-              </div>
             </n-tab-pane>
 
-            <n-tab-pane name="mapping" tab="Mapping">
-              <n-space align="center" wrap style="margin-bottom: 0.5rem">
-                <n-button type="primary" secondary @click="addMappingRow">Add Mapping</n-button>
-                <n-button type="primary" @click="saveMapping" :loading="savingMapping">{{
-                  savingMapping ? 'Saving...' : 'Save Mapping'
-                }}</n-button>
-                <n-button @click="reloadChannels" :loading="reloadingChannels"
-                  >Reload Channels</n-button
-                >
-              </n-space>
-              <n-collapse>
-                <n-collapse-item title="Duplicates (click to expand)" name="duplicates">
-                  <n-space align="center" wrap style="margin-bottom: 0.5rem">
-                    <n-button size="small" @click="loadDuplicates" :loading="loadingDuplicates">{{
-                      loadingDuplicates ? 'Loading...' : 'Refresh'
-                    }}</n-button>
-                  </n-space>
-                  <div
-                    v-if="
-                      duplicates.summary &&
-                      (duplicates.summary.duplicateNames > 0 ||
-                        duplicates.summary.duplicateTvgIds > 0)
-                    "
-                  >
-                    <div style="margin-bottom: 1rem; opacity: 0.9">
-                      Found {{ duplicates.summary.duplicateNames }} duplicate names and
-                      {{ duplicates.summary.duplicateTvgIds }} duplicate tvg-ids
-                    </div>
-                    <div v-if="duplicates.byTvgId.length > 0">
-                      <h4 style="margin: 0.5rem 0">By TVG-ID:</h4>
-                      <div
-                        v-for="dup in duplicates.byTvgId"
-                        :key="dup.tvgId"
-                        style="
-                          margin-bottom: 1rem;
-                          padding: 0.5rem;
-                          background: rgba(255, 255, 255, 0.05);
-                          border-radius: 4px;
-                        "
-                      >
-                        <div style="font-weight: 600; margin-bottom: 0.25rem">
-                          tvg-id: {{ dup.tvgId }} ({{ dup.count }} channels)
-                        </div>
-                        <div
-                          v-for="(ch, idx) in dup.channels"
-                          :key="idx"
-                          style="padding-left: 1rem; opacity: 0.8; margin: 0.25rem 0"
-                        >
-                          • {{ ch.name }} <span style="opacity: 0.6">({{ ch.source }})</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div v-if="duplicates.byName.length > 0" style="margin-top: 1rem">
-                      <h4 style="margin: 0.5rem 0">By Name:</h4>
-                      <div
-                        v-for="dup in duplicates.byName"
-                        :key="dup.name"
-                        style="
-                          margin-bottom: 1rem;
-                          padding: 0.5rem;
-                          background: rgba(255, 255, 255, 0.05);
-                          border-radius: 4px;
-                        "
-                      >
-                        <div style="font-weight: 600; margin-bottom: 0.25rem">
-                          {{ dup.name }} ({{ dup.count }} channels)
-                        </div>
-                        <div
-                          v-for="(ch, idx) in dup.channels"
-                          :key="idx"
-                          style="padding-left: 1rem; opacity: 0.8; margin: 0.25rem 0"
-                        >
-                          • tvg-id: {{ ch.tvg_id || 'none' }}
-                          <span style="opacity: 0.6">({{ ch.source }})</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else style="opacity: 0.6">No duplicates detected.</div>
-                </n-collapse-item>
-                <n-collapse-item title="Auto-Suggestions (click to expand)" name="suggestions">
-                  <n-space align="center" wrap style="margin-bottom: 0.5rem">
-                    <n-button size="small" @click="loadSuggestions" :loading="loadingSuggestions">{{
-                      loadingSuggestions ? 'Loading...' : 'Refresh'
-                    }}</n-button>
-                  </n-space>
-                  <div v-if="Array.isArray(suggestions) && suggestions.length">
-                    <div
-                      v-for="(s, i) in suggestions"
-                      :key="'s' + i"
-                      style="
-                        margin-bottom: 1rem;
-                        padding: 0.5rem;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 4px;
-                      "
-                    >
-                      <div style="font-weight: 600; margin-bottom: 0.5rem">
-                        {{ s.channel.name }}
-                        <span style="opacity: 0.6">({{ s.channel.tvg_id }})</span>
-                      </div>
-                      <div
-                        v-for="(sug, j) in s.suggestions"
-                        :key="'sg' + j"
-                        style="
-                          display: flex;
-                          gap: 0.5rem;
-                          align-items: center;
-                          margin: 0.25rem 0;
-                          padding-left: 1rem;
-                        "
-                      >
-                        <div style="flex: 1 1 auto; opacity: 0.9">
-                          → {{ sug.name }} <span style="opacity: 0.6">({{ sug.tvg_id }})</span>
-                          <span style="opacity: 0.5; margin-left: 0.5rem"
-                            >score: {{ (sug.score * 100).toFixed(0) }}%</span
-                          >
-                        </div>
-                        <n-button size="tiny" @click="applySuggestion(s.channel, sug)"
-                          >Apply</n-button
-                        >
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else style="opacity: 0.6">
-                    No suggestions available. Try lowering the threshold or ensure you have unmapped
-                    channels.
-                  </div>
-                </n-collapse-item>
-                <n-collapse-item title="Unmapped (click to expand)" name="unmapped">
-                  <n-space align="center" wrap style="margin-bottom: 0.5rem">
-                    <n-select
-                      style="min-width: 220px"
-                      clearable
-                      placeholder="Filter by source"
-                      :options="providers.map(s => ({ label: s.name, value: s.name }))"
-                      v-model:value="unmappedSource"
-                    />
-                    <div style="display: flex; align-items: center; gap: 0.5rem">
-                      <n-switch v-model:value="hideAdded" />
-                      <span style="opacity: 0.8">Hide ones already added</span>
-                    </div>
-                    <n-button size="small" @click="refreshUnmapped">Refresh</n-button>
-                  </n-space>
-                  <div v-if="Array.isArray(unmapped) && unmapped.length">
-                    <n-space vertical>
-                      <div
-                        v-for="(s, i) in unmapped"
-                        :key="'u' + i"
-                        style="display: flex; gap: 0.5rem; align-items: center"
-                      >
-                        <n-button size="small" @click="quickAddMapping(s)">Add</n-button>
-                        <div style="flex: 1 1 auto; opacity: 0.9">
-                          {{ s.name }}
-                          <span v-if="s.tvg_id" style="opacity: 0.6">({{ s.tvg_id }})</span>
-                          <span v-if="s.source" style="opacity: 0.5; margin-left: 0.5rem"
-                            >— {{ s.source }}</span
-                          >
-                        </div>
-                      </div>
-                    </n-space>
-                  </div>
-                  <div v-else style="opacity: 0.6">No unmapped items detected.</div>
-                </n-collapse-item>
-              </n-collapse>
-              <n-data-table
-                v-if="Array.isArray(mappingRows) && mappingRows.length"
-                :columns="mappingColumns"
-                :data="sortedMappingRows"
-                :bordered="false"
-                :row-key="rowKeyFn"
+            <n-tab-pane name="channels" tab="Channels">
+              <channels-pane
+                :profiles="outputProfiles"
+                :selected-profile-slug="selectedOutputProfileSlug"
+                :selected-profile="selectedOutputProfile"
+                :rows="channelWorkflowRows"
+                :loading="channelWorkflowsLoading"
+                :saving-profile="savingOutputProfile"
+                :reloading-channels="reloadingChannels"
+                :reloading-e-p-g="reloadingEPG"
+                :updating-preferred-stream-id="updatingPreferredStreamChannelId"
+                :updating-guide-binding-id="updatingGuideBindingChannelId"
+                :profile-dirty="profileDirty"
+                :profile-stats="channelWorkflowStats"
+                :profile-endpoint-info="selectedOutputProfileEndpointInfo"
+                :change-selected-profile="changeSelectedOutputProfile"
+                :refresh-channels="loadChannelAuthoringData"
+                :reload-channels="reloadChannels"
+                :reload-e-p-g="reloadEPG"
+                :save-profile-changes="saveOutputProfileChanges"
+                :create-profile="createOutputProfile"
+                :duplicate-profile="duplicateOutputProfile"
+                :delete-profile="deleteSelectedOutputProfile"
+                :update-profile-name="updateSelectedOutputProfileName"
+                :update-profile-enabled="updateSelectedOutputProfileEnabled"
+                :update-preferred-stream="updatePreferredStream"
+                :update-guide-binding="updateGuideBinding"
+                :update-output-enabled="updateOutputEnabled"
+                :update-guide-number-override-input="updateGuideNumberOverrideDraft"
+                :commit-guide-number-override="commitGuideNumberOverride"
               />
-              <div v-else style="margin-top: 1rem; opacity: 0.7">
-                No mappings yet. Add one to map EPG names to tvg-id and numbers.
-              </div>
-              <div class="foot">
-                Editing <code>config/channel-map.yaml</code>. Save and then reload channels to
-                apply.
-              </div>
             </n-tab-pane>
             <n-tab-pane name="preview" tab="Preview">
               <n-space align="center" wrap style="margin-bottom: 0.75rem">
+                <n-select
+                  v-model:value="previewProfileSlug"
+                  :options="
+                    outputProfiles.map(profile => ({
+                      label: profile.name,
+                      value: profile.slug,
+                    }))
+                  "
+                  placeholder="Select preview profile"
+                  style="min-width: 220px"
+                  :disabled="!outputProfiles.length"
+                  @update:value="changePreviewProfile"
+                />
                 <n-input
                   v-model:value="previewSearch"
                   placeholder="Search channels by name, group, or tvg-id…"
@@ -492,7 +167,7 @@
                 v-else-if="!previewChannels.length"
                 style="opacity: 0.6; padding: 2rem 0; text-align: center"
               >
-                No channels loaded. Check your provider configuration.
+                No channels loaded. Check your source configuration.
               </div>
               <n-data-table
                 v-else
@@ -505,8 +180,8 @@
                 virtual-scroll
               />
               <div class="foot">
-                Mapped channels as they appear in the M3U output. Channel numbers reflect the
-                configured mapping. Click <strong>▶ Watch</strong> to preview a stream.
+                Channels from the selected output profile as they would appear in the published
+                lineup. Click <strong>▶ Watch</strong> to preview a stream.
               </div>
 
               <!-- Video player modal -->
@@ -834,7 +509,8 @@
                 No backups yet. Click "Create Backup" to save the current config.
               </div>
               <div class="foot">
-                Backups are stored in <code>data/backups/</code> and contain all YAML config files.
+                Backups are stored in <code>data/backups/</code> and include the SQLite snapshot
+                plus compatibility exports.
               </div>
             </n-tab-pane>
           </n-tabs>
@@ -848,6 +524,9 @@
 import { reactive, toRefs, h, watch, computed, ref, nextTick } from 'vue';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
+import AppSettingsPane from './components/AppSettingsPane.vue';
+import ChannelsPane from './components/ChannelsPane.vue';
+import SourcesPane from './components/SourcesPane.vue';
 import {
   darkTheme,
   NInput,
@@ -863,9 +542,6 @@ import {
   NLayoutHeader,
   NConfigProvider,
   NDataTable,
-  NCollapse,
-  NCollapseItem,
-  NSwitch,
   NBadge,
   NModal,
   NTooltip,
@@ -980,24 +656,30 @@ const state = reactive({
   passwordForm: { current: '', newPass: '', confirm: '' },
   savingPassword: false,
   providers: [],
-  mapping: {},
-  mappingRows: [],
-  candidates: { epgNames: [], tvgIds: [], tvgOptions: [] },
-  unmapped: [],
-  unmappedSource: '',
-  hideAdded: true,
-  duplicates: { byName: [], byTvgId: [], summary: {} },
-  suggestions: [],
+  canonicalChannels: [],
+  channelBindings: [],
+  guideBindings: [],
+  outputProfiles: [],
+  selectedOutputProfileSlug: 'default',
+  outputProfileDraft: {
+    name: '',
+    enabled: true,
+  },
+  outputProfileEntries: [],
+  loadingChannelAuthoring: false,
+  loadingOutputProfileEntries: false,
+  savingOutputProfile: false,
+  outputProfileDirty: false,
+  updatingPreferredStreamChannelId: '',
+  updatingGuideBindingChannelId: '',
   epgValidation: null,
-  loadingDuplicates: false,
-  loadingSuggestions: false,
   loadingEPGValidation: false,
   status: '',
   statusOk: true,
   savingProviders: false,
   reloadingChannels: false,
+  reloadingEPG: false,
   savingApp: false,
-  savingMapping: false,
   health: {},
   loadingHealth: false,
   runningHealth: false,
@@ -1014,6 +696,7 @@ const state = reactive({
   // Preview tab state
   previewChannels: [],
   loadingPreviewChannels: false,
+  previewProfileSlug: 'default',
   previewSearch: '',
   previewWatchingChannel: null,
   showVideoModal: false,
@@ -1030,6 +713,18 @@ function setStatus(msg, ok = true) {
   state.statusOk = ok;
 }
 
+function getSelectedOutputProfileRecord() {
+  return state.outputProfiles.find(profile => profile.slug === state.selectedOutputProfileSlug) || null;
+}
+
+function resetSelectedOutputProfileDraft() {
+  const profile = getSelectedOutputProfileRecord();
+  state.outputProfileDraft = {
+    name: profile?.name || '',
+    enabled: profile?.enabled ?? true,
+  };
+}
+
 async function loadProviders() {
   try {
     const r = await apiFetch('/api/config/providers');
@@ -1044,75 +739,94 @@ async function loadProviders() {
       p.epg = p.epg || '';
       if (!p._id) p._id = `prov_${Date.now()}_${i}`;
     });
-    setStatus('Loaded providers config');
+    setStatus('Loaded sources');
   } catch (e) {
-    setStatus('Failed to load providers config: ' + e.message, false);
+    setStatus('Failed to load sources: ' + e.message, false);
     message.error(e.message);
   }
 }
 
-async function loadMapping() {
+async function loadChannelAuthoringData() {
   try {
-    const [mapRes, candRes, unmappedRes] = await Promise.all([
-      apiFetch('/api/config/channel-map'),
-      apiFetch('/api/mapping/candidates'),
-      apiFetch('/api/mapping/unmapped'),
+    state.loadingChannelAuthoring = true;
+    const [channelsRes, bindingsRes, guideBindingsRes, profilesRes] = await Promise.all([
+      apiFetch('/api/canonical/channels'),
+      apiFetch('/api/canonical/bindings'),
+      apiFetch('/api/canonical/guide-bindings'),
+      apiFetch('/api/output-profiles'),
     ]);
-    const map = await mapRes.json();
-    const candidates = await candRes.json();
-    const unmapped = await unmappedRes.json();
-    state.mapping = map || {};
-    state.candidates = candidates || { epgNames: [], tvgIds: [], tvgOptions: [] };
-    state.unmapped = Array.isArray(unmapped?.suggestions) ? unmapped.suggestions : [];
-    // flatten mapping into rows for editing
-    state.mappingRows = Object.entries(state.mapping).map(([name, v]) => ({
-      name,
-      number: v.number || '',
-      tvg_id: v.tvg_id || '',
-    }));
-    setStatus('Loaded mapping');
-    // refresh with filters applied
-    await refreshUnmapped();
+    const [channelsJson, bindingsJson, guideBindingsJson, profilesJson] = await Promise.all([
+      channelsRes.json(),
+      bindingsRes.json(),
+      guideBindingsRes.json(),
+      profilesRes.json(),
+    ]);
+
+    if (!channelsRes.ok) {
+      throw new Error(channelsJson.error || 'Failed to load canonical channels');
+    }
+    if (!bindingsRes.ok) {
+      throw new Error(bindingsJson.error || 'Failed to load channel bindings');
+    }
+    if (!guideBindingsRes.ok) {
+      throw new Error(guideBindingsJson.error || 'Failed to load guide bindings');
+    }
+    if (!profilesRes.ok) {
+      throw new Error(profilesJson.error || 'Failed to load output profiles');
+    }
+
+    state.canonicalChannels = Array.isArray(channelsJson?.channels) ? channelsJson.channels : [];
+    state.channelBindings = Array.isArray(bindingsJson?.bindings) ? bindingsJson.bindings : [];
+    state.guideBindings = Array.isArray(guideBindingsJson?.bindings)
+      ? guideBindingsJson.bindings
+      : [];
+    state.outputProfiles = Array.isArray(profilesJson?.profiles) ? profilesJson.profiles : [];
+
+    const hasSelectedProfile = state.outputProfiles.some(
+      profile => profile.slug === state.selectedOutputProfileSlug
+    );
+    const nextProfileSlug = hasSelectedProfile
+      ? state.selectedOutputProfileSlug
+      : state.outputProfiles[0]?.slug || 'default';
+    state.selectedOutputProfileSlug = nextProfileSlug;
+    if (!state.outputProfiles.some(profile => profile.slug === state.previewProfileSlug)) {
+      state.previewProfileSlug = nextProfileSlug;
+    }
+    resetSelectedOutputProfileDraft();
+
+    await loadOutputProfileEntries(nextProfileSlug);
+    setStatus('Loaded channel workflows');
   } catch (e) {
-    setStatus('Failed to load mapping: ' + e.message, false);
+    setStatus('Failed to load channel workflows: ' + e.message, false);
     message.error(e.message);
+  } finally {
+    state.loadingChannelAuthoring = false;
   }
 }
 
-async function refreshUnmapped() {
+async function loadOutputProfileEntries(slug = state.selectedOutputProfileSlug) {
   try {
-    const url = state.unmappedSource
-      ? `/api/mapping/unmapped?source=${encodeURIComponent(state.unmappedSource)}`
-      : '/api/mapping/unmapped';
-    const r = await apiFetch(url);
-    const j = await r.json();
-    const list = Array.isArray(j?.suggestions) ? j.suggestions : [];
-    const existing = new Set(state.mappingRows.map(r => r.name));
-    const filtered = state.hideAdded ? list.filter(s => !existing.has(s.name)) : list;
-    // sort by tvg_id (numeric dot notation if possible, else string)
-    const isNumericDots = v => typeof v === 'string' && /^\d+(?:\.\d+)*$/.test(v);
-    const cmpTvg = (a, b) => {
-      const av = a?.tvg_id || '';
-      const bv = b?.tvg_id || '';
-      if (isNumericDots(av) && isNumericDots(bv)) {
-        const ap = av.split('.').map(Number);
-        const bp = bv.split('.').map(Number);
-        const len = Math.max(ap.length, bp.length);
-        for (let i = 0; i < len; i++) {
-          const ai = ap[i] ?? 0;
-          const bi = bp[i] ?? 0;
-          if (ai !== bi) return ai - bi;
-        }
-        return 0;
-      }
-      // Empty tvg_id to the end
-      if (!av && bv) return 1;
-      if (!bv && av) return -1;
-      return String(av).localeCompare(String(bv));
-    };
-    state.unmapped = filtered.slice().sort(cmpTvg);
-  } catch (_) {
-    /* ignore refresh errors */
+    state.loadingOutputProfileEntries = true;
+    const response = await apiFetch(`/api/output-profiles/${encodeURIComponent(slug)}/entries`);
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.error || 'Failed to load output profile entries');
+    }
+
+    state.outputProfileEntries = Array.isArray(json?.channels)
+      ? json.channels.map(channel => ({
+          ...channel,
+          canonical: { ...(channel.canonical || {}) },
+          guideNumberOverrideDraft: channel?.guideNumberOverride ?? '',
+        }))
+      : [];
+    state.outputProfileDirty = false;
+    resetSelectedOutputProfileDraft();
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.loadingOutputProfileEntries = false;
   }
 }
 
@@ -1148,9 +862,9 @@ async function saveProviders() {
       body: JSON.stringify(body),
     });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Save providers failed');
-    setStatus('Providers saved. Reloading...');
-    message.success('Providers saved');
+    if (!r.ok) throw new Error(j.error || 'Save sources failed');
+    setStatus('Sources saved. Reloading...');
+    message.success('Sources saved');
     // Reload channels and EPG concurrently after save
     await Promise.all([reloadChannels(), reloadEPG()]);
   } catch (e) {
@@ -1169,9 +883,11 @@ async function reloadChannels() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Reload failed');
     setStatus(`Reloaded ${j.channels} channels.`);
-    // Refresh mapping data after channels reload
-    await loadMapping();
-    message.success('Mapping updated with new channels');
+    await loadChannelAuthoringData();
+    if (state.previewChannels.length) {
+      await loadPreviewChannels();
+    }
+    message.success('Channel workflows refreshed');
   } catch (e) {
     setStatus(e.message, false);
   } finally {
@@ -1181,12 +897,16 @@ async function reloadChannels() {
 
 async function reloadEPG() {
   try {
+    state.reloadingEPG = true;
     const r = await apiFetch('/api/reload/epg', { method: 'POST' });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Reload EPG failed');
     setStatus('EPG reloaded.');
+    message.success('EPG reloaded');
   } catch (e) {
     setStatus(e.message, false);
+  } finally {
+    state.reloadingEPG = false;
   }
 }
 
@@ -1211,52 +931,6 @@ async function saveApp() {
   }
 }
 
-async function saveMapping() {
-  try {
-    state.savingMapping = true;
-    // build object back from rows
-    const obj = {};
-    for (const row of state.mappingRows) {
-      if (!row.name) continue;
-      // Start from the full existing entry to preserve fields not editable in the UI
-      // (e.g. name override, logo, url, group set directly in channel-map.yaml).
-      const existing = state.mapping[row.name] || {};
-      const merged = { ...existing };
-      // Apply the editable fields; remove them when blank so Joi rejects empty strings.
-      if (row.number) {
-        merged.number = String(row.number);
-      } else {
-        delete merged.number;
-      }
-      if (row.tvg_id) {
-        merged.tvg_id = String(row.tvg_id);
-      } else {
-        delete merged.tvg_id;
-      }
-      // Strip any remaining empty-string values defensively.
-      for (const k of Object.keys(merged)) {
-        if (merged[k] === '') delete merged[k];
-      }
-      if (Object.keys(merged).length === 0) continue;
-      obj[row.name] = merged;
-    }
-    const r = await apiFetch('/api/config/channel-map', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(obj),
-    });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Save mapping failed');
-    setStatus('Mapping saved. Reload channels to apply.');
-    message.success('Mapping saved');
-  } catch (e) {
-    setStatus(e.message, false);
-    message.error(e.message);
-  } finally {
-    state.savingMapping = false;
-  }
-}
-
 function addProvider() {
   state.providers.push({
     _id: `prov_${Date.now()}_${Math.random()}`,
@@ -1268,26 +942,6 @@ function addProvider() {
 }
 function removeProvider(i) {
   state.providers.splice(i, 1);
-}
-
-function addMappingRow() {
-  state.mappingRows.push({ name: '', number: '', tvg_id: '' });
-}
-function removeMappingRow(i) {
-  state.mappingRows.splice(i, 1);
-}
-
-function quickAddMapping(s) {
-  if (!s) return;
-  // Avoid duplicates by name
-  if (!state.mappingRows.some(r => r.name === s.name)) {
-    state.mappingRows.push({ name: s.name || '', tvg_id: s.tvg_id || '', number: '' });
-  }
-  // remove from unmapped when added
-  const idx = state.unmapped.findIndex(
-    x => x && x.name === s.name && (x.tvg_id || '') === (s.tvg_id || '')
-  );
-  if (idx >= 0) state.unmapped.splice(idx, 1);
 }
 
 async function loadHealth() {
@@ -1412,33 +1066,351 @@ async function runTask(taskName) {
   }
 }
 
-async function loadDuplicates() {
+function updateOutputProfileEntry(channelId, patch) {
+  const entry = state.outputProfileEntries.find(item => item.canonical?.id === channelId);
+  if (!entry) return;
+
+  Object.assign(entry, patch);
+  state.outputProfileDirty = true;
+}
+
+function parseGuideBindingValue(value) {
+  if (typeof value !== 'string' || !value) {
+    return null;
+  }
+
   try {
-    state.loadingDuplicates = true;
-    const r = await apiFetch('/api/mapping/duplicates');
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to load duplicates');
-    state.duplicates = j;
-  } catch (e) {
-    setStatus(e.message, false);
-    message.error(e.message);
-  } finally {
-    state.loadingDuplicates = false;
+    const parsed = JSON.parse(value);
+    if (!parsed?.sourceId || !parsed?.epgChannelId) {
+      return null;
+    }
+
+    return {
+      sourceId: String(parsed.sourceId),
+      epgChannelId: String(parsed.epgChannelId),
+    };
+  } catch (_error) {
+    return null;
   }
 }
 
-async function loadSuggestions() {
+async function changeSelectedOutputProfile(slug) {
+  if (!slug || slug === state.selectedOutputProfileSlug) {
+    return;
+  }
+  if (profileDirty.value) {
+    message.warning('Save output changes before switching profiles.');
+    return;
+  }
+
+  state.selectedOutputProfileSlug = slug;
+  await loadOutputProfileEntries(slug);
+}
+
+async function updatePreferredStream(channelId, sourceChannelId) {
+  if (!sourceChannelId) {
+    return;
+  }
+
   try {
-    state.loadingSuggestions = true;
-    const r = await apiFetch('/api/mapping/suggestions?threshold=0.7&max=3');
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to load suggestions');
-    state.suggestions = j.suggestions || [];
+    state.updatingPreferredStreamChannelId = channelId;
+    const response = await apiFetch(
+      `/api/canonical/channels/${encodeURIComponent(channelId)}/preferred-stream`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceChannelId }),
+      }
+    );
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.error || 'Failed to update preferred stream');
+    }
+
+    state.channelBindings = state.channelBindings.map(binding => ({
+      ...binding,
+      isPreferredStream:
+        binding.canonical?.id === channelId
+          ? binding.id === json.binding.id
+          : binding.isPreferredStream,
+    }));
+    if (state.previewChannels.length) {
+      await loadPreviewChannels();
+    }
+    message.success('Preferred stream saved');
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
   } finally {
-    state.loadingSuggestions = false;
+    state.updatingPreferredStreamChannelId = '';
+  }
+}
+
+async function updateGuideBinding(channelId, value) {
+  const binding = parseGuideBindingValue(value);
+  if (!binding) {
+    return;
+  }
+
+  try {
+    state.updatingGuideBindingChannelId = channelId;
+    const response = await apiFetch(
+      `/api/canonical/channels/${encodeURIComponent(channelId)}/guide-binding`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(binding),
+      }
+    );
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.error || 'Failed to update guide binding');
+    }
+
+    state.guideBindings = state.guideBindings.map(entry => {
+      if (entry.canonical?.id !== channelId) {
+        return entry;
+      }
+
+      if (entry.source?.id === json.binding.source.id) {
+        return {
+          ...entry,
+          epgChannelId: json.binding.epgChannelId,
+          priority: json.binding.priority,
+          selected: true,
+        };
+      }
+
+      return {
+        ...entry,
+        selected: false,
+        priority: entry.priority === 0 ? 1 : entry.priority,
+      };
+    });
+    message.success('Guide source saved');
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.updatingGuideBindingChannelId = '';
+  }
+}
+
+function updateOutputEnabled(channelId, enabled) {
+  updateOutputProfileEntry(channelId, { enabled });
+}
+
+function updateGuideNumberOverrideDraft(channelId, value) {
+  const entry = state.outputProfileEntries.find(item => item.canonical?.id === channelId);
+  if (!entry) return;
+
+  entry.guideNumberOverrideDraft = typeof value === 'string' ? value : '';
+}
+
+function commitGuideNumberOverride(channelId) {
+  const entry = state.outputProfileEntries.find(item => item.canonical?.id === channelId);
+  if (!entry) return;
+
+  const nextValue = typeof entry.guideNumberOverrideDraft === 'string'
+    ? entry.guideNumberOverrideDraft.trim()
+    : '';
+  const normalized = nextValue ? nextValue : null;
+  entry.guideNumberOverrideDraft = nextValue;
+
+  if (entry.guideNumberOverride === normalized) {
+    return;
+  }
+
+  updateOutputProfileEntry(channelId, {
+    guideNumberOverride: normalized,
+  });
+}
+
+function updateSelectedOutputProfileName(value) {
+  state.outputProfileDraft.name = value;
+}
+
+function updateSelectedOutputProfileEnabled(value) {
+  state.outputProfileDraft.enabled = value;
+}
+
+async function createOutputProfile() {
+  if (profileDirty.value) {
+    message.warning('Save output changes before creating another profile.');
+    return;
+  }
+
+  const name = window.prompt('Name for the new output profile', 'New Output');
+  if (!name || !name.trim()) {
+    return;
+  }
+
+  try {
+    state.savingOutputProfile = true;
+    const response = await apiFetch('/api/output-profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.error || 'Failed to create output profile');
+    }
+
+    state.selectedOutputProfileSlug = json.profile.slug;
+    await loadChannelAuthoringData();
+    message.success('Output profile created');
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.savingOutputProfile = false;
+  }
+}
+
+async function duplicateOutputProfile() {
+  if (profileDirty.value) {
+    message.warning('Save output changes before duplicating a profile.');
+    return;
+  }
+
+  const sourceProfile = getSelectedOutputProfileRecord();
+  if (!sourceProfile) {
+    return;
+  }
+
+  const name = window.prompt(
+    'Name for the duplicated output profile',
+    `${sourceProfile.name} Copy`
+  );
+  if (!name || !name.trim()) {
+    return;
+  }
+
+  try {
+    state.savingOutputProfile = true;
+    const response = await apiFetch('/api/output-profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.trim(),
+        copyFromSlug: sourceProfile.slug,
+        enabled: sourceProfile.enabled,
+      }),
+    });
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.error || 'Failed to duplicate output profile');
+    }
+
+    state.selectedOutputProfileSlug = json.profile.slug;
+    await loadChannelAuthoringData();
+    message.success('Output profile duplicated');
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.savingOutputProfile = false;
+  }
+}
+
+function deleteSelectedOutputProfile() {
+  const profile = getSelectedOutputProfileRecord();
+  if (!profile || profile.isDefault) {
+    return;
+  }
+  if (profileDirty.value) {
+    message.warning('Save output changes before deleting a profile.');
+    return;
+  }
+
+  dialog.warning({
+    title: 'Delete output profile?',
+    content: `Delete "${profile.name}" and all of its channel overrides?`,
+    positiveText: 'Delete',
+    negativeText: 'Cancel',
+    onPositiveClick: async () => {
+      try {
+        state.savingOutputProfile = true;
+        const response = await apiFetch(`/api/output-profiles/${encodeURIComponent(profile.slug)}`, {
+          method: 'DELETE',
+        });
+        const json = await response.json();
+        if (!response.ok) {
+          throw new Error(json.error || 'Failed to delete output profile');
+        }
+
+        state.selectedOutputProfileSlug = 'default';
+        await loadChannelAuthoringData();
+        message.success('Output profile deleted');
+      } catch (e) {
+        setStatus(e.message, false);
+        message.error(e.message);
+      } finally {
+        state.savingOutputProfile = false;
+      }
+    },
+  });
+}
+
+async function saveOutputProfileChanges() {
+  try {
+    state.savingOutputProfile = true;
+    const selectedProfile = getSelectedOutputProfileRecord();
+    if (!selectedProfile) {
+      throw new Error('No output profile selected');
+    }
+
+    if (profileMetaDirty.value) {
+      const profileResponse = await apiFetch(
+        `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: state.outputProfileDraft.name.trim(),
+            enabled: state.outputProfileDraft.enabled,
+          }),
+        }
+      );
+      const profileJson = await profileResponse.json();
+      if (!profileResponse.ok) {
+        throw new Error(profileJson.error || 'Failed to save output profile details');
+      }
+    }
+
+    if (state.outputProfileDirty) {
+      const response = await apiFetch(
+        `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}/channels`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channels: channelWorkflowRows.value.map(row => ({
+              canonicalId: row.id,
+              position: row.position,
+              enabled: row.outputEnabled,
+              guideNumberOverride: row.committedGuideNumberOverride,
+            })),
+          }),
+        }
+      );
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error || 'Failed to save output profile channels');
+      }
+    }
+
+    await loadChannelAuthoringData();
+    if (state.previewChannels.length) {
+      await loadPreviewChannels();
+    }
+    message.success('Output profile saved');
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.savingOutputProfile = false;
   }
 }
 
@@ -1454,18 +1426,6 @@ async function loadEPGValidation() {
     message.error(e.message);
   } finally {
     state.loadingEPGValidation = false;
-  }
-}
-
-function applySuggestion(channel, suggestion) {
-  // Add mapping based on suggestion
-  if (!state.mappingRows.some(r => r.name === channel.name)) {
-    state.mappingRows.push({
-      name: channel.name,
-      tvg_id: suggestion.tvg_id || '',
-      number: '',
-    });
-    message.success(`Added mapping for ${channel.name}`);
   }
 }
 
@@ -1619,7 +1579,7 @@ async function restoreBackup(name) {
     };
     dialog.warning({
       title: 'Restore Backup',
-      content: `Restore config from "${formatBackupTimestamp(name) || name}"? This will overwrite your current configuration files.`,
+      content: `Restore config from "${formatBackupTimestamp(name) || name}"? This will overwrite your current configuration and apply it immediately.`,
       positiveText: 'Restore',
       negativeText: 'Cancel',
       maskClosable: false,
@@ -1641,6 +1601,10 @@ async function restoreBackup(name) {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Failed to restore backup');
     message.success(`Restored backup: ${name}`);
+    await Promise.all([loadProviders(), loadApp(), loadChannelAuthoringData(), loadBackups()]);
+    if (state.previewChannels.length) {
+      await loadPreviewChannels();
+    }
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
@@ -1728,14 +1692,27 @@ async function deleteBackup(name) {
 async function loadPreviewChannels() {
   try {
     state.loadingPreviewChannels = true;
-    const r = await apiFetch('/channels?mapped_only=true');
-    const channels = await r.json();
-    state.previewChannels = Array.isArray(channels) ? channels : [];
+    const slug = state.previewProfileSlug || state.selectedOutputProfileSlug || 'default';
+    const r = await apiFetch(`/api/output-profiles/${encodeURIComponent(slug)}/channels`);
+    const j = await r.json();
+    if (!r.ok) {
+      throw new Error(j.error || 'Failed to load preview channels');
+    }
+    state.previewChannels = Array.isArray(j?.channels) ? j.channels : [];
   } catch (e) {
     message.error('Failed to load channels: ' + e.message);
   } finally {
     state.loadingPreviewChannels = false;
   }
+}
+
+async function changePreviewProfile(slug) {
+  if (!slug || slug === state.previewProfileSlug) {
+    return;
+  }
+
+  state.previewProfileSlug = slug;
+  await loadPreviewChannels();
 }
 
 async function loadGuide(tvgId) {
@@ -2288,7 +2265,7 @@ watch(
 checkAuthStatus();
 loadProviders();
 loadApp();
-loadMapping();
+loadChannelAuthoringData();
 loadHealth();
 loadUsage();
 loadTasks();
@@ -2297,25 +2274,6 @@ loadBackups();
 setInterval(() => {
   loadUsage();
 }, 5000);
-// keep unmapped list in sync when filters or rows change
-watch(
-  () => state.unmappedSource,
-  () => {
-    refreshUnmapped();
-  }
-);
-watch(
-  () => state.hideAdded,
-  () => {
-    refreshUnmapped();
-  }
-);
-watch(
-  () => state.mappingRows.map(r => r.name),
-  () => {
-    if (state.hideAdded) refreshUnmapped();
-  }
-);
 
 // Expose reactive fields directly in template
 const {
@@ -2330,23 +2288,21 @@ const {
   passwordForm,
   savingPassword,
   providers,
-  mappingRows,
-  unmapped,
-  unmappedSource,
-  hideAdded,
-  duplicates,
-  suggestions,
+  outputProfiles,
+  selectedOutputProfileSlug,
   epgValidation,
-  loadingDuplicates,
-  loadingSuggestions,
   loadingEPGValidation,
   health,
   loadingHealth,
   runningHealth,
   savingProviders,
   reloadingChannels,
+  reloadingEPG,
   savingApp,
-  savingMapping,
+  loadingChannelAuthoring,
+  savingOutputProfile,
+  updatingPreferredStreamChannelId,
+  updatingGuideBindingChannelId,
   activeUsage,
   loadingUsage,
   tasks,
@@ -2356,12 +2312,314 @@ const {
   creatingBackup,
   previewChannels,
   loadingPreviewChannels,
+  previewProfileSlug,
   previewSearch,
   previewWatchingChannel,
   showVideoModal,
   previewGuide,
   loadingGuide,
 } = toRefs(state);
+
+const channelWorkflowsLoading = computed(
+  () => loadingChannelAuthoring.value || state.loadingOutputProfileEntries
+);
+
+const selectedOutputProfile = computed(() => {
+  const profile = getSelectedOutputProfileRecord();
+  if (!profile) {
+    return null;
+  }
+
+  return {
+    ...profile,
+    name: state.outputProfileDraft.name,
+    enabled: state.outputProfileDraft.enabled,
+  };
+});
+
+const profileMetaDirty = computed(() => {
+  const profile = getSelectedOutputProfileRecord();
+  if (!profile) {
+    return false;
+  }
+
+  return (
+    state.outputProfileDraft.name.trim() !== String(profile.name || '').trim() ||
+    state.outputProfileDraft.enabled !== Boolean(profile.enabled)
+  );
+});
+
+const profileDirty = computed(() => state.outputProfileDirty || profileMetaDirty.value);
+
+function getPublicBaseUrl() {
+  const configuredBaseUrl = String(state.app.base_url || '').trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+
+  return '';
+}
+
+const selectedOutputProfileEndpointInfo = computed(() => {
+  const profile = selectedOutputProfile.value;
+  if (!profile) {
+    return null;
+  }
+
+  const baseUrl = getPublicBaseUrl();
+  const profilePath = profile.isDefault ? '' : `/profiles/${encodeURIComponent(profile.slug)}`;
+  const endpoints = [
+    {
+      label: 'M3U',
+      url: baseUrl ? `${baseUrl}${profilePath}/lineup.m3u` : `${profilePath || ''}/lineup.m3u`,
+    },
+    {
+      label: 'JSON',
+      url: baseUrl ? `${baseUrl}${profilePath}/lineup.json` : `${profilePath || ''}/lineup.json`,
+    },
+    {
+      label: 'XMLTV',
+      url: baseUrl ? `${baseUrl}${profilePath}/xmltv.xml` : `${profilePath || ''}/xmltv.xml`,
+    },
+  ];
+
+  if (profile.isDefault) {
+    return {
+      available: true,
+      title: 'Public Endpoints',
+      message: 'These public URLs currently publish this profile.',
+      endpoints,
+    };
+  }
+
+  return {
+    available: profile.enabled,
+    title: 'Public Endpoints',
+    message: profile.enabled
+      ? 'These profile-specific public URLs publish this named profile.'
+      : 'Enable this profile to publish these profile-specific public URLs.',
+    endpoints,
+  };
+});
+
+function parseGuideNumberSortParts(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parts = normalized.split('.');
+  if (!parts.every(part => /^\d+$/.test(part))) {
+    return null;
+  }
+
+  return parts.map(part => Number(part));
+}
+
+function compareGuideNumbers(left, right) {
+  const leftParts = parseGuideNumberSortParts(left);
+  const rightParts = parseGuideNumberSortParts(right);
+
+  if (!leftParts && !rightParts) {
+    return String(left || '').localeCompare(String(right || ''));
+  }
+  if (!leftParts) {
+    return 1;
+  }
+  if (!rightParts) {
+    return -1;
+  }
+
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftPart = leftParts[index];
+    const rightPart = rightParts[index];
+
+    if (leftPart === undefined) {
+      return -1;
+    }
+    if (rightPart === undefined) {
+      return 1;
+    }
+    if (leftPart !== rightPart) {
+      return leftPart - rightPart;
+    }
+  }
+
+  return 0;
+}
+
+function describeEffectiveGuideNumber(outputEntry, channel) {
+  const overrideGuideNumber = String(outputEntry?.guideNumberOverride || '').trim();
+  const canonicalGuideNumber = String(channel?.guideNumber || '').trim();
+
+  if (overrideGuideNumber) {
+    return {
+      label: overrideGuideNumber,
+      helpText: `Using override ${overrideGuideNumber}.`,
+      source: 'override',
+      warning: false,
+    };
+  }
+
+  if (canonicalGuideNumber) {
+    return {
+      label: canonicalGuideNumber,
+      helpText: `Using canonical guide number ${canonicalGuideNumber}.`,
+      source: 'canonical',
+      warning: false,
+    };
+  }
+
+  return {
+    label: 'Missing',
+    helpText: outputEntry?.enabled
+      ? 'No guide number is assigned for this enabled channel.'
+      : 'No guide number is assigned.',
+    source: 'missing',
+    warning: Boolean(outputEntry?.enabled),
+  };
+}
+
+function hasAssignedGuideNumber(outputEntry, channel) {
+  return Boolean(
+    String(outputEntry?.guideNumberOverride || '').trim() || String(channel?.guideNumber || '').trim()
+  );
+}
+
+const channelWorkflowRows = computed(() => {
+  const bindingsByCanonicalId = new Map();
+  const guideBindingsByCanonicalId = new Map();
+  const outputEntriesByCanonicalId = new Map(
+    state.outputProfileEntries.map(entry => [entry.canonical?.id, entry])
+  );
+
+  for (const binding of state.channelBindings) {
+    const key = binding.canonical?.id;
+    if (!key) continue;
+    if (!bindingsByCanonicalId.has(key)) {
+      bindingsByCanonicalId.set(key, []);
+    }
+    bindingsByCanonicalId.get(key).push(binding);
+  }
+
+  for (const binding of state.guideBindings) {
+    const key = binding.canonical?.id;
+    if (!key) continue;
+    if (!guideBindingsByCanonicalId.has(key)) {
+      guideBindingsByCanonicalId.set(key, []);
+    }
+    guideBindingsByCanonicalId.get(key).push(binding);
+  }
+
+  return state.canonicalChannels
+    .map(channel => {
+      const sourceBindings = bindingsByCanonicalId.get(channel.id) || [];
+      const guideBindingOptions = (guideBindingsByCanonicalId.get(channel.id) || []).map(
+        binding => ({
+          label: `${binding.source?.name || 'Unknown source'} - ${binding.epgChannelId || 'no EPG id'}`,
+          value: JSON.stringify({
+            sourceId: binding.source?.id || '',
+            epgChannelId: binding.epgChannelId || '',
+          }),
+        })
+      );
+      const selectedGuideBinding = (guideBindingsByCanonicalId.get(channel.id) || []).find(
+        binding => binding.selected
+      );
+      const outputEntry = outputEntriesByCanonicalId.get(channel.id);
+      const preferredBinding = sourceBindings.find(binding => binding.isPreferredStream);
+      const sortedBindings = sourceBindings.slice().sort((left, right) => {
+        if (left.isPreferredStream !== right.isPreferredStream) {
+          return left.isPreferredStream ? -1 : 1;
+        }
+        if ((left.priority ?? 0) !== (right.priority ?? 0)) {
+          return (left.priority ?? 0) - (right.priority ?? 0);
+        }
+        return (left.sourceChannel?.source || '').localeCompare(right.sourceChannel?.source || '');
+      });
+      const guideDisplay = describeEffectiveGuideNumber(outputEntry, channel);
+      const hasGuideNumber = hasAssignedGuideNumber(outputEntry, channel);
+      const sourceGuideReferences = sortedBindings
+        .map(binding => {
+          const sourceGuideNumber =
+            binding.sourceChannel?.sourceGuideNumber || binding.sourceChannel?.guideNumber || '';
+          if (!sourceGuideNumber) {
+            return '';
+          }
+
+          return `${binding.sourceChannel?.source || 'Unknown'} ${sourceGuideNumber}`;
+        })
+        .filter(Boolean);
+
+      return {
+        id: channel.id,
+        name: channel.name,
+        tvg_id: channel.tvg_id,
+        guideNumber: channel.guideNumber,
+        sourceBindings,
+        sourceBindingsSummary: sortedBindings
+          .map(
+            binding =>
+              `${binding.sourceChannel?.source || 'Unknown'}: ${binding.sourceChannel?.name || 'Unnamed channel'}`
+          )
+          .join(', '),
+        sourceGuideReferencesSummary: sourceGuideReferences.join(', '),
+        preferredSourceChannelId: preferredBinding?.sourceChannel?.id || null,
+        preferredStreamOptions: sortedBindings.map(binding => ({
+          label: `${binding.sourceChannel?.source || 'Unknown'} - ${binding.sourceChannel?.name || 'Unnamed channel'}${
+            binding.sourceChannel?.sourceGuideNumber || binding.sourceChannel?.guideNumber
+              ? ` (${binding.sourceChannel?.sourceGuideNumber || binding.sourceChannel?.guideNumber})`
+              : ''
+          }`,
+          value: binding.sourceChannel?.id || '',
+        })),
+        guideBindingOptions,
+        selectedGuideBindingValue: selectedGuideBinding
+          ? JSON.stringify({
+              sourceId: selectedGuideBinding.source?.id || '',
+              epgChannelId: selectedGuideBinding.epgChannelId || '',
+            })
+          : null,
+        outputEnabled: hasGuideNumber ? (outputEntry?.enabled ?? false) : false,
+        enableToggleDisabled: !hasGuideNumber,
+        position: outputEntry?.position ?? 0,
+        guideNumberOverrideInput:
+          outputEntry?.guideNumberOverrideDraft ?? outputEntry?.guideNumberOverride ?? '',
+        committedGuideNumberOverride: outputEntry?.guideNumberOverride ?? null,
+        effectiveGuideNumber: outputEntry?.guideNumberOverride || channel.guideNumber || '',
+        guideDisplayLabel: guideDisplay.label,
+        guideDisplaySource: guideDisplay.source,
+        guideDisplayWarning: guideDisplay.warning,
+        guideHelpText: guideDisplay.helpText,
+      };
+    })
+    .sort((left, right) => {
+      const guideNumberComparison = compareGuideNumbers(
+        left.effectiveGuideNumber,
+        right.effectiveGuideNumber
+      );
+      if (guideNumberComparison !== 0) {
+        return guideNumberComparison;
+      }
+      if (left.position !== right.position) {
+        return left.position - right.position;
+      }
+      return (left.name || '').localeCompare(right.name || '');
+    });
+});
+
+const channelWorkflowStats = computed(() => ({
+  totalChannels: state.canonicalChannels.length,
+  enabledChannels: channelWorkflowRows.value.filter(row => row.outputEnabled).length,
+  missingGuideChannels: channelWorkflowRows.value.filter(row => row.guideDisplayWarning).length,
+  multiSourceChannels: channelWorkflowRows.value.filter(row => row.sourceBindings.length > 1)
+    .length,
+}));
 
 const healthDetails = computed(() =>
   Array.isArray(health.value.details)
@@ -2519,7 +2777,7 @@ const providerColumns = [
     },
   },
   {
-    title: 'Channel URL',
+    title: 'Source URL',
     key: 'url',
     render(row) {
       return h(NInput, { value: row?.url ?? '', onUpdateValue: v => (row.url = v) });
@@ -2558,71 +2816,6 @@ function rowKeyFn(row) {
   if (row?._id) return row._id;
   return (row?.name || '') + '|' + (row?.url ?? row?.tvg_id ?? '');
 }
-
-const mappingColumns = [
-  {
-    title: 'EPG Channel',
-    key: 'name',
-    render(row) {
-      return h(NSelect, {
-        filterable: true,
-        options: state.candidates.epgNames.map(n => ({ label: n, value: n })),
-        value: row?.name ?? '',
-        onUpdateValue: v => (row.name = v),
-      });
-    },
-  },
-  {
-    title: 'M3U Channel',
-    key: 'tvg_id',
-    render(row) {
-      return h(NSelect, {
-        filterable: true,
-        options: state.candidates.tvgOptions || [],
-        value: row?.tvg_id ?? '',
-        onUpdateValue: v => (row.tvg_id = v),
-        placeholder: 'Select M3U channel...',
-      });
-    },
-  },
-  {
-    title: 'Channel Number',
-    key: 'number',
-    render(row) {
-      return h(NInput, {
-        defaultValue: row?.number ?? '',
-        onBlur: e => {
-          row.number = e.target.value;
-        },
-        placeholder: 'e.g. 101',
-      });
-    },
-  },
-  {
-    title: 'Remove',
-    key: 'remove',
-    render(row) {
-      return h(
-        NButton,
-        {
-          type: 'error',
-          size: 'small',
-          onClick: () => removeMappingRow(state.mappingRows.indexOf(row)),
-        },
-        { default: () => '✕' }
-      );
-    },
-  },
-];
-
-// display mapping rows sorted by channel number
-const sortedMappingRows = computed(() => {
-  const num = v => {
-    const n = parseFloat(String(v ?? '').trim());
-    return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
-  };
-  return state.mappingRows.slice().sort((a, b) => num(a.number) - num(b.number));
-});
 
 /**
  * Format a backup name (e.g. "backup-2024-01-15T14-30-00") into a human-readable

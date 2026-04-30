@@ -1,8 +1,9 @@
 import express from 'express';
 import fs from 'fs/promises';
 import RateLimit from 'express-rate-limit';
-import { loadConfig } from '../libs/config-loader.js';
+import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
 import { getChannels } from '../libs/channels-cache.js';
+import { loadProvidersConfigFromStore } from '../libs/source-service.js';
 
 const router = express.Router();
 const CHANNELS_FILE = './data/channels.json';
@@ -79,9 +80,8 @@ export function getSourceStatus() {
 router.get('/status', statusLimiter, async (req, res) => {
   try {
     // Load configurations
-    const m3uConfig = loadConfig('m3u');
-    const epgConfig = loadConfig('epg');
-    const channelMapConfig = loadConfig('channelMap');
+    const providersConfig = loadProvidersConfigFromStore();
+    const channelMapConfig = loadChannelMapFromStore();
 
     // Get current channels
     const channels = getChannels();
@@ -119,6 +119,14 @@ router.get('/status', statusLimiter, async (req, res) => {
     }
 
     // Build response
+    const configuredProviders = providersConfig.providers || [];
+    const configuredEpgSources = configuredProviders
+      .filter(provider => provider.epg)
+      .map(provider => ({
+        name: provider.name,
+        url: provider.epg,
+      }));
+
     const status = {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
@@ -133,20 +141,17 @@ router.get('/status', statusLimiter, async (req, res) => {
 
       sources: {
         m3u: {
-          count: m3uConfig.urls?.length || 0,
-          configured: (m3uConfig.urls || []).map(s => ({
-            name: s.name,
-            type: s.type || 'standard',
-            url: s.url,
+          count: configuredProviders.length,
+          configured: configuredProviders.map(provider => ({
+            name: provider.name,
+            type: provider.type || 'm3u',
+            url: provider.url,
           })),
           status: sourceStatus.sources,
         },
         epg: {
-          count: epgConfig.urls?.length || 0,
-          configured: (epgConfig.urls || []).map(s => ({
-            name: s.name,
-            url: s.url,
-          })),
+          count: configuredEpgSources.length,
+          configured: configuredEpgSources,
         },
       },
 

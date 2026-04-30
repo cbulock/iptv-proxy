@@ -1,3 +1,11 @@
+function normalizeLoopbackHost(host) {
+  if (!host) {
+    return host;
+  }
+
+  return String(host).replace(/^127\.0\.0\.1(?=[:]|$)/, 'localhost');
+}
+
 /**
  * Get the base URL for the request, honoring reverse proxy headers
  * Supports X-Forwarded-Proto, X-Forwarded-Host, X-Forwarded-Protocol, X-Url-Scheme, X-Forwarded-Ssl
@@ -23,5 +31,5 @@ export default function getBaseUrl(req) {
     return '';
   }
 
-  return `${protocol}://${host}`;
+  return `${protocol}://${normalizeLoopbackHost(host)}`;
 }

@@ -2,11 +2,30 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as z from 'zod';
 import { getChannels } from '../libs/channels-cache.js';
-import { loadConfig } from '../libs/config-loader.js';
-import { getGuideData, refreshEPG } from './epg.js';
+import { getGuideData, hasEPGRefresh, refreshEPG } from './epg.js';
 import { getSourceStatus } from './status.js';
 import { requireAuth } from './auth.js';
 import { parseAll } from '../scripts/parseM3U.js';
+import { listSources } from '../libs/source-service.js';
+import {
+  listCanonicalChannels,
+  listChannelBindings,
+  listGuideBindings,
+  setCanonicalChannelPublished,
+  setCanonicalChannelGuideBinding,
+  setCanonicalChannelPreferredStream,
+} from '../libs/canonical-channel-service.js';
+import {
+  createOutputProfile,
+  deleteOutputProfile,
+  getOutputProfileChannels,
+  listOutputProfileEntries,
+  listOutputProfiles,
+  syncAllOutputProfiles,
+  updateOutputProfileEntries,
+  updateOutputProfile,
+} from '../libs/output-profile-service.js';
+import { invalidateLineupCaches } from './lineup.js';
 
 const SERVER_INFO = { name: 'iptv-proxy', version: '1.0.0' };
 
@@ -117,15 +136,346 @@ function createMcpServer() {
     'List configured IPTV provider sources (M3U playlists and HDHomeRun tuners).',
     {},
     async () => {
-      const providersConfig = loadConfig('providers');
-      const providers = (providersConfig.providers || []).map(p => ({
-        name: p.name,
-        type: p.type || 'm3u',
-        hasEpg: Boolean(p.epg),
+      const providers = listSources().map(source => ({
+        name: source.name,
+        type: source.type || 'm3u',
+        hasEpg: Boolean(source.epg),
       }));
       return {
         content: [{ type: 'text', text: JSON.stringify(providers, null, 2) }],
       };
+    }
+  );
+
+  // ── list_canonical_channels ─────────────────────────────────────────────────
+  server.tool(
+    'list_canonical_channels',
+    'List canonical channels built from mapped source channels.',
+    {},
+    async () => {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(listCanonicalChannels(), null, 2) }],
+      };
+    }
+  );
+
+  // ── list_channel_bindings ───────────────────────────────────────────────────
+  server.tool(
+    'list_channel_bindings',
+    'List bindings between discovered source channels and canonical channels.',
+    {},
+    async () => {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(listChannelBindings(), null, 2) }],
+      };
+    }
+  );
+
+  // ── list_guide_bindings ──────────────────────────────────────────────────────
+  server.tool(
+    'list_guide_bindings',
+    'List guide bindings between canonical channels and source EPG channel IDs.',
+    {},
+    async () => {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(listGuideBindings(), null, 2) }],
+      };
+    }
+  );
+
+  // ── list_output_profiles ────────────────────────────────────────────────────
+  server.tool(
+    'list_output_profiles',
+    'List configured output profiles that define enabled output lineups.',
+    {},
+    async () => {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(listOutputProfiles(), null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    'create_output_profile',
+    'Create a new output profile, optionally copying channel settings from an existing profile.',
+    {
+      name: z.string().min(1).describe('Display name for the new output profile'),
+      copyFromSlug: z
+        .string()
+        .optional()
+        .describe('Existing output profile slug to clone from'),
+      enabled: z.boolean().optional().describe('Whether the new output profile should be enabled'),
+    },
+    async ({ name, copyFromSlug, enabled }) => {
+      const profile = createOutputProfile({ name, copyFromSlug, enabled });
+      if (profile?.error) {
+        return {
+          content: [{ type: 'text', text: `Failed to create output profile: ${profile.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(profile, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    'update_output_profile',
+    'Rename an output profile or change whether it is enabled.',
+    {
+      slug: z.string().min(1).describe('Output profile slug'),
+      name: z.string().min(1).optional().describe('New display name for the output profile'),
+      enabled: z.boolean().optional().describe('Whether the output profile should be enabled'),
+    },
+    async ({ slug, name, enabled }) => {
+      const profile = updateOutputProfile(slug, { name, enabled });
+      if (profile?.error) {
+        return {
+          content: [{ type: 'text', text: `Failed to update output profile: ${profile.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(profile, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    'delete_output_profile',
+    'Delete a non-default output profile.',
+    {
+      slug: z.string().min(1).describe('Output profile slug'),
+    },
+    async ({ slug }) => {
+      const result = deleteOutputProfile(slug);
+      if (result?.error) {
+        return {
+          content: [{ type: 'text', text: `Failed to delete output profile: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // ── get_output_profile_channels ─────────────────────────────────────────────
+  server.tool(
+    'get_output_profile_channels',
+    'List channels currently enabled in an output profile.',
+    {
+      slug: z.string().default('default').describe('Output profile slug (default: "default")'),
+    },
+    async ({ slug = 'default' }) => {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(getOutputProfileChannels(slug), null, 2) }],
+      };
+    }
+  );
+
+  // ── list_output_profile_entries ──────────────────────────────────────────────
+  server.tool(
+    'list_output_profile_entries',
+    'List editable output profile entries, including enabled state and guide number overrides.',
+    {
+      slug: z.string().default('default').describe('Output profile slug (default: "default")'),
+    },
+    async ({ slug = 'default' }) => {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(listOutputProfileEntries(slug), null, 2) }],
+      };
+    }
+  );
+
+  // ── set_canonical_channel_published ─────────────────────────────────────────
+  server.tool(
+    'set_canonical_channel_published',
+    'Legacy canonical visibility toggle; updates the canonical channel record and resyncs all output profiles.',
+    {
+      id: z.string().min(1).describe('Canonical channel ID'),
+      published: z.boolean().describe('Legacy canonical visibility flag'),
+    },
+    async ({ id, published }) => {
+      try {
+        const channel = setCanonicalChannelPublished(id, published);
+        if (!channel) {
+          return {
+            content: [{ type: 'text', text: `Canonical channel not found: ${id}` }],
+            isError: true,
+          };
+        }
+
+        syncAllOutputProfiles();
+        invalidateLineupCaches();
+        if (hasEPGRefresh()) {
+          await refreshEPG();
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(channel, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Failed to update canonical channel: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ── set_canonical_channel_preferred_stream ──────────────────────────────────
+  server.tool(
+    'set_canonical_channel_preferred_stream',
+    'Choose which bound source channel should be the preferred stream for a canonical channel.',
+    {
+      canonical_id: z.string().min(1).describe('Canonical channel ID'),
+      source_channel_id: z.string().min(1).describe('Source channel ID to prefer'),
+    },
+    async ({ canonical_id, source_channel_id }) => {
+      try {
+        const binding = setCanonicalChannelPreferredStream(canonical_id, source_channel_id);
+        if (binding?.error === 'canonical-not-found') {
+          return {
+            content: [{ type: 'text', text: `Canonical channel not found: ${canonical_id}` }],
+            isError: true,
+          };
+        }
+        if (binding?.error === 'binding-not-found') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Binding not found for canonical channel ${canonical_id} and source channel ${source_channel_id}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        invalidateLineupCaches();
+        if (hasEPGRefresh()) {
+          await refreshEPG();
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(binding, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Failed to update preferred stream: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ── set_canonical_channel_guide_binding ─────────────────────────────────────
+  server.tool(
+    'set_canonical_channel_guide_binding',
+    'Choose which source guide binding and EPG channel ID should drive a canonical channel.',
+    {
+      canonical_id: z.string().min(1).describe('Canonical channel ID'),
+      source_id: z.string().min(1).describe('Source ID to use for guide data'),
+      epg_channel_id: z.string().min(1).describe('EPG channel ID from the selected source'),
+    },
+    async ({ canonical_id, source_id, epg_channel_id }) => {
+      try {
+        const binding = setCanonicalChannelGuideBinding(canonical_id, source_id, epg_channel_id);
+        if (binding?.error === 'canonical-not-found') {
+          return {
+            content: [{ type: 'text', text: `Canonical channel not found: ${canonical_id}` }],
+            isError: true,
+          };
+        }
+        if (binding?.error === 'guide-binding-not-found') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Guide binding not found for canonical channel ${canonical_id} and source ${source_id}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        if (hasEPGRefresh()) {
+          await refreshEPG();
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(binding, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Failed to update guide binding: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ── update_output_profile_channels ───────────────────────────────────────────
+  server.tool(
+    'update_output_profile_channels',
+    'Update output profile channel order, enabled state, and guide number overrides.',
+    {
+      slug: z.string().default('default').describe('Output profile slug (default: "default")'),
+      channels: z
+        .array(
+          z.object({
+            canonicalId: z.string().min(1).describe('Canonical channel ID'),
+            position: z.number().int().min(0).describe('Zero-based output position'),
+            enabled: z.boolean().describe('Whether the channel is enabled'),
+            guideNumberOverride: z
+              .union([z.string(), z.null()])
+              .optional()
+              .describe('Optional guide number override'),
+          })
+        )
+        .describe('Updated output profile entry configuration'),
+    },
+    async ({ slug = 'default', channels }) => {
+      try {
+        const updatedChannels = updateOutputProfileEntries(slug, channels);
+        if (updatedChannels?.error === 'profile-not-found') {
+          return {
+            content: [{ type: 'text', text: `Output profile not found: ${slug}` }],
+            isError: true,
+          };
+        }
+        if (updatedChannels?.error === 'entry-not-found') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Output profile entry not found for canonical channel ${updatedChannels.canonicalId}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        invalidateLineupCaches();
+        if (hasEPGRefresh()) {
+          await refreshEPG();
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(updatedChannels, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Failed to update output profile channels: ${err.message}` }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -197,7 +547,7 @@ function createMcpServer() {
  *
  * Endpoint: POST /mcp
  * Uses the MCP Streamable HTTP transport in stateless mode.
- * Auth is enforced via requireAuth (respects whether auth is enabled in app.yaml).
+ * Auth is enforced via requireAuth (respects whether auth is enabled in the SQLite-backed app config).
  *
  * @param {import('express').Application} app
  */

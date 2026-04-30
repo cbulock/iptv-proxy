@@ -4,28 +4,43 @@ import express from 'express';
 import fs from 'fs/promises';
 import axios from 'axios';
 import path from 'path';
+import os from 'os';
 import nock from 'nock';
-import { getDataPath } from '../../libs/paths.js';
-import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
-import { setupLineupRoutes } from '../../server/lineup.js';
-import { errorHandler } from '../../server/error-handler.js';
 
 describe('Lineup Route Integration', () => {
-  const channelsFile = getDataPath('channels.json');
-  let originalChannels = null;
-  let hadOriginalChannelsFile = false;
+  let configDir = '';
+  let dataDir = '';
+  let channelsFile = '';
   let server = null;
   let baseUrl = '';
+  let initChannelsCache;
+  let cleanupCache;
+  let setupLineupRoutes;
+  let errorHandler;
+  let databaseModule;
 
   before(async () => {
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
+    configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-lineup-config-'));
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-lineup-data-'));
+    process.env.CONFIG_PATH = configDir;
+    process.env.DATA_PATH = dataDir;
 
-    try {
-      originalChannels = await fs.readFile(channelsFile, 'utf8');
-      hadOriginalChannelsFile = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-    }
+    await fs.writeFile(path.join(configDir, 'app.yaml'), '{}\n', 'utf8');
+    await fs.writeFile(path.join(configDir, 'channel-map.yaml'), '{}\n', 'utf8');
+
+    const pathsModule = await import('../../libs/paths.js');
+    const channelsCacheModule = await import('../../libs/channels-cache.js');
+    const lineupModule = await import('../../server/lineup.js');
+    const errorHandlerModule = await import('../../server/error-handler.js');
+    databaseModule = await import('../../libs/database.js');
+
+    channelsFile = pathsModule.getDataPath('channels.json');
+    initChannelsCache = channelsCacheModule.initChannelsCache;
+    cleanupCache = channelsCacheModule.cleanupCache;
+    setupLineupRoutes = lineupModule.setupLineupRoutes;
+    errorHandler = errorHandlerModule.errorHandler;
+
+    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
 
     const testChannels = [
       {
@@ -80,9 +95,9 @@ describe('Lineup Route Integration', () => {
     app.use(errorHandler);
 
     await new Promise(resolve => {
-      server = app.listen(0, '127.0.0.1', () => {
+      server = app.listen(0, 'localhost', () => {
         const address = server.address();
-        baseUrl = `http://127.0.0.1:${address.port}`;
+        baseUrl = `http://localhost:${address.port}`;
         resolve();
       });
     });
@@ -93,16 +108,11 @@ describe('Lineup Route Integration', () => {
       await new Promise(resolve => server.close(resolve));
     }
     cleanupCache();
-
-    if (hadOriginalChannelsFile && originalChannels !== null) {
-      await fs.writeFile(channelsFile, originalChannels, 'utf8');
-    } else {
-      try {
-        await fs.unlink(channelsFile);
-      } catch (err) {
-        if (err.code !== 'ENOENT') throw err;
-      }
-    }
+    databaseModule.closeDatabase();
+    delete process.env.CONFIG_PATH;
+    delete process.env.DATA_PATH;
+    await fs.rm(configDir, { recursive: true, force: true });
+    await fs.rm(dataDir, { recursive: true, force: true });
   });
 
   afterEach(() => {

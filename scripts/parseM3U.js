@@ -1,9 +1,17 @@
 import fs from 'fs';
 import axios from 'axios';
 import pLimit from 'p-limit';
-import { loadConfig } from '../libs/config-loader.js';
 import { getDataPath, DATA_DIR } from '../libs/paths.js';
 import { applyMapping as _applyMapping, buildReverseIndex } from '../libs/channel-mapping.js';
+import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
+import { listSources } from '../libs/source-service.js';
+import {
+  finishSourceSyncRun,
+  replaceDiscoveredSourceChannels,
+  startSourceSyncRun,
+} from '../libs/source-sync-service.js';
+import { rebuildCanonicalChannels } from '../libs/canonical-channel-service.js';
+import { syncAllOutputProfiles } from '../libs/output-profile-service.js';
 
 const outputPath = getDataPath('channels.json');
 
@@ -32,8 +40,10 @@ export function proxyURL(channel) {
  */
 async function processSource(source, map) {
   const channels = [];
+  const discoveredChannels = [];
   // Build the reverse index once per source so per-channel lookups are O(1).
   const reverseIndex = buildReverseIndex(map);
+  const syncRunId = source.id ? startSourceSyncRun(source.id, 'channels') : null;
 
   try {
     console.log(`Processing source: ${source.name}...`);
@@ -54,7 +64,7 @@ async function processSource(source, map) {
       const lineup = (await axios.get(`${deviceInfo.BaseURL}/lineup.json`)).data;
 
       for (const chan of lineup) {
-        const channel = {
+        const discoveredChannel = {
           name: chan.GuideName,
           tvg_id: '',
           logo: '',
@@ -63,7 +73,7 @@ async function processSource(source, map) {
             source: source.name,
           }),
           original_url: chan.URL,
-          guideNumber: chan.GuideNumber,
+          sourceGuideNumber: chan.GuideNumber || '',
           source: source.name,
           hdhomerun: {
             deviceID: deviceInfo.DeviceID,
@@ -72,7 +82,8 @@ async function processSource(source, map) {
           },
         };
 
-        channels.push(_applyMapping(channel, map, reverseIndex));
+        discoveredChannels.push(discoveredChannel);
+        channels.push(_applyMapping({ ...discoveredChannel }, map, reverseIndex));
       }
     } else {
       // Standard M3U - stream processing for large files
@@ -125,11 +136,17 @@ async function processSource(source, map) {
             const nameMatch = trimmedLine.match(/,(.*)$/);
             const tvgIdMatch = trimmedLine.match(/tvg-id="(.*?)"/);
             const tvgLogoMatch = trimmedLine.match(/tvg-logo="(.*?)"/);
+            const tvgChnoMatch =
+              trimmedLine.match(/tvg-chno="(.*?)"/) ||
+              trimmedLine.match(/channel-number="(.*?)"/);
+            const groupTitleMatch = trimmedLine.match(/group-title="(.*?)"/);
 
             current = {
               name: nameMatch ? nameMatch[1].trim() : 'Unknown',
               tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
               logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
+              guideNumber: tvgChnoMatch ? tvgChnoMatch[1] : '',
+              group: groupTitleMatch ? groupTitleMatch[1] : '',
               source: source.name,
             };
           } catch (lineErr) {
@@ -151,13 +168,25 @@ async function processSource(source, map) {
           }
 
           if (current.name) {
-            current.url = proxyURL(current);
-            current.original_url = trimmedLine;
-            channels.push(_applyMapping(current, map, reverseIndex));
+            const discoveredChannel = {
+              ...current,
+              url: proxyURL(current),
+              original_url: trimmedLine,
+              external_key: current.tvg_id || `${source.name}:${current.name}:${trimmedLine}`,
+            };
+            discoveredChannels.push(discoveredChannel);
+            channels.push(_applyMapping({ ...discoveredChannel }, map, reverseIndex));
           }
           current = {};
         }
       }
+    }
+
+    if (source.id) {
+      replaceDiscoveredSourceChannels(source.id, discoveredChannels);
+    }
+    if (syncRunId) {
+      finishSourceSyncRun(syncRunId, { status: 'success' });
     }
 
     console.log(`Processed ${channels.length} channels from ${source.name}`);
@@ -206,6 +235,9 @@ async function processSource(source, map) {
     }
 
     if (statusCallback) statusCallback(source.name, 'error', err.message);
+    if (syncRunId) {
+      finishSourceSyncRun(syncRunId, { status: 'failed', error: err.message });
+    }
   }
 
   return channels;
@@ -214,14 +246,13 @@ async function processSource(source, map) {
 export async function parseAll() {
   const startTime = Date.now();
 
-  // Load config dynamically so updates take effect without restart
-  const providersConfig = loadConfig('providers');
-  const sources = (providersConfig.providers || []).map(p => ({
+  const sources = listSources().map(p => ({
+    id: p.id,
     name: p.name,
     url: p.url,
     type: p.type || 'm3u',
   }));
-  const map = loadConfig('channelMap');
+  const map = loadChannelMapFromStore();
 
   // Process sources in parallel with concurrency limit
   const channelArrays = await Promise.all(
@@ -233,6 +264,8 @@ export async function parseAll() {
 
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(outputPath, JSON.stringify(allChannels, null, 2));
+  rebuildCanonicalChannels();
+  syncAllOutputProfiles();
 
   const duration = Date.now() - startTime;
   console.log(`Parsed ${allChannels.length} channels to ${outputPath} in ${duration}ms`);

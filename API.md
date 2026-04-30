@@ -241,7 +241,9 @@ Comprehensive system diagnostics endpoint that provides information about the cu
 }
 ```
 
-## Dynamic Mapping Management Endpoints
+## Legacy Compatibility Mapping Endpoints
+
+Channel mappings are stored in SQLite. These endpoints remain available for compatibility and bulk import/export flows, but the primary channel authoring workflow is now the canonical/output-profile API surface.
 
 ### POST /api/mapping
 
@@ -373,21 +375,31 @@ The following endpoints remain available:
 
 - `GET /lineup.json` - JSON lineup for HDHomeRun compatibility
 - `GET /channels` - List all channels
-- `GET /api/config/m3u` - Get M3U configuration
-- `GET /api/config/epg` - Get EPG configuration
-- `GET /api/config/app` - Get app configuration
-- `GET /api/config/channel-map` - Get channel mappings
-- `PUT /api/config/m3u` - Update M3U configuration
-- `PUT /api/config/epg` - Update EPG configuration
-- `PUT /api/config/app` - Update app configuration
-- `PUT /api/config/channel-map` - Update channel mappings
+- `GET /api/config/m3u` - Get the legacy M3U compatibility view synthesized from sources
+- `GET /api/config/epg` - Get the legacy EPG compatibility view synthesized from sources
+- `GET /api/config/app` - Get app configuration from the SQLite-backed app settings store
+- `GET /api/config/channel-map` - Get the legacy compatibility mapping view from the SQLite-backed mapping store
+- `PUT /api/config/m3u` - Update sources through the legacy M3U compatibility view
+- `PUT /api/config/epg` - Update source EPG URLs through the legacy EPG compatibility view
+- `PUT /api/config/app` - Update app configuration in the SQLite-backed app settings store
+- `PUT /api/config/channel-map` - Replace the legacy compatibility mapping view in the SQLite-backed mapping store
 - `POST /api/reload/channels` - Reload channels from sources
 - `POST /api/reload/epg` - Reload EPG data
 - `GET /api/channel-health` - Get channel health status
 - `POST /api/channel-health/run` - Run channel health check
-- `GET /api/mapping/candidates` - Get mapping candidates
-- `GET /api/mapping/unmapped` - Get unmapped channels
-- `GET /api/mapping/conflicts` - Get mapping conflicts
+- `GET /api/mapping/candidates` - Get legacy mapping candidates
+- `GET /api/mapping/unmapped` - Get legacy unmapped-channel suggestions
+- `GET /api/mapping/conflicts` - Get legacy mapping conflicts
+- `GET /api/canonical/channels` - List canonical channels derived from mapped source channels
+- `GET /api/canonical/bindings` - List source-to-canonical channel bindings
+- `GET /api/canonical/guide-bindings` - List guide bindings between canonical channels and source EPG ids
+- `PATCH /api/canonical/channels/:id` - Update canonical channel publish state
+- `PATCH /api/canonical/channels/:id/preferred-stream` - Choose the preferred bound source stream for a canonical channel
+- `PATCH /api/canonical/channels/:id/guide-binding` - Choose the preferred guide source and EPG channel id for a canonical channel
+- `GET /api/output-profiles` - List output profiles
+- `GET /api/output-profiles/:slug/channels` - List published channels for an output profile
+- `GET /api/output-profiles/:slug/entries` - List editable output profile channel entries, including disabled channels and overrides
+- `PATCH /api/output-profiles/:slug/channels` - Update output profile channel order, enabled state, and guide number overrides
 
 All endpoints now include proper error handling and will return appropriate HTTP status codes with detailed error messages.
 
@@ -654,7 +666,7 @@ All endpoints require authentication (session cookie or equivalent).
 
 ### POST /api/config/backup
 
-Create a timestamped snapshot of all YAML configuration files. Backups are stored under `data/backups/`.
+Create a timestamped snapshot of the active SQLite database plus exported compatibility files. Backups are stored under `data/backups/`. `providers.yaml`, `app.yaml`, and `channel-map.yaml` are always included when present; the SQLite database snapshot is included when available; legacy `m3u.yaml` and `epg.yaml` are included only if they still exist for compatibility.
 
 **Response:**
 
@@ -662,7 +674,7 @@ Create a timestamped snapshot of all YAML configuration files. Backups are store
 {
   "status": "created",
   "name": "backup-2026-01-01T12-00-00",
-  "files": ["m3u.yaml", "epg.yaml", "app.yaml", "channel-map.yaml"]
+  "files": ["iptv-proxy.sqlite", "providers.yaml", "app.yaml", "channel-map.yaml"]
 }
 ```
 
@@ -681,7 +693,7 @@ List all available backups (newest first).
 
 ### POST /api/config/backups/:name/restore
 
-Restore configuration files from the named backup.
+Restore application state from the named backup. When a SQLite snapshot is present, it becomes the restored source of truth and the compatibility exports are regenerated from it.
 
 **URL Parameters:**
 
@@ -693,7 +705,7 @@ Restore configuration files from the named backup.
 {
   "status": "restored",
   "name": "backup-2026-01-01T12-00-00",
-  "files": ["m3u.yaml", "epg.yaml"]
+  "files": ["providers.yaml", "app.yaml"]
 }
 ```
 

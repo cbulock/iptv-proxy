@@ -1,10 +1,7 @@
 import express from 'express';
-import fs from 'fs';
-import yaml from 'yaml';
 import RateLimit from 'express-rate-limit';
 import { isAuthEnabled, hashPassword, verifyCredentials, requireAuth, invalidateAuthCache } from './auth.js';
-import { loadConfig } from '../libs/config-loader.js';
-import { getConfigPath } from '../libs/paths.js';
+import { loadAppConfigFromStore, replaceAppConfig } from '../libs/app-settings-service.js';
 import { loginPage } from './login-page.js';
 import { ensureCsrfToken } from './csrf.js';
 
@@ -207,7 +204,7 @@ router.post('/api/auth/setup', authLimiter, (req, res) => {
     // Read and merge with existing app config to preserve other settings
     let appConfig = {};
     try {
-      appConfig = loadConfig('app') || {};
+      appConfig = loadAppConfigFromStore();
     } catch (_) {
       // Config file may not exist yet; start with empty object
     }
@@ -217,7 +214,7 @@ router.post('/api/auth/setup', authLimiter, (req, res) => {
       password: hashedPassword,
     };
 
-    fs.writeFileSync(getConfigPath('app.yaml'), yaml.stringify(appConfig), 'utf8');
+    replaceAppConfig(appConfig);
     invalidateAuthCache();
     res.json({ status: 'configured' });
   } catch (e) {
@@ -261,7 +258,7 @@ router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
   }
 
   try {
-    const appConfig = loadConfig('app') || {};
+    const appConfig = loadAppConfigFromStore();
     const authSection = appConfig.admin_auth || {};
 
     // Verify current password before allowing the change
@@ -274,7 +271,7 @@ router.put('/api/auth/password', authLimiter, requireAuth, (req, res) => {
       password: hashPassword(newPassword),
     };
 
-    fs.writeFileSync(getConfigPath('app.yaml'), yaml.stringify(appConfig), 'utf8');
+    replaceAppConfig(appConfig);
     invalidateAuthCache();
     res.json({ status: 'updated' });
   } catch (e) {

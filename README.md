@@ -6,7 +6,7 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 
 - 🧩 Merge multiple M3U sources into a single playlist
 - 🗓️ Merge multiple EPG sources (including local files) into a unified `xmltv.xml`
-- 📺 Channel mapping to control display names, guide numbers, logos, and groups
+- 📺 Canonical channel workflows to publish channels, choose preferred streams, and control guide/output settings
 - 🧠 Fallback guide info via guide number when `tvg_id` is missing
 - 🔁 HTTP server that hosts `/lineup.m3u` and `/xmltv.xml`
 - 🛡️ Robust error handling for malformed sources and network failures
@@ -19,7 +19,7 @@ This project provides a simple IPTV proxy that aggregates multiple sources (M3U 
 - 🔧 **NEW:** Dynamic channel management API (reorder, rename, group)
 - ⚡ **NEW:** Advanced caching system with configurable TTL for EPG and M3U data
 - 👁️ **NEW:** Live preview API to test configuration changes before saving
-- 💾 **NEW:** Config backup & restore API to snapshot and recover configuration files
+- 💾 **NEW:** Config backup & restore API to snapshot and recover app state plus compatibility exports
 - 📜 **NEW:** Stream usage history tracking with session duration
 - 🔔 **NEW:** Webhook notifications on channel/EPG refresh events
 - 🚦 **NEW:** Rate limiting on public playlist and guide endpoints
@@ -47,7 +47,14 @@ npm start
 By default, the server runs on `http://localhost:34400` and serves:
 
 - `http://localhost:34400/lineup.m3u`
+- `http://localhost:34400/lineup.json`
 - `http://localhost:34400/xmltv.xml`
+
+These public endpoints serve the **Default Output** profile. Named profiles can also be published with profile-specific paths such as:
+
+1. `http://localhost:34400/profiles/bedroom-tv/lineup.m3u`
+2. `http://localhost:34400/profiles/bedroom-tv/lineup.json`
+3. `http://localhost:34400/profiles/bedroom-tv/xmltv.xml`
 
 To use a custom port, set the `PORT` environment variable:
 
@@ -59,11 +66,11 @@ PORT=8080 npm start
 
 ## Configuration
 
-All configuration is done in `providers.yaml`, `channel-map.yaml`, and `app.yaml`.
+Runtime configuration lives in SQLite, with compatibility import/export through `providers.yaml`, `channel-map.yaml`, and `app.yaml`. The admin UI is the primary authoring surface: use **Sources** for upstream feeds and **Channels** for output-profile enabled state, preferred streams, guide bindings, and guide-number authoring.
 
 ### `app.yaml`
 
-Configure application-level settings including authentication, base URL, and caching.
+This file remains the compatibility import/export format for application settings. The live app settings store is SQLite, and the server keeps `app.yaml` updated with the same shape for portability and backup workflows.
 
 ```yaml
 # Admin Authentication (optional)
@@ -166,7 +173,7 @@ providers:
 
 ### `channel-map.yaml`
 
-Use this file to normalize channel metadata. You can define mapping by either channel `name` or `tvg_id`.
+This file remains the compatibility import/export format for channel mappings. The primary editing workflow now lives in the admin UI's **Channels** tab and canonical/output-profile APIs; `channel-map.yaml` is mainly for portability, bootstrapping, and bulk compatibility edits.
 
 ```yaml
 'The Simpsons':
@@ -203,7 +210,7 @@ Use this file to normalize channel metadata. You can define mapping by either ch
 
 ## Running in Docker
 
-You can build and run IPTV-Proxy in a container. The folder `/config` contains your YAML configs and `/data` contains generated files (like `channels.json`), so you must mount both directories from your host.
+You can build and run IPTV-Proxy in a container. The folder `/config` contains your YAML compatibility files and `/data` contains the SQLite app store plus generated artifacts, so you must mount both directories from your host.
 
 ### Build the image
 
@@ -516,7 +523,7 @@ Returns the merged XMLTV with your temporary configuration applied.
 
 ### Config Backup & Restore
 
-Create timestamped snapshots of all YAML configuration files and restore them if needed. All endpoints require authentication.
+Create timestamped snapshots of the SQLite app state and exported compatibility files, then restore them if needed. All endpoints require authentication.
 
 **Create a backup:**
 
@@ -550,7 +557,7 @@ curl -X DELETE http://localhost:34400/api/config/backups/backup-2026-01-01T12-00
 # Response: { "status": "deleted", "name": "..." }
 ```
 
-Backups are stored under `data/backups/` and protected against path traversal attacks.
+Backups are stored under `data/backups/`, include the SQLite database snapshot plus compatibility exports, and are protected against path traversal attacks.
 
 ---
 
@@ -675,7 +682,7 @@ For more detailed configuration examples covering edge cases, see the `config/ex
    - M3U channels need `tvg-id` attribute
    - XMLTV must have `<channel id="...">` matching the tvg-id
 2. Check EPG sources are accessible and contain data
-3. Use channel-map.yaml to normalize tvg_id across sources
+3. Use the admin **Channels** tab to choose the output guide source and effective guide number, or update `channel-map.yaml` when you need compatibility import/export
 4. Force EPG refresh: `POST http://localhost:34400/api/reload/epg`
 5. Inspect the merged XMLTV: `curl http://localhost:34400/xmltv.xml | head -100`
 
@@ -765,6 +772,10 @@ For more detailed configuration examples covering edge cases, see the `config/ex
    ```bash
    npm run dev
    ```
+   This starts both the API server and the Vite admin app. When the backend is running in this
+   mode, `/admin` redirects to the admin dev server instead of serving the built bundle. Set
+   `ADMIN_DEV_PORT` if you need a port other than `5173`, or `ADMIN_DEV_HOST` if you need a host
+   other than `localhost`.
 3. For Docker, ensure you're using an image with the admin UI built
 4. Check that `public/admin/index.html` exists
 
@@ -816,8 +827,12 @@ The server provides several API endpoints for configuration and management. See 
 
 **Key Endpoints:**
 
-- `GET /lineup.m3u` - M3U playlist
-- `GET /xmltv.xml` - EPG data
+- `GET /lineup.m3u` - M3U playlist for the default output profile
+- `GET /lineup.json` - JSON lineup for the default output profile
+- `GET /xmltv.xml` - EPG data for the default output profile
+- `GET /profiles/:slug/lineup.m3u` - M3U playlist for a named enabled output profile
+- `GET /profiles/:slug/lineup.json` - JSON lineup for a named enabled output profile
+- `GET /profiles/:slug/xmltv.xml` - EPG data for a named enabled output profile
 - `GET /status` - System diagnostics
 - `GET /health` - Health check
 - `POST /api/reload/channels` - Reload M3U sources

@@ -292,5 +292,18 @@ describe('getBaseUrl', () => {
       const baseUrl = getBaseUrl(req);
       expect(baseUrl).to.equal('http://localhost:3000');
     });
+
+    it('should normalize 127.0.0.1 to localhost', () => {
+      const req = {
+        protocol: 'http',
+        get: header => {
+          if (header === 'host') return '127.0.0.1:3000';
+          return undefined;
+        },
+      };
+
+      const baseUrl = getBaseUrl(req);
+      expect(baseUrl).to.equal('http://localhost:3000');
+    });
   });
 });

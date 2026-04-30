@@ -3,7 +3,7 @@ import express from 'express';
 import RateLimit from 'express-rate-limit';
 import { getChannels } from '../libs/channels-cache.js';
 import { getDataPath } from '../libs/paths.js';
-import { loadConfig } from '../libs/config-loader.js';
+import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
 
 const router = express.Router();
 
@@ -18,7 +18,7 @@ function ensureChannelMapCache() {
     return;
   }
 
-  const channelMap = loadConfig('channelMap') || {};
+  const channelMap = loadChannelMapFromStore();
   channelMapCache = channelMap;
   channelMapKeySet = new Set(Object.keys(channelMap));
 

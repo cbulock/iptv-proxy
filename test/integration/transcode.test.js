@@ -16,7 +16,6 @@ import { errorHandler } from '../../server/error-handler.js';
  * with the stdout data. Returns the path to the script.
  */
 async function makeFFmpegStub(tmpDir, { exitCode = 0, stdoutData = null, argsFile = null } = {}) {
-  const bin = path.join(tmpDir, 'ffmpeg');
   let script = '#!/usr/bin/env node\n';
   if (argsFile !== null) {
     // The stub runs in a temp dir with no package.json, so Node.js treats it as
@@ -28,8 +27,23 @@ async function makeFFmpegStub(tmpDir, { exitCode = 0, stdoutData = null, argsFil
     script += `process.stdout.write(${JSON.stringify(stdoutData)});\n`;
   }
   script += `process.exit(${exitCode});\n`;
+
+  if (process.platform === 'win32') {
+    const scriptPath = path.join(tmpDir, 'ffmpeg-stub.cjs');
+    const bin = path.join(tmpDir, 'ffmpeg.cmd');
+    await fs.writeFile(scriptPath, script, 'utf8');
+    await fs.writeFile(bin, `@echo off\r\nnode "%~dp0\\ffmpeg-stub.cjs" %*\r\n`, 'utf8');
+    return bin;
+  }
+
+  const bin = path.join(tmpDir, 'ffmpeg');
   await fs.writeFile(bin, script, { mode: 0o755 });
   return bin;
+}
+
+function setProcessPath(value) {
+  process.env.PATH = value;
+  process.env.Path = value;
 }
 
 describe('Transcode Route Integration', () => {
@@ -66,7 +80,7 @@ describe('Transcode Route Integration', () => {
 
     // Create a temporary directory for fake ffmpeg binaries
     tmpBinDir = await fs.mkdtemp(path.join(os.tmpdir(), 'transcode-test-'));
-    originalPath = process.env.PATH || '';
+    originalPath = process.env.Path || process.env.PATH || '';
 
     const app = express();
     setupTranscodeRoutes(app);
@@ -83,7 +97,7 @@ describe('Transcode Route Integration', () => {
 
   after(async () => {
     // Restore PATH
-    process.env.PATH = originalPath;
+    setProcessPath(originalPath);
 
     if (server) {
       await new Promise(resolve => server.close(resolve));
@@ -112,8 +126,18 @@ describe('Transcode Route Integration', () => {
     } catch (_) {
       // not present — that's fine
     }
+    try {
+      await fs.unlink(path.join(tmpBinDir, 'ffmpeg.cmd'));
+    } catch (_) {
+      // not present — that's fine
+    }
+    try {
+      await fs.unlink(path.join(tmpBinDir, 'ffmpeg-stub.cjs'));
+    } catch (_) {
+      // not present — that's fine
+    }
     // Restore PATH to its original value
-    process.env.PATH = originalPath;
+    setProcessPath(originalPath);
   });
 
   it('returns 404 for an unknown channel', async () => {
@@ -126,7 +150,7 @@ describe('Transcode Route Integration', () => {
   it('returns 503 when ffmpeg is not installed (ENOENT)', async () => {
     // Remove tmpBinDir from PATH so that the real ffmpeg (if present) cannot be used
     // and the stub is also absent, guaranteeing an ENOENT spawn error.
-    process.env.PATH = '/nonexistent-path-for-test';
+    setProcessPath('/nonexistent-path-for-test');
 
     const response = await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
       validateStatus: () => true,
@@ -140,7 +164,7 @@ describe('Transcode Route Integration', () => {
   it('returns 502 when ffmpeg exits non-zero before writing any output', async () => {
     // Place a stub that exits immediately with code 1 (no stdout)
     await makeFFmpegStub(tmpBinDir, { exitCode: 1 });
-    process.env.PATH = `${tmpBinDir}:${originalPath}`;
+    setProcessPath(`${tmpBinDir}${path.delimiter}${originalPath}`);
 
     const response = await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
       validateStatus: () => true,
@@ -156,7 +180,7 @@ describe('Transcode Route Integration', () => {
   it('pipes ffmpeg stdout to the response', async () => {
     // Place a stub that writes known bytes to stdout and exits cleanly
     await makeFFmpegStub(tmpBinDir, { exitCode: 0, stdoutData: 'FAKEDATA' });
-    process.env.PATH = `${tmpBinDir}:${originalPath}`;
+    setProcessPath(`${tmpBinDir}${path.delimiter}${originalPath}`);
 
     const response = await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
       responseType: 'arraybuffer',
@@ -171,7 +195,7 @@ describe('Transcode Route Integration', () => {
   it('passes browser-compatible encoding flags to ffmpeg', async () => {
     const argsFile = path.join(tmpBinDir, 'ffmpeg-args.json');
     await makeFFmpegStub(tmpBinDir, { exitCode: 0, stdoutData: 'X', argsFile });
-    process.env.PATH = `${tmpBinDir}:${originalPath}`;
+    setProcessPath(`${tmpBinDir}${path.delimiter}${originalPath}`);
 
     await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
       responseType: 'arraybuffer',

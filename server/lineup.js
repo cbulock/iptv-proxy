@@ -2,10 +2,12 @@ import axios from 'axios';
 import RateLimit from 'express-rate-limit';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
+import { loadAppConfigFromStore } from '../libs/app-settings-service.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import cacheManager from '../libs/cache-manager.js';
-import { loadConfig } from '../libs/config-loader.js';
+import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
+import { getOutputProfile, getOutputProfileChannels } from '../libs/output-profile-service.js';
 
 // Rate limiter for public playlist endpoints
 const lineupLimiter = RateLimit({
@@ -119,18 +121,27 @@ function rewriteHlsPlaylist(body, playlistUrl, req, source, name) {
 }
 
 function resolveGuideNumberForLineup(channel) {
-  // Always prefer an explicitly set guideNumber (from the channel map's "number"
-  // field or from the HDHomeRun tuner's own GuideNumber).
+  // Always prefer an explicitly set guideNumber (for example from the channel
+  // map's "number" field or an output-profile override).
   if (channel?.guideNumber) {
     return channel.guideNumber;
   }
-  // Fallback for HDHomeRun channels whose GuideNumber was absent: use tvg_id
-  // (which applyMapping may have set from the guideNumber or the mapping).
-  // This keeps subchannels like 6.1/23.1 aligned with XMLTV channel ids.
-  if (channel?.hdhomerun && channel?.tvg_id) {
-    return channel.tvg_id;
+  // HDHomeRun tuning numbers like 10.1 are source-local values, not reliable
+  // IPTV guide numbers. Do not synthesize a guide number for them when none
+  // has been explicitly assigned.
+  if (channel?.hdhomerun) {
+    return '';
   }
   return channel?.tvg_id || channel?.name;
+}
+
+function resolveGuideNumberForM3U(channel) {
+  const guideNumber = String(channel?.guideNumber || '').trim();
+  if (/^\d+$/.test(guideNumber)) {
+    return guideNumber;
+  }
+
+  return '';
 }
 
 function isChannelMapped(channel, map, mapKeys) {
@@ -147,6 +158,30 @@ function isChannelMapped(channel, map, mapKeys) {
   }
 
   return false;
+}
+
+function loadPublishedChannels(includeUnmapped) {
+  if (includeUnmapped) {
+    return getChannels();
+  }
+
+  const outputChannels = getOutputProfileChannels();
+  if (outputChannels.length > 0) {
+    return outputChannels;
+  }
+
+  const channelMap = loadChannelMapFromStore();
+  const mapKeys = new Set(Object.keys(channelMap));
+  return getChannels().filter(channel => isChannelMapped(channel, channelMap, mapKeys));
+}
+
+function loadProfileChannelsOrThrow(slug) {
+  const profile = getOutputProfile(slug);
+  if (!profile || !profile.enabled) {
+    throw new AppError('Output profile not found', 404);
+  }
+
+  return getOutputProfileChannels(slug);
 }
 
 function parseBooleanQueryParam(value) {
@@ -188,7 +223,7 @@ function isSameOriginHttpUrl(overrideUrlString, channelUrlString) {
 
 export function setupLineupRoutes(app, config, usageHelpers = {}) {
   // Initialize lineup caches with TTL from config (default: 1 hour)
-  const appConfig = loadConfig('app');
+  const appConfig = loadAppConfigFromStore();
   const m3uTTL = (appConfig.cache?.m3u_ttl ?? 3600) * 1000; // Convert seconds to milliseconds
   m3uCache = cacheManager.createCache('m3u', m3uTTL);
   jsonCache = cacheManager.createCache('lineup-json', m3uTTL);
@@ -200,142 +235,118 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     unregisterUsage = () => undefined,
   } = usageHelpers;
   const loadChannels = () => getChannels();
+  const handleLineupJson = asyncHandler(async (req, res) => {
+    const profileSlug = req.params.slug ? String(req.params.slug).trim() : '';
+    const includeUnmapped = profileSlug
+      ? false
+      : parseBooleanQueryParam(req.query.include_unmapped ?? req.query.includeUnmapped);
+    const cacheKey = `${req.protocol}://${req.get('host')}|path:${req.path}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
 
-  app.get(
-    '/lineup.json',
-    lineupLimiter,
-    asyncHandler(async (req, res) => {
-      const includeUnmapped = parseBooleanQueryParam(
-        req.query.include_unmapped ?? req.query.includeUnmapped
-      );
-      const cacheKey = `${req.protocol}://${req.get('host')}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
+    const cached = jsonCache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
-      // Check cache
-      const cached = jsonCache.get(cacheKey);
-      if (cached) {
-        return res.json(cached);
-      }
+    const channels = profileSlug
+      ? loadProfileChannelsOrThrow(profileSlug)
+      : loadPublishedChannels(includeUnmapped);
 
-      let channels = loadChannels();
+    if (!Array.isArray(channels)) {
+      throw new AppError('Invalid channels data structure', 500);
+    }
 
-      // Validate that we have channels
-      if (!Array.isArray(channels)) {
-        throw new AppError('Invalid channels data structure', 500);
-      }
+    const baseUrl = getBaseUrl(req);
+    const lineup = channels
+      .filter(channel => channel && channel.name)
+      .map(channel => ({
+        GuideNumber: resolveGuideNumberForLineup(channel),
+        GuideName: channel.name,
+        URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.name)}`,
+      }));
 
-      if (!includeUnmapped) {
-        const channelMap = loadConfig('channelMap') || {};
-        const mapKeys = new Set(Object.keys(channelMap));
-        channels = channels.filter(channel => isChannelMapped(channel, channelMap, mapKeys));
-      }
+    jsonCache.set(cacheKey, lineup);
+    res.json(lineup);
+  });
 
-      const baseUrl = getBaseUrl(req);
-      const lineup = channels
-        .filter(channel => channel && channel.name) // Filter out invalid channels
-        .map(channel => ({
-          GuideNumber: resolveGuideNumberForLineup(channel),
-          GuideName: channel.name,
-          URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.name)}`,
-        }));
+  app.get('/lineup.json', lineupLimiter, handleLineupJson);
+  app.get('/profiles/:slug/lineup.json', lineupLimiter, handleLineupJson);
 
-      // Cache the result
-      jsonCache.set(cacheKey, lineup);
+  const handleLineupM3u = asyncHandler(async (req, res) => {
+    const profileSlug = req.params.slug ? String(req.params.slug).trim() : '';
+    const filterSource = req.query.source ? String(req.query.source) : null;
+    const filterGroup = req.query.group ? String(req.query.group) : null;
+    const includeUnmapped = profileSlug
+      ? false
+      : parseBooleanQueryParam(req.query.include_unmapped ?? req.query.includeUnmapped);
+    const cacheKey = `${req.protocol}://${req.get('host')}|path:${req.path}|source:${filterSource || ''}|group:${filterGroup || ''}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
 
-      res.json(lineup);
-    })
-  );
-
-  app.get(
-    '/lineup.m3u',
-    lineupLimiter,
-    asyncHandler(async (req, res) => {
-      // Extract query parameters for filtering
-      const filterSource = req.query.source ? String(req.query.source) : null;
-      const filterGroup = req.query.group ? String(req.query.group) : null;
-      const includeUnmapped = parseBooleanQueryParam(
-        req.query.include_unmapped ?? req.query.includeUnmapped
-      );
-
-      // Create cache key including filters
-      const cacheKey = `${req.protocol}://${req.get('host')}|source:${filterSource || ''}|group:${filterGroup || ''}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
-
-      // Check cache
-      const cached = m3uCache.get(cacheKey);
-      if (cached) {
-        res.set('Content-Type', 'application/x-mpegURL');
-        return res.send(cached);
-      }
-
-      let channels = loadChannels();
-
-      // Validate that we have channels
-      if (!Array.isArray(channels)) {
-        throw new AppError('Invalid channels data structure', 500);
-      }
-
-      // Apply filters (note: source and group both filter by channel.source since group-title=source)
-      if (filterSource) {
-        channels = channels.filter(ch => ch && ch.source === filterSource);
-      } else if (filterGroup) {
-        // group-title in M3U is set to channel.source, so this filters the same way
-        channels = channels.filter(ch => ch && ch.source === filterGroup);
-      }
-
-      // Filter out invalid channels
-      channels = channels.filter(ch => ch && ch.name && ch.source);
-
-      if (!includeUnmapped) {
-        const channelMap = loadConfig('channelMap') || {};
-        const mapKeys = new Set(Object.keys(channelMap));
-        channels = channels.filter(channel => isChannelMapped(channel, channelMap, mapKeys));
-      }
-
-      const tvgIdMap = new Map(); // For deduplication
-      const baseUrl = getBaseUrl(req);
-
-      const epgUrl = `${baseUrl}/xmltv.xml`;
-      let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
-
-      for (const channel of channels) {
-        try {
-          let tvgId = channel.tvg_id || '';
-          const originalTvgId = tvgId;
-
-          // Deduplicate tvg-id
-          if (tvgIdMap.has(tvgId)) {
-            let i = 1;
-            while (tvgIdMap.has(`${originalTvgId}_${i}`)) i++;
-            tvgId = `${originalTvgId}_${i}`;
-          }
-          if (tvgId) tvgIdMap.set(tvgId, true);
-
-          const tvgName = channel.name || '';
-          const tvgLogo = channel.logo
-            ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
-            : '';
-          const tvgChno = channel.guideNumber || '';
-          const groupTitle = channel.source || '';
-          const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
-
-          output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}"`;
-          if (tvgChno) {
-            output += ` tvg-chno="${tvgChno}"`;
-          }
-          output += `,${tvgName}\n`;
-          output += `${streamUrl}\n`;
-        } catch (channelErr) {
-          // Log but continue processing other channels
-          console.warn(`[lineup.m3u] Skipping invalid channel: ${channelErr.message}`);
-        }
-      }
-
-      // Cache the result
-      m3uCache.set(cacheKey, output);
-
+    const cached = m3uCache.get(cacheKey);
+    if (cached) {
       res.set('Content-Type', 'application/x-mpegURL');
-      res.send(output);
-    })
-  );
+      return res.send(cached);
+    }
+
+    let channels = profileSlug
+      ? loadProfileChannelsOrThrow(profileSlug)
+      : loadPublishedChannels(includeUnmapped);
+
+    if (!Array.isArray(channels)) {
+      throw new AppError('Invalid channels data structure', 500);
+    }
+
+    if (filterSource) {
+      channels = channels.filter(ch => ch && ch.source === filterSource);
+    } else if (filterGroup) {
+      channels = channels.filter(ch => ch && ch.source === filterGroup);
+    }
+
+    channels = channels.filter(ch => ch && ch.name && ch.source);
+
+    const tvgIdMap = new Map();
+    const baseUrl = getBaseUrl(req);
+    const epgUrl = profileSlug
+      ? `${baseUrl}/profiles/${encodeURIComponent(profileSlug)}/xmltv.xml`
+      : `${baseUrl}/xmltv.xml`;
+    let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
+
+    for (const channel of channels) {
+      try {
+        let tvgId = channel.tvg_id || '';
+        const originalTvgId = tvgId;
+
+        if (tvgIdMap.has(tvgId)) {
+          let i = 1;
+          while (tvgIdMap.has(`${originalTvgId}_${i}`)) i++;
+          tvgId = `${originalTvgId}_${i}`;
+        }
+        if (tvgId) tvgIdMap.set(tvgId, true);
+
+        const tvgName = channel.name || '';
+        const tvgLogo = channel.logo
+          ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
+          : '';
+        const tvgChno = resolveGuideNumberForM3U(channel);
+        const groupTitle = channel.source || '';
+        const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
+
+        output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}"`;
+        if (tvgChno) {
+          output += ` tvg-chno="${tvgChno}"`;
+        }
+        output += `,${tvgName}\n`;
+        output += `${streamUrl}\n`;
+      } catch (channelErr) {
+        console.warn(`[lineup.m3u] Skipping invalid channel: ${channelErr.message}`);
+      }
+    }
+
+    m3uCache.set(cacheKey, output);
+    res.set('Content-Type', 'application/x-mpegURL');
+    res.send(output);
+  });
+
+  app.get('/lineup.m3u', lineupLimiter, handleLineupM3u);
+  app.get('/profiles/:slug/lineup.m3u', lineupLimiter, handleLineupM3u);
 
   app.all('/stream/:source/:name', async (req, res) => {
     const { source, name } = req.params;

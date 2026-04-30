@@ -23,15 +23,17 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "serve": "node index.js",
+    "serve:dev": "node --watch --watch-preserve-output scripts/serve-dev.js",
     "admin:dev": "npm run dev --prefix admin",
     "admin:build": "npm run build --prefix admin",
-    "dev": "concurrently \"npm:serve\" \"npm:admin:dev\""
+    "dev": "concurrently \"npm:serve:dev\" \"npm:admin:dev\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "archiver": "^7.0.1",
     "axios": "^1.15.0",
     "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.9.0",
     "chalk": "^5.4.1",
     "escape-html": "^1.0.3",
     "express": "^5.2.1",

@@ -1,5 +1,5 @@
-import { loadConfig } from '../libs/config-loader.js';
 import bcrypt from 'bcryptjs';
+import { loadAppConfigFromStore } from '../libs/app-settings-service.js';
 
 // Cache auth config to avoid reading disk on every request.
 // undefined = not yet loaded; null = loaded but auth is disabled.
@@ -11,11 +11,10 @@ let _authConfigCache = undefined;
  */
 function getAuthConfig() {
   if (_authConfigCache !== undefined) return _authConfigCache;
-  // loadConfig never throws — it returns {} on missing/invalid files.
+  // The app settings service returns {} on missing/invalid config.
   // If no valid admin_auth is found, null is cached and auth stays disabled
-  // until invalidateAuthCache() is called (which happens at every API write
-  // path that modifies app.yaml) or the process restarts.
-  const appConfig = loadConfig('app');
+  // until invalidateAuthCache() is called after app-config updates.
+  const appConfig = loadAppConfigFromStore();
   if (appConfig && appConfig.admin_auth) {
     const { username, password } = appConfig.admin_auth;
     if (username && password) {
@@ -28,8 +27,8 @@ function getAuthConfig() {
 }
 
 /**
- * Invalidate the cached auth config so the next request re-reads app.yaml.
- * Call this after writing app.yaml.
+ * Invalidate the cached auth config so the next request re-reads app settings.
+ * Call this after updating app config.
  */
 export function invalidateAuthCache() {
   _authConfigCache = undefined;
@@ -63,7 +62,7 @@ export function verifyCredentials(username, password) {
   // Verify the stored password is a bcrypt hash
   if (!isBcryptHash(authConfig.password)) {
     console.error(
-      'Authentication error: Password in app.yaml must be a bcrypt hash. Use: node scripts/hash-password.js your-password'
+      'Authentication error: Stored admin password must be a bcrypt hash. Use: node scripts/hash-password.js your-password'
     );
     return false;
   }

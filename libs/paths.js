@@ -21,9 +21,13 @@ export function getConfigPath(filename) {
   return join(dir, filename);
 }
 
+export function getDataDir() {
+  return process.env.DATA_PATH || join(PROJECT_ROOT, 'data');
+}
+
 // Helper function to get data file path
 export function getDataPath(filename) {
-  return join(DATA_DIR, filename);
+  return join(getDataDir(), filename);
 }
 
 export default {
@@ -31,5 +35,6 @@ export default {
   CONFIG_DIR,
   DATA_DIR,
   getConfigPath,
+  getDataDir,
   getDataPath,
 };

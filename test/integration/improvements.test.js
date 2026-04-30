@@ -52,6 +52,8 @@ describe('Config Backup API', () => {
   let tmpDir;
   let server;
   let baseUrl;
+  let databaseModule;
+  let appSettingsService;
 
   before(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-backup-test-'));
@@ -59,6 +61,7 @@ describe('Config Backup API', () => {
     // Write some dummy config files
     await fs.writeFile(path.join(tmpDir, 'm3u.yaml'), 'urls: []\n', 'utf8');
     await fs.writeFile(path.join(tmpDir, 'epg.yaml'), 'urls: []\n', 'utf8');
+    await fs.writeFile(path.join(tmpDir, 'app.yaml'), 'base_url: "https://yaml.example.com"\n', 'utf8');
 
     // Point config loader to our temp dir
     process.env.CONFIG_PATH = tmpDir;
@@ -67,6 +70,8 @@ describe('Config Backup API', () => {
     process.env.DATA_PATH = tmpDir;
 
     const backupRouter = (await import('../../server/backup.js')).default;
+    databaseModule = await import('../../libs/database.js');
+    appSettingsService = await import(`../../libs/app-settings-service.js?test=${Date.now()}`);
 
     const app = express();
     app.use(express.json());
@@ -82,6 +87,7 @@ describe('Config Backup API', () => {
 
   after(async () => {
     await stopServer(server);
+    databaseModule.closeDatabase();
     await fs.rm(tmpDir, { recursive: true, force: true });
     delete process.env.CONFIG_PATH;
     delete process.env.DATA_PATH;
@@ -93,6 +99,7 @@ describe('Config Backup API', () => {
     expect(res.data.status).to.equal('created');
     expect(res.data.name).to.match(/^backup-/);
     expect(res.data.files).to.be.an('array').with.length.greaterThan(0);
+    expect(res.data.files).to.include('iptv-proxy.sqlite');
   });
 
   it('GET /api/config/backups lists created backups', async () => {
@@ -120,6 +127,49 @@ describe('Config Backup API', () => {
     // Verify file content was restored
     const content = await fs.readFile(path.join(tmpDir, 'm3u.yaml'), 'utf8');
     expect(content).to.equal('urls: []\n');
+  });
+
+  it('keeps the SQLite database available after creating a backup', async () => {
+    const createRes = await axios.post(`${baseUrl}/api/config/backup`);
+    expect(createRes.status).to.equal(200);
+
+    appSettingsService.replaceAppConfig({ base_url: 'https://still-open.example.com' });
+    expect(appSettingsService.loadAppConfigFromStore()).to.deep.equal({
+      base_url: 'https://still-open.example.com',
+    });
+  });
+
+  it('restores SQLite-backed app state from the database snapshot instead of stale YAML exports', async () => {
+    databaseModule.initDatabase();
+    databaseModule.run('DELETE FROM app_settings');
+    databaseModule.run(
+      'INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)',
+      [
+        'app-config',
+        JSON.stringify({ base_url: 'https://db-backed.example.com' }),
+        new Date().toISOString(),
+      ]
+    );
+    databaseModule.closeDatabase();
+
+    const createRes = await axios.post(`${baseUrl}/api/config/backup`);
+    const { name } = createRes.data;
+
+    await fs.writeFile(path.join(tmpDir, 'app.yaml'), 'base_url: "https://stale-yaml.example.com"\n', 'utf8');
+    appSettingsService.replaceAppConfig({ base_url: 'https://mutated-after-backup.example.com' });
+    databaseModule.closeDatabase();
+
+    const restoreRes = await axios.post(`${baseUrl}/api/config/backups/${name}/restore`);
+    expect(restoreRes.status).to.equal(200);
+    expect(restoreRes.data.files).to.include('iptv-proxy.sqlite');
+    expect(restoreRes.data.files).to.include('app.yaml');
+
+    expect(appSettingsService.loadAppConfigFromStore()).to.deep.equal({
+      base_url: 'https://db-backed.example.com',
+    });
+
+    const content = await fs.readFile(path.join(tmpDir, 'app.yaml'), 'utf8');
+    expect(content).to.include('base_url: https://db-backed.example.com');
   });
 
   it('DELETE /api/config/backups/:name deletes a backup', async () => {

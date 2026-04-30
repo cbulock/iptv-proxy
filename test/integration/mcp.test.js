@@ -121,6 +121,8 @@ describe('MCP Route Integration', () => {
   after(async () => {
     if (server) await new Promise(resolve => server.close(resolve));
     if (cleanupCache) cleanupCache();
+    const { closeDatabase } = await import('../../libs/database.js');
+    closeDatabase();
 
     await fs.rm(tmpDataDir, { recursive: true, force: true });
     await fs.rm(tmpConfigDir, { recursive: true, force: true });
@@ -148,6 +150,19 @@ describe('MCP Route Integration', () => {
       'list_channels',
       'get_guide',
       'list_providers',
+      'list_canonical_channels',
+      'list_channel_bindings',
+      'list_guide_bindings',
+      'list_output_profiles',
+      'create_output_profile',
+      'update_output_profile',
+      'delete_output_profile',
+      'get_output_profile_channels',
+      'list_output_profile_entries',
+      'set_canonical_channel_published',
+      'set_canonical_channel_preferred_stream',
+      'set_canonical_channel_guide_binding',
+      'update_output_profile_channels',
       'get_status',
       'reload_channels',
       'reload_epg',
@@ -216,6 +231,150 @@ describe('MCP Route Integration', () => {
     expect(providers).to.have.lengthOf(2);
     expect(providers[0]).to.have.all.keys('name', 'type', 'hasEpg');
     expect(providers.map(p => p.name)).to.include.members(['TestProvider', 'OtherProvider']);
+  });
+
+  it('list_canonical_channels returns canonical channel rows', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'list_canonical_channels',
+      arguments: {},
+    });
+    expect(msg).to.not.be.null;
+    const channels = JSON.parse(msg.result.content[0].text);
+    expect(channels).to.be.an('array');
+  });
+
+  it('list_channel_bindings returns binding rows', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'list_channel_bindings',
+      arguments: {},
+    });
+    expect(msg).to.not.be.null;
+    const bindings = JSON.parse(msg.result.content[0].text);
+    expect(bindings).to.be.an('array');
+  });
+
+  it('list_guide_bindings returns guide binding rows', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'list_guide_bindings',
+      arguments: {},
+    });
+    expect(msg).to.not.be.null;
+    const bindings = JSON.parse(msg.result.content[0].text);
+    expect(bindings).to.be.an('array');
+  });
+
+  it('list_output_profiles returns output profiles', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'list_output_profiles',
+      arguments: {},
+    });
+    expect(msg).to.not.be.null;
+    const profiles = JSON.parse(msg.result.content[0].text);
+    expect(profiles).to.be.an('array');
+  });
+
+  it('create_output_profile, update_output_profile, and delete_output_profile manage named profiles', async () => {
+    const createResult = await mcpPost(baseUrl, 'tools/call', {
+      name: 'create_output_profile',
+      arguments: { name: 'Bedroom TV', enabled: false },
+    });
+    expect(createResult.msg).to.not.be.null;
+    const createdProfile = JSON.parse(createResult.msg.result.content[0].text);
+    expect(createdProfile).to.include({
+      name: 'Bedroom TV',
+      slug: 'bedroom-tv',
+      enabled: false,
+    });
+
+    const updateResult = await mcpPost(baseUrl, 'tools/call', {
+      name: 'update_output_profile',
+      arguments: { slug: 'bedroom-tv', name: 'Bedroom TV Night', enabled: true },
+    });
+    expect(updateResult.msg).to.not.be.null;
+    const updatedProfile = JSON.parse(updateResult.msg.result.content[0].text);
+    expect(updatedProfile).to.include({
+      name: 'Bedroom TV Night',
+      slug: 'bedroom-tv',
+      enabled: true,
+    });
+
+    const deleteResult = await mcpPost(baseUrl, 'tools/call', {
+      name: 'delete_output_profile',
+      arguments: { slug: 'bedroom-tv' },
+    });
+    expect(deleteResult.msg).to.not.be.null;
+    const deletedProfile = JSON.parse(deleteResult.msg.result.content[0].text);
+    expect(deletedProfile).to.deep.equal({ deleted: true, slug: 'bedroom-tv' });
+  });
+
+  it('get_output_profile_channels returns channels for the default profile', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'get_output_profile_channels',
+      arguments: { slug: 'default' },
+    });
+    expect(msg).to.not.be.null;
+    const channels = JSON.parse(msg.result.content[0].text);
+    expect(channels).to.be.an('array');
+  });
+
+  it('list_output_profile_entries returns output profile entry rows', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'list_output_profile_entries',
+      arguments: { slug: 'default' },
+    });
+    expect(msg).to.not.be.null;
+    const channels = JSON.parse(msg.result.content[0].text);
+    expect(channels).to.be.an('array');
+  });
+
+  it('set_canonical_channel_published returns an error for an unknown channel', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'set_canonical_channel_published',
+      arguments: { id: 'missing-canonical-channel', published: false },
+    });
+    expect(msg).to.not.be.null;
+    expect(msg.result.isError).to.equal(true);
+    expect(msg.result.content[0].text).to.include('Canonical channel not found');
+  });
+
+  it('set_canonical_channel_preferred_stream returns an error for an unknown channel', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'set_canonical_channel_preferred_stream',
+      arguments: {
+        canonical_id: 'missing-canonical-channel',
+        source_channel_id: 'missing-source-channel',
+      },
+    });
+    expect(msg).to.not.be.null;
+    expect(msg.result.isError).to.equal(true);
+    expect(msg.result.content[0].text).to.include('Canonical channel not found');
+  });
+
+  it('set_canonical_channel_guide_binding returns an error for an unknown channel', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'set_canonical_channel_guide_binding',
+      arguments: {
+        canonical_id: 'missing-canonical-channel',
+        source_id: 'missing-source',
+        epg_channel_id: 'missing-epg',
+      },
+    });
+    expect(msg).to.not.be.null;
+    expect(msg.result.isError).to.equal(true);
+    expect(msg.result.content[0].text).to.include('Canonical channel not found');
+  });
+
+  it('update_output_profile_channels returns an error for an unknown profile', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'update_output_profile_channels',
+      arguments: {
+        slug: 'missing-profile',
+        channels: [],
+      },
+    });
+    expect(msg).to.not.be.null;
+    expect(msg.result.isError).to.equal(true);
+    expect(msg.result.content[0].text).to.include('Output profile not found');
   });
 
   // ── get_status ─────────────────────────────────────────────────────────────
