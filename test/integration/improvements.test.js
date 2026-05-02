@@ -351,12 +351,16 @@ describe('Webhook notifications', () => {
     delete process.env.DATA_PATH;
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    closeDatabase();
+    await fs.rm(dataDir, { recursive: true, force: true });
+    await fs.mkdir(dataDir, { recursive: true });
     axiosPostStub = sinon.stub(axios, 'post').resolves({ status: 200 });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     axiosPostStub.restore();
+    closeDatabase();
   });
 
   it('does nothing when no webhooks are configured', async () => {
