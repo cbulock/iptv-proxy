@@ -1,5 +1,8 @@
 # Stage 1: Build production dependencies
-FROM node:20-alpine AS deps
+#
+# Use the Debian-based Node image instead of Alpine to avoid arm64/QEMU crashes
+# during `npm ci` for native modules like better-sqlite3 in the multi-arch CI build.
+FROM node:20-bookworm-slim AS deps
 
 WORKDIR /build
 
@@ -10,7 +13,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Stage 2: Final production image
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
 # Add metadata labels
 LABEL org.opencontainers.image.source="https://github.com/cbulock/iptv-proxy"
@@ -19,7 +22,9 @@ LABEL org.opencontainers.image.licenses="MIT"
 
 # Install ffmpeg for server-side transcoding of MPEG-TS streams
 # (converts MPEG-2/AC-3 from HDHomeRun to H.264/AAC for browser playback)
-RUN apk add --no-cache ffmpeg
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /usr/src/app
