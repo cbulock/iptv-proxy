@@ -155,6 +155,48 @@ function buildAdminDevRedirectUrl(req) {
   return new URL(normalizedPath === '/admin' ? '/admin/' : normalizedPath, adminDevOrigin).toString();
 }
 
+function sendAdminEntryHtml(req, res) {
+  if (useAdminDevServer) {
+    return res.redirect(307, buildAdminDevRedirectUrl(req));
+  }
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  if (isAdminBuilt()) {
+    return res.sendFile(builtAdminIndexPath);
+  }
+
+  // Admin UI not built - show helpful error message
+  return res.status(503).send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Admin UI Not Available</title>
+        <style>
+          body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+          h1 { color: #e74c3c; }
+          code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+          pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        </style>
+      </head>
+      <body>
+        <h1>Admin UI Not Available</h1>
+        <p>The admin interface has not been built. To use the admin UI, you need to build it first.</p>
+        <h2>Build Instructions:</h2>
+        <pre>cd admin
+npm install
+npm run build</pre>
+        <p>Or use the shortcut from the project root:</p>
+        <pre>npm run admin:build</pre>
+        <p>For development with hot reload, run:</p>
+        <pre>npm run dev</pre>
+        <p>This will start both the server and the admin dev server on port ${adminDevPort}.</p>
+      </body>
+    </html>
+  `);
+}
+
 // Rate limiter for admin interface access
 const adminLimiter = RateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -163,7 +205,7 @@ const adminLimiter = RateLimit({
   keyGenerator: req => req.ip || 'unknown',
 });
 
-// Serve all /admin assets with authentication.
+// Serve /admin assets. Auth is enforced for HTML routes, while login assets stay public.
 // Order: built admin files -> shared public files -> hashed entry fallback.
 app.use('/admin', adminLimiter, requireAuthHTML, (req, res, next) => {
   if (useAdminDevServer && (req.path === '/' || req.path === '' || req.path === '/index.html')) {
@@ -211,47 +253,18 @@ app.use('/admin', adminLimiter, requireAuthHTML, (req, res, next) => {
   });
 });
 
-// Serve admin HTML pages with authentication
-app.get(['/admin', '/admin.html'], adminLimiter, requireAuthHTML, (req, res) => {
-  if (useAdminDevServer) {
-    return res.redirect(307, buildAdminDevRedirectUrl(req));
-  }
+// Serve the login page from the same admin bundle so pre-auth and post-auth UI stay aligned.
+app.get('/admin/login', (req, res) => {
+  sendAdminEntryHtml(req, res);
+});
 
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  if (isAdminBuilt()) {
-    res.sendFile(builtAdminIndexPath);
-  } else {
-    // Admin UI not built - show helpful error message
-    res.status(503).send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Admin UI Not Available</title>
-          <style>
-            body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-            h1 { color: #e74c3c; }
-            code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
-            pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
-          </style>
-        </head>
-        <body>
-          <h1>Admin UI Not Available</h1>
-          <p>The admin interface has not been built. To use the admin UI, you need to build it first.</p>
-          <h2>Build Instructions:</h2>
-          <pre>cd admin
-npm install
-npm run build</pre>
-          <p>Or use the shortcut from the project root:</p>
-          <pre>npm run admin:build</pre>
-          <p>For development with hot reload, run:</p>
-          <pre>npm run dev</pre>
-          <p>This will start both the server and the admin dev server on port ${adminDevPort}.</p>
-        </body>
-      </html>
-    `);
-  }
+// Serve admin HTML pages with authentication
+app.get('/admin', requireAuthHTML, (req, res) => {
+  sendAdminEntryHtml(req, res);
+});
+
+app.get('/admin.html', adminLimiter, requireAuthHTML, (req, res) => {
+  sendAdminEntryHtml(req, res);
 });
 
 // Serve other static files (not admin)

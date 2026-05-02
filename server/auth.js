@@ -107,7 +107,7 @@ export function requireAuth(req, res, next) {
 /**
  * Middleware specifically for admin UI pages.
  * Redirects to /admin/login when the user has no valid session.
- * The /login sub-path itself is always allowed through.
+ * The login route and static assets needed to render it are always allowed through.
  */
 export function requireAuthHTML(req, res, next) {
   // If auth is not enabled, allow access
@@ -115,8 +115,8 @@ export function requireAuthHTML(req, res, next) {
     return next();
   }
 
-  // The login page must always be reachable (req.path is relative to mount point)
-  if (req.path === '/login') {
+  // The login page and its static assets must stay reachable before authentication.
+  if (req.path === '/login' || req.path === '/favicon.svg' || req.path.startsWith('/assets/')) {
     return next();
   }
 

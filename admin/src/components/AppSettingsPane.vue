@@ -10,10 +10,6 @@
         </CindorButton>
       </CindorStack>
     </CindorForm>
-    <div class="foot">
-      Used for absolute URL generation behind proxies and external clients.
-    </div>
-
     <div v-if="authConfigured" style="margin-top: 2rem">
       <h3 style="margin-bottom: 0.75rem">Security</h3>
       <CindorForm style="max-width: 520px">

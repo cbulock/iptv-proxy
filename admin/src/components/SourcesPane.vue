@@ -142,10 +142,6 @@
       @row-action="$emit('row-action', $event)"
     />
     <div v-else style="margin-top: 1rem; opacity: 0.7">No sources configured yet.</div>
-    <div class="foot">
-      Configure source playlists and optional guide URLs here, then reload channels to refresh the
-      merged lineup.
-    </div>
   </div>
 </template>
 

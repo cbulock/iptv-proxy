@@ -58,10 +58,6 @@
         <span class="profile-meta-label">Slug</span>
         <code>{{ selectedProfile.slug }}</code>
       </div>
-      <div class="profile-meta-item">
-        <span class="profile-meta-label">Role</span>
-        <span>{{ selectedProfile.isDefault ? 'Default output lineup' : 'Named output variant' }}</span>
-      </div>
     </div>
 
     <div v-if="selectedProfile && profileEndpointInfo" class="endpoint-card">
@@ -199,11 +195,6 @@
           </tr>
         </tbody>
       </table>
-    </div>
-
-    <div class="foot">
-      Choose the preferred stream and guide source, then save profile inclusion and guide-number
-      overrides for the selected profile.
     </div>
   </div>
 </template>

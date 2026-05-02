@@ -33,7 +33,62 @@
       </div>
     </div>
 
-    <CindorLayout class="admin-shell">
+    <CindorLayout v-if="!authStateReady" class="admin-shell">
+      <CindorLayoutHeader class="admin-header">
+        <div class="brand-lockup">
+          <div class="brand-mark">IP</div>
+          <div class="brand-title">IPTV Proxy Admin</div>
+        </div>
+      </CindorLayoutHeader>
+      <CindorLayoutContent class="admin-content login-content">
+        <div class="workspace-frame login-frame">
+          <div class="login-card">
+            <div class="login-title">Loading admin…</div>
+          </div>
+        </div>
+      </CindorLayoutContent>
+    </CindorLayout>
+
+    <CindorLayout v-else-if="showLoginView" class="admin-shell">
+      <CindorLayoutHeader class="admin-header">
+        <div class="brand-lockup">
+          <div class="brand-mark">IP</div>
+          <div class="brand-title">IPTV Proxy Admin</div>
+        </div>
+      </CindorLayoutHeader>
+      <CindorLayoutContent class="admin-content login-content">
+        <div class="workspace-frame login-frame">
+          <div class="login-card">
+            <h1 class="login-title">Sign In</h1>
+            <p class="login-copy">Sign in to manage sources, mappings, backups, and live channel health.</p>
+            <form class="login-form" @submit.prevent="submitLogin">
+              <CindorForm>
+                <CindorFormField label="Username">
+                  <CindorInput
+                    v-model="loginForm.username"
+                    autocomplete="username"
+                    :disabled="loggingIn"
+                  />
+                </CindorFormField>
+                <CindorFormField label="Password">
+                  <CindorPasswordInput
+                    v-model="loginForm.password"
+                    autocomplete="current-password"
+                    :disabled="loggingIn"
+                  />
+                </CindorFormField>
+              </CindorForm>
+              <div v-if="loginError" class="setup-error">{{ loginError }}</div>
+              <CindorButton type="submit" :disabled="loggingIn">
+                {{ loggingIn ? 'Signing In...' : 'Sign In' }}
+              </CindorButton>
+            </form>
+          </div>
+        </div>
+      </CindorLayoutContent>
+    </CindorLayout>
+
+    <CindorLayout v-else class="admin-shell">
       <CindorLayoutHeader class="admin-header">
         <div class="brand-lockup">
           <div class="brand-mark">IP</div>
@@ -41,7 +96,7 @@
         </div>
         <CindorButton
           v-if="authConfigured"
-          class="compact-button"
+          class="compact-button signout-button"
           variant="ghost"
           :disabled="loggingOut"
           @click="logout"
@@ -164,10 +219,6 @@
                 :rows="previewTableRows"
                 @row-action="handlePreviewRowAction"
               />
-              <div class="foot">
-                Channels from the selected output profile as they would appear in the published
-                lineup. Click <strong>Watch</strong> to preview a stream.
-              </div>
             </CindorTabPanel>
 
             <CindorTabPanel value="health" label="Health">
@@ -186,9 +237,6 @@
                 <CindorDataTable row-id-key="id" :columns="healthColumns" :rows="healthDetails" />
               </div>
               <div v-else style="opacity: 0.6">No health data yet. Run a health check.</div>
-              <div class="foot">
-                Channel health statuses are stored in <code>data/lineup_status.json</code>.
-              </div>
             </CindorTabPanel>
 
             <CindorTabPanel value="usage" :label="usageTabLabel">
@@ -201,7 +249,6 @@
                 <CindorDataTable row-id-key="key" :columns="usageColumns" :rows="activeUsage" />
               </div>
               <div v-else style="opacity: 0.6">No active viewers detected.</div>
-              <div class="foot">Active usage is tracked in-memory and refreshed periodically.</div>
             </CindorTabPanel>
 
             <CindorTabPanel value="tasks" label="Tasks">
@@ -219,9 +266,6 @@
                 />
               </div>
               <div v-else style="opacity: 0.6">No scheduled tasks found.</div>
-              <div class="foot">
-                Scheduled tasks run automatically. You can also trigger them manually.
-              </div>
             </CindorTabPanel>
 
             <CindorTabPanel value="backups" label="Backups">
@@ -243,10 +287,6 @@
               </div>
               <div v-else style="opacity: 0.6">
                 No backups yet. Click "Create Backup" to save the current config.
-              </div>
-              <div class="foot">
-                Backups are stored in <code>data/backups/</code> and include the SQLite snapshot
-                plus compatibility exports.
               </div>
             </CindorTabPanel>
           </CindorTabs>
@@ -474,6 +514,10 @@ import {
   showToast,
 } from 'cindor-ui-vue';
 
+const LOGIN_ROUTE = '/admin/login';
+const DEFAULT_ADMIN_ROUTE = '/admin';
+const isLoginRoute = typeof window !== 'undefined' && window.location?.pathname === LOGIN_ROUTE;
+
 // CSRF token for mutating API requests — fetched after login
 let _csrfToken = '';
 
@@ -502,6 +546,29 @@ async function fetchCsrfToken() {
     }
   } catch (_) {
     /* non-fatal: CSRF token may not be needed when auth is off */
+  }
+}
+
+function getPostLoginRedirect() {
+  if (typeof window === 'undefined') {
+    return DEFAULT_ADMIN_ROUTE;
+  }
+
+  const redirect = new URLSearchParams(window.location.search).get('redirect') || DEFAULT_ADMIN_ROUTE;
+  const safeRedirect =
+    redirect.startsWith('/') &&
+    !redirect.startsWith('//') &&
+    !redirect.includes('://') &&
+    redirect !== LOGIN_ROUTE
+      ? redirect
+      : DEFAULT_ADMIN_ROUTE;
+
+  return safeRedirect;
+}
+
+function redirectToAdmin(target = DEFAULT_ADMIN_ROUTE) {
+  if (typeof window !== 'undefined') {
+    window.location.replace(target);
   }
 }
 
@@ -565,11 +632,16 @@ function resolveConfirmDialog(confirmed) {
 const state = reactive({
   tab: 'app',
   app: { base_url: '' },
+  authStateReady: false,
   authConfigured: false,
+  sessionAuthenticated: false,
   showSetupModal: false,
   setupForm: { username: 'admin', password: '', confirm: '' },
   setupError: '',
   savingSetup: false,
+  loginForm: { username: '', password: '' },
+  loginError: '',
+  loggingIn: false,
   loggingOut: false,
   passwordForm: { current: '', newPass: '', confirm: '' },
   savingPassword: false,
@@ -631,6 +703,17 @@ function setStatus(msg, ok = true) {
   state.statusOk = ok;
 }
 
+function normalizeProvider(provider = {}, index = 0) {
+  return {
+    ...provider,
+    _id: provider._id || `prov_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`,
+    name: provider.name || '',
+    type: provider.type ? String(provider.type).toLowerCase() : 'm3u',
+    url: provider.url || '',
+    epg: provider.epg || '',
+  };
+}
+
 function getSelectedOutputProfileRecord() {
   return state.outputProfiles.find(profile => profile.slug === state.selectedOutputProfileSlug) || null;
 }
@@ -647,16 +730,9 @@ async function loadProviders() {
   try {
     const r = await apiFetch('/api/config/providers');
     const cfg = await r.json();
-    state.providers.splice(
-      0,
-      state.providers.length,
-      ...(cfg.providers && Array.isArray(cfg.providers) ? cfg.providers : [])
+    state.providers = (cfg.providers && Array.isArray(cfg.providers) ? cfg.providers : []).map(
+      normalizeProvider
     );
-    state.providers.forEach((p, i) => {
-      p.type = p.type ? String(p.type).toLowerCase() : 'm3u';
-      p.epg = p.epg || '';
-      if (!p._id) p._id = `prov_${Date.now()}_${i}`;
-    });
     setStatus('Loaded sources');
   } catch (e) {
     setStatus('Failed to load sources: ' + e.message, false);
@@ -850,16 +926,10 @@ async function saveApp() {
 }
 
 function addProvider() {
-  state.providers.push({
-    _id: `prov_${Date.now()}_${Math.random()}`,
-    name: '',
-    type: 'm3u',
-    url: '',
-    epg: '',
-  });
+  state.providers = [...state.providers, normalizeProvider({}, state.providers.length)];
 }
 function removeProvider(i) {
-  state.providers.splice(i, 1);
+  state.providers = state.providers.filter((_, index) => index !== i);
 }
 
 function handleProviderCellEdit(event) {
@@ -868,12 +938,14 @@ function handleProviderCellEdit(event) {
     return;
   }
 
-  const provider = state.providers.find(entry => String(entry?._id) === String(rowId));
-  if (!provider) {
+  const providerIndex = state.providers.findIndex(entry => String(entry?._id) === String(rowId));
+  if (providerIndex < 0) {
     return;
   }
 
-  provider[columnKey] = value;
+  state.providers = state.providers.map((entry, index) =>
+    index === providerIndex ? normalizeProvider({ ...entry, [columnKey]: value }, index) : entry
+  );
 }
 
 function handleProviderRowAction(event) {
@@ -1382,26 +1454,81 @@ async function loadEPGValidation() {
   }
 }
 
-async function checkAuthStatus() {
+async function initializeAuthState() {
   try {
-    const r = await fetch('/api/auth/status');
-    const j = await r.json();
-    state.authConfigured = !!j.configured;
-    state.showSetupModal = !j.configured;
-    // Fetch the CSRF token once we know auth is configured (requires a valid session)
-    if (j.configured) {
-      await fetchCsrfToken();
+    const [statusResponse, sessionResponse] = await Promise.all([
+      fetch('/api/auth/status'),
+      fetch('/api/auth/session'),
+    ]);
+    const statusJson = await statusResponse.json();
+    const sessionJson = await sessionResponse.json();
+
+    state.authConfigured = !!statusJson.configured;
+    state.sessionAuthenticated = !state.authConfigured || !!sessionJson.authenticated;
+    state.showSetupModal = !state.authConfigured;
+
+    if (!state.authConfigured && isLoginRoute) {
+      redirectToAdmin(DEFAULT_ADMIN_ROUTE);
+      return false;
     }
+
+    if (state.authConfigured && state.sessionAuthenticated) {
+      await fetchCsrfToken();
+      if (isLoginRoute) {
+        redirectToAdmin(getPostLoginRedirect());
+        return false;
+      }
+    }
+
+    return !isLoginRoute || state.sessionAuthenticated || !state.authConfigured;
   } catch (e) {
     // If status check fails, assume auth may be configured; don't force modal,
     // but surface an error so the user/admin knows something went wrong.
     state.authConfigured = true;
+    state.sessionAuthenticated = !isLoginRoute;
     state.showSetupModal = false;
     if (e && e.message) {
       message.error(e.message);
     } else {
       message.error('Failed to check authentication status.');
     }
+    return !isLoginRoute;
+  } finally {
+    state.authStateReady = true;
+  }
+}
+
+async function submitLogin() {
+  state.loginError = '';
+  const username = state.loginForm.username.trim();
+  const password = state.loginForm.password;
+
+  if (!username || !password) {
+    state.loginError = 'Username and password are required.';
+    return;
+  }
+
+  try {
+    state.loggingIn = true;
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const json = await response.json();
+    if (!response.ok) {
+      state.loginError = json.error || 'Login failed.';
+      return;
+    }
+
+    state.sessionAuthenticated = true;
+    _csrfToken = json.csrfToken || '';
+    state.loginForm.password = '';
+    redirectToAdmin(getPostLoginRedirect());
+  } catch (e) {
+    state.loginError = e.message || 'Login failed.';
+  } finally {
+    state.loggingIn = false;
   }
 }
 
@@ -1412,7 +1539,7 @@ async function logout() {
   } catch (_) {
     /* ignore logout errors */
   }
-  window.location.href = '/admin/login';
+  redirectToAdmin(LOGIN_ROUTE);
 }
 
 async function submitSetup() {
@@ -2195,6 +2322,7 @@ watch(
 
 // Load channels the first time the Preview tab is selected
 let _previewLoaded = false;
+let _usagePollInterval = null;
 watch(
   () => state.tab,
   newTab => {
@@ -2205,29 +2333,48 @@ watch(
   }
 );
 
-// Initial loads
-checkAuthStatus();
-loadProviders();
-loadApp();
-loadChannelAuthoringData();
-loadHealth();
-loadUsage();
-loadTasks();
-loadBackups();
-// poll usage every 5s
-setInterval(() => {
+function startUsagePolling() {
+  if (_usagePollInterval) {
+    return;
+  }
+
+  _usagePollInterval = setInterval(() => {
+    loadUsage();
+  }, 5000);
+}
+
+async function initializeApp() {
+  const shouldLoadAdminData = await initializeAuthState();
+  if (!shouldLoadAdminData) {
+    return;
+  }
+
+  loadProviders();
+  loadApp();
+  loadChannelAuthoringData();
+  loadHealth();
   loadUsage();
-}, 5000);
+  loadTasks();
+  loadBackups();
+  startUsagePolling();
+}
+
+initializeApp();
 
 // Expose reactive fields directly in template
 const {
   tab,
   app,
+  authStateReady,
   authConfigured,
+  sessionAuthenticated,
   showSetupModal,
   setupForm,
   setupError,
   savingSetup,
+  loginForm,
+  loginError,
+  loggingIn,
   loggingOut,
   passwordForm,
   savingPassword,
@@ -2263,6 +2410,15 @@ const {
   previewGuide,
   loadingGuide,
 } = toRefs(state);
+
+const showLoginView = computed(
+  () =>
+    authStateReady.value &&
+    isLoginRoute &&
+    authConfigured.value &&
+    !sessionAuthenticated.value &&
+    !showSetupModal.value
+);
 
 const usageTabLabel = computed(() =>
   activeUsage.value.length > 0 ? `Usage (${Math.min(activeUsage.value.length, 99)})` : 'Usage'
@@ -2906,14 +3062,6 @@ const previewColumns = [
 </script>
 
 <style>
-.foot {
-  margin-top: 1rem;
-  color: var(--fg-subtle);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-}
-
 html,
 body,
 #app {
@@ -2928,10 +3076,6 @@ body {
 
 #app {
   min-height: 100%;
-}
-
-.mono {
-  font-family: var(--font-mono);
 }
 
 .admin-shell {
@@ -2979,8 +3123,18 @@ body {
   letter-spacing: -0.01em;
 }
 
+.signout-button {
+  margin-inline-start: auto;
+}
+
 .admin-content {
   padding: 24px;
+}
+
+.login-content {
+  min-height: calc(100vh - 73px);
+  display: grid;
+  place-items: center;
 }
 
 .workspace-frame {
@@ -2989,6 +3143,31 @@ body {
   background: var(--surface);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
+}
+
+.login-frame {
+  width: min(460px, 100%);
+}
+
+.login-card {
+  padding: 24px;
+}
+
+.login-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.login-copy {
+  margin: 0 0 1rem;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.login-form {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .admin-tabs h3 {
@@ -3000,6 +3179,11 @@ body {
   display: block;
   padding: 20px;
   background: var(--bg-subtle);
+}
+
+.admin-tabs cindor-tab-panel {
+  display: block;
+  padding-top: 12px;
 }
 
 .admin-tabs cindor-data-table {
@@ -3075,37 +3259,6 @@ body {
 .toolbar-count {
   opacity: 0.6;
   font-size: 0.9em;
-}
-
-.preview-logo-cell,
-.preview-logo-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  max-width: 32px;
-  max-height: 32px;
-  flex: 0 0 32px;
-  overflow: hidden;
-  vertical-align: middle;
-}
-
-.preview-logo-image {
-  display: block;
-  width: 100%;
-  height: 100%;
-  max-width: 32px;
-  max-height: 32px;
-  object-fit: contain;
-  border-radius: 4px;
-}
-
-.preview-logo-fallback {
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 1.05rem;
-  line-height: 1;
 }
 
 .dialog-body {

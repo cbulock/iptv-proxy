@@ -2,7 +2,6 @@ import express from 'express';
 import RateLimit from 'express-rate-limit';
 import { isAuthEnabled, hashPassword, verifyCredentials, requireAuth, invalidateAuthCache } from './auth.js';
 import { loadAppConfigFromStore, replaceAppConfig } from '../libs/app-settings-service.js';
-import { loginPage } from './login-page.js';
 import { ensureCsrfToken } from './csrf.js';
 
 const router = express.Router();
@@ -126,14 +125,6 @@ router.post('/api/auth/logout', (req, res) => {
     res.clearCookie('connect.sid');
     res.json({ status: 'logged_out' });
   });
-});
-
-/**
- * GET /admin/login
- * Standalone login page (served without authentication).
- */
-router.get('/admin/login', authLimiter, (req, res) => {
-  res.send(loginPage());
 });
 
 /**
