@@ -6,6 +6,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import sinon from 'sinon';
+import { closeDatabase } from '../../libs/database.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -329,16 +330,25 @@ describe('Usage History', () => {
 // ──────────────────────────────────────────────────────────────────────────────
 describe('Webhook notifications', () => {
   let tmpDir;
+  let configDir;
+  let dataDir;
   let axiosPostStub;
 
   before(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-webhook-test-'));
-    process.env.CONFIG_PATH = tmpDir;
+    configDir = path.join(tmpDir, 'config');
+    dataDir = path.join(tmpDir, 'data');
+    await fs.mkdir(configDir, { recursive: true });
+    await fs.mkdir(dataDir, { recursive: true });
+    process.env.CONFIG_PATH = configDir;
+    process.env.DATA_PATH = dataDir;
   });
 
   after(async () => {
+    closeDatabase();
     await fs.rm(tmpDir, { recursive: true, force: true });
     delete process.env.CONFIG_PATH;
+    delete process.env.DATA_PATH;
   });
 
   beforeEach(() => {
@@ -350,7 +360,7 @@ describe('Webhook notifications', () => {
   });
 
   it('does nothing when no webhooks are configured', async () => {
-    await fs.writeFile(path.join(tmpDir, 'app.yaml'), 'base_url: ""\n', 'utf8');
+    await fs.writeFile(path.join(configDir, 'app.yaml'), 'base_url: ""\n', 'utf8');
 
     const { notifyWebhooks } = await import('../../libs/webhooks.js');
     await notifyWebhooks('channels.refreshed', { channels: 5 });
@@ -360,7 +370,7 @@ describe('Webhook notifications', () => {
 
   it('calls the configured webhook URL with correct payload', async () => {
     await fs.writeFile(
-      path.join(tmpDir, 'app.yaml'),
+      path.join(configDir, 'app.yaml'),
       'webhooks:\n  - url: "http://example.com/hook"\n',
       'utf8'
     );
@@ -378,7 +388,7 @@ describe('Webhook notifications', () => {
 
   it('respects the events filter – skips hooks not subscribed to the event', async () => {
     await fs.writeFile(
-      path.join(tmpDir, 'app.yaml'),
+      path.join(configDir, 'app.yaml'),
       [
         'webhooks:',
         '  - url: "http://example.com/epg-only"',
@@ -396,7 +406,7 @@ describe('Webhook notifications', () => {
 
   it('delivers to hooks subscribed to the matching event', async () => {
     await fs.writeFile(
-      path.join(tmpDir, 'app.yaml'),
+      path.join(configDir, 'app.yaml'),
       [
         'webhooks:',
         '  - url: "http://example.com/channels-only"',
