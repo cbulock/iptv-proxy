@@ -1,71 +1,58 @@
 <template>
-  <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides">
-    <!-- Auth setup modal: shown when no credentials are configured -->
-    <n-modal
-      :show="showSetupModal"
-      :mask-closable="false"
-      :closable="false"
-      preset="card"
-      title="Set Up Admin Authentication"
-      style="max-width: 460px"
-    >
-      <p style="opacity: 0.8; margin-top: 0">
-        No administrator credentials are configured. Set a username and password to secure the admin
-        interface.
-      </p>
-      <n-form label-placement="left" label-width="140">
-        <n-form-item label="Username">
-          <n-input v-model:value="setupForm.username" placeholder="admin" :disabled="savingSetup" />
-        </n-form-item>
-        <n-form-item label="Password">
-          <n-input
-            v-model:value="setupForm.password"
-            type="password"
-            show-password-on="click"
-            placeholder="Min. 8 characters"
-            :disabled="savingSetup"
-          />
-        </n-form-item>
-        <n-form-item label="Confirm Password">
-          <n-input
-            v-model:value="setupForm.confirm"
-            type="password"
-            show-password-on="click"
-            placeholder="Repeat password"
-            :disabled="savingSetup"
-          />
-        </n-form-item>
-      </n-form>
-      <div v-if="setupError" style="color: var(--danger); margin-bottom: 0.75rem">
-        {{ setupError }}
+  <CindorProvider theme="dark" color-scheme="dark">
+    <div v-if="showSetupModal" class="setup-overlay">
+      <div class="setup-card">
+        <h2 id="setup-modal-title" class="setup-title">Set Up Admin Authentication</h2>
+        <p class="setup-copy">
+          No administrator credentials are configured. Set a username and password to secure the
+          admin interface.
+        </p>
+        <CindorForm>
+          <CindorFormField label="Username">
+            <CindorInput v-model="setupForm.username" placeholder="admin" :disabled="savingSetup" />
+          </CindorFormField>
+          <CindorFormField label="Password">
+            <CindorPasswordInput
+              v-model="setupForm.password"
+              placeholder="Min. 8 characters"
+              :disabled="savingSetup"
+            />
+          </CindorFormField>
+          <CindorFormField label="Confirm Password">
+            <CindorPasswordInput
+              v-model="setupForm.confirm"
+              placeholder="Repeat password"
+              :disabled="savingSetup"
+            />
+          </CindorFormField>
+        </CindorForm>
+        <div v-if="setupError" class="setup-error">{{ setupError }}</div>
+        <CindorButton :disabled="savingSetup" @click="submitSetup">
+          {{ savingSetup ? 'Saving...' : 'Save Credentials' }}
+        </CindorButton>
       </div>
-      <n-button type="primary" :loading="savingSetup" @click="submitSetup" block>
-{{
-        savingSetup ? 'Saving...' : 'Save Credentials'
-      }}
-</n-button>
-    </n-modal>
+    </div>
 
-    <n-layout class="admin-shell">
-      <n-layout-header bordered class="admin-header">
+    <CindorLayout class="admin-shell">
+      <CindorLayoutHeader class="admin-header">
         <div class="brand-lockup">
           <div class="brand-mark">IP</div>
           <div class="brand-title">IPTV Proxy Admin</div>
         </div>
-        <n-button v-if="authConfigured" size="small" secondary @click="logout" :loading="loggingOut">
-Sign Out
-</n-button>
-      </n-layout-header>
-      <n-layout-content class="admin-content">
+        <CindorButton
+          v-if="authConfigured"
+          class="compact-button"
+          variant="ghost"
+          :disabled="loggingOut"
+          @click="logout"
+        >
+          Sign Out
+        </CindorButton>
+      </CindorLayoutHeader>
+      <CindorLayoutContent class="admin-content">
         <div class="workspace-frame">
-          <n-tabs
-            v-model:value="tab"
-            type="line"
-            animated
-            class="admin-tabs"
-            pane-wrapper-class="admin-tabs-pane-wrapper"
-          >
-            <n-tab-pane name="app" tab="App">
+          <CindorTabs v-model:value="tab" class="admin-tabs">
+            <CindorTabPanel value="app" label="App">
               <app-settings-pane
                 :app-base-url="app.base_url"
                 :auth-configured="authConfigured"
@@ -81,23 +68,24 @@ Sign Out
                 @update:password-new="passwordForm.newPass = $event"
                 @update:password-confirm="passwordForm.confirm = $event"
               />
-            </n-tab-pane>
+            </CindorTabPanel>
 
-            <n-tab-pane name="providers" tab="Sources">
+            <CindorTabPanel value="providers" label="Sources">
               <sources-pane
                 :providers="providers"
                 :epg-validation="epgValidation"
                 :provider-columns="providerColumns"
-                :row-key-fn="rowKeyFn"
                 :saving-providers="savingProviders"
                 :loading-e-p-g-validation="loadingEPGValidation"
                 :add-provider="addProvider"
                 :save-providers="saveProviders"
                 :load-e-p-g-validation="loadEPGValidation"
+                @cell-edit="handleProviderCellEdit"
+                @row-action="handleProviderRowAction"
               />
-            </n-tab-pane>
+            </CindorTabPanel>
 
-            <n-tab-pane name="channels" tab="Channels">
+            <CindorTabPanel value="channels" label="Channels">
               <channels-pane
                 :profiles="outputProfiles"
                 :selected-profile-slug="selectedOutputProfileSlug"
@@ -128,37 +116,35 @@ Sign Out
                 :update-guide-number-override-input="updateGuideNumberOverrideDraft"
                 :commit-guide-number-override="commitGuideNumberOverride"
               />
-            </n-tab-pane>
-            <n-tab-pane name="preview" tab="Preview">
-              <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-select
-                  v-model:value="previewProfileSlug"
-                  :options="
-                    outputProfiles.map(profile => ({
-                      label: profile.name,
-                      value: profile.slug,
-                    }))
-                  "
-                  placeholder="Select preview profile"
+            </CindorTabPanel>
+
+            <CindorTabPanel value="preview" label="Preview">
+              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
+                <CindorSelect
+                  v-model="previewProfileSlug"
                   style="min-width: 220px"
                   :disabled="!outputProfiles.length"
-                  @update:value="changePreviewProfile"
-                />
-                <n-input
-                  v-model:value="previewSearch"
+                  @update:model-value="changePreviewProfile"
+                >
+                  <option value="" disabled>Select preview profile</option>
+                  <option v-for="profile in outputProfiles" :key="profile.slug" :value="profile.slug">
+                    {{ profile.name }}
+                  </option>
+                </CindorSelect>
+                <CindorInput
+                  v-model="previewSearch"
                   placeholder="Search channels by name, group, or tvg-id…"
-                  clearable
                   style="min-width: 260px"
                 />
-                <n-button @click="loadPreviewChannels" :loading="loadingPreviewChannels">
-{{
-                  loadingPreviewChannels ? 'Loading…' : 'Refresh'
-                }}
-</n-button>
-                <span style="opacity: 0.6; font-size: 0.9em">{{ filteredPreviewChannels.length }} channel{{
+                <CindorButton variant="ghost" :disabled="loadingPreviewChannels" @click="loadPreviewChannels">
+                  {{ loadingPreviewChannels ? 'Loading…' : 'Refresh' }}
+                </CindorButton>
+                <span class="toolbar-count">
+                  {{ filteredPreviewChannels.length }} channel{{
                     filteredPreviewChannels.length !== 1 ? 's' : ''
-                  }}</span>
-              </n-space>
+                  }}
+                </span>
+              </CindorStack>
               <div
                 v-if="loadingPreviewChannels && !previewChannels.length"
                 style="opacity: 0.6; padding: 2rem 0; text-align: center"
@@ -171,347 +157,88 @@ Sign Out
               >
                 No channels loaded. Check your source configuration.
               </div>
-              <n-data-table
+              <CindorDataTable
                 v-else
+                row-id-key="previewKey"
                 :columns="previewColumns"
-                :data="filteredPreviewChannels"
-                :bordered="false"
-                :row-key="row => row.original_url || `${row.source}|${row.name}|${row.guideNumber}`"
-                size="small"
-                :max-height="500"
-                virtual-scroll
+                :rows="previewTableRows"
+                @row-action="handlePreviewRowAction"
               />
               <div class="foot">
                 Channels from the selected output profile as they would appear in the published
-                lineup. Click <strong>▶ Watch</strong> to preview a stream.
+                lineup. Click <strong>Watch</strong> to preview a stream.
               </div>
+            </CindorTabPanel>
 
-              <!-- Video player modal -->
-              <n-modal
-                v-model:show="showVideoModal"
-                preset="card"
-                :title="previewWatchingChannel ? previewWatchingChannel.name : 'Watch Channel'"
-                style="max-width: 720px; width: 95vw"
-                @after-leave="stopVideoPlayer"
-              >
-                <div v-if="previewWatchingChannel">
-                  <!-- Logo + player area -->
-                  <div
-                    style="
-                      background: #000;
-                      border-radius: 4px;
-                      overflow: hidden;
-                      margin-bottom: 1rem;
-                      position: relative;
-                    "
-                  >
-                    <video
-                      ref="videoPlayerEl"
-                      controls
-                      autoplay
-                      style="width: 100%; max-height: 360px; display: block"
-                      preload="auto"
-                    />
-                    <div
-                      v-if="state.playerError"
-                      role="alert"
-                      aria-live="assertive"
-                      style="
-                        position: absolute;
-                        inset: 0;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        background: rgba(0, 0, 0, 0.85);
-                        color: #fff;
-                        padding: 1.5rem;
-                        text-align: center;
-                        gap: 0.5rem;
-                      "
-                    >
-                      <div aria-hidden="true" style="font-size: 1.5rem">⚠️</div>
-                      <div style="font-weight: 600">{{ state.playerError }}</div>
-                      <n-button
-                        v-if="showTranscodeButton"
-                        size="small"
-                        type="primary"
-                        style="margin-top: 0.25rem"
-                        @click="setupTranscodePlayer"
-                      >
-                        Try Server Transcoding
-                      </n-button>
-                      <div style="font-size: 0.8em; opacity: 0.7">
-                        Try opening the stream URL directly in VLC or another IPTV player.
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Stream URL row -->
-                  <div
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 0.5rem;
-                      margin-bottom: 1rem;
-                      flex-wrap: wrap;
-                    "
-                  >
-                    <span style="opacity: 0.7; font-size: 0.85em; flex-shrink: 0">Stream URL:</span>
-                    <code
-                      style="font-size: 0.78em; word-break: break-all; flex: 1; opacity: 0.85"
-                      >{{ previewStreamUrl }}</code>
-                    <n-button size="tiny" secondary @click="copyStreamUrl">Copy</n-button>
-                    <a
-                      :href="previewStreamUrl"
-                      target="_blank"
-                      rel="noopener"
-                      style="font-size: 0.8em; opacity: 0.7"
-                      >Open ↗</a>
-                  </div>
-
-                  <!-- Player debug panel -->
-                  <div
-                    v-if="state.playerDebug"
-                    style="
-                      margin-bottom: 1rem;
-                      border: 1px solid rgba(255, 255, 255, 0.12);
-                      border-radius: 4px;
-                      overflow: hidden;
-                    "
-                  >
-                    <button
-                      type="button"
-                      style="
-                        width: 100%;
-                        display: flex;
-                        align-items: center;
-                        justify-content: space-between;
-                        padding: 0.35rem 0.6rem;
-                        background: rgba(255, 255, 255, 0.06);
-                        cursor: pointer;
-                        user-select: none;
-                        border: none;
-                        color: inherit;
-                        font: inherit;
-                        text-align: left;
-                      "
-                      :aria-expanded="state.showPlayerDebug"
-                      @click="state.showPlayerDebug = !state.showPlayerDebug"
-                    >
-                      <span style="font-size: 0.8em; opacity: 0.75">
-                        🔍 Stream Debug
-                        <span
-                          v-if="state.playerDebug.playerMode"
-                          style="margin-left: 0.5em; opacity: 0.6"
-                          >— player: {{ state.playerDebug.playerMode }}</span>
-                      </span>
-                      <span style="font-size: 0.75em; opacity: 0.5">{{
-                        state.showPlayerDebug ? '▲ hide' : '▼ show'
-                      }}</span>
-                    </button>
-                    <div
-                      v-if="state.showPlayerDebug"
-                      style="padding: 0.5rem 0.6rem; font-size: 0.75em; opacity: 0.85"
-                    >
-                      <div
-                        style="
-                          display: grid;
-                          grid-template-columns: max-content 1fr;
-                          gap: 0.2rem 0.6rem;
-                          margin-bottom: 0.5rem;
-                        "
-                      >
-                        <span style="opacity: 0.6">HDHomeRun</span>
-                        <span>{{ state.playerDebug.hdhomerun }}</span>
-                        <span style="opacity: 0.6">Player mode</span>
-                        <span>{{ state.playerDebug.playerMode ?? '(pending)' }}</span>
-                        <span style="opacity: 0.6">Probe URL</span>
-                        <code style="word-break: break-all; font-size: 0.9em">{{
-                          state.playerDebug.probeUrl
-                        }}</code>
-                        <span style="opacity: 0.6">Probe result</span>
-                        <code style="word-break: break-all; font-size: 0.9em">{{
-                          state.playerDebug.probeResult
-                            ? JSON.stringify(state.playerDebug.probeResult)
-                            : '(pending)'
-                        }}</code>
-                        <template v-if="state.playerDebug.hlsError">
-                          <span style="opacity: 0.6">HLS.js error</span>
-                          <code style="word-break: break-all; font-size: 0.9em">{{
-                            JSON.stringify(state.playerDebug.hlsError)
-                          }}</code>
-                        </template>
-                      </div>
-                      <div style="margin-bottom: 0.4rem; opacity: 0.6; font-size: 0.9em">
-                        Events:
-                      </div>
-                      <pre
-                        style="
-                          font-size: 0.85em;
-                          line-height: 1.4;
-                          max-height: 140px;
-                          overflow-y: auto;
-                          white-space: pre-wrap;
-                          word-break: break-all;
-                          background: rgba(0, 0, 0, 0.3);
-                          padding: 0.4rem;
-                          border-radius: 3px;
-                          margin: 0;
-                        "
-                        >{{ state.playerDebug.events.join('\n') }}</pre>
-                      <div style="margin-top: 0.5rem">
-                        <n-button size="tiny" secondary @click="copyPlayerDebug">
-Copy debug info
-</n-button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Guide / EPG -->
-                  <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 0.75rem">
-                    <div style="font-weight: 600; margin-bottom: 0.5rem">Guide</div>
-                    <div v-if="loadingGuide" style="opacity: 0.6; font-size: 0.9em">
-                      Loading guide data…
-                    </div>
-                    <div v-else-if="!previewGuide.length" style="opacity: 0.5; font-size: 0.9em">
-                      No guide data available for this channel.
-                    </div>
-                    <div v-else style="max-height: 220px; overflow-y: auto">
-                      <div
-                        v-for="(prog, idx) in previewGuide"
-                        :key="idx"
-                        style="
-                          display: flex;
-                          gap: 0.75rem;
-                          padding: 0.35rem 0;
-                          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-                        "
-                      >
-                        <span
-                          style="
-                            opacity: 0.6;
-                            font-size: 0.85em;
-                            white-space: nowrap;
-                            min-width: 85px;
-                          "
-                          >{{ formatXMLTVTime(prog.start) }}</span>
-                        <div style="flex: 1; min-width: 0">
-                          <div style="font-size: 0.9em; font-weight: 500">{{ prog.title }}</div>
-                          <div
-                            v-if="prog.desc"
-                            style="
-                              font-size: 0.8em;
-                              opacity: 0.55;
-                              margin-top: 0.1rem;
-                              overflow: hidden;
-                              text-overflow: ellipsis;
-                              white-space: nowrap;
-                            "
-                          >
-                            {{ prog.desc }}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </n-modal>
-            </n-tab-pane>
-
-            <n-tab-pane name="health" tab="Health">
-              <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-button type="primary" @click="loadHealth" :loading="loadingHealth">
-{{
-                  loadingHealth ? 'Loading...' : 'Refresh Status'
-                }}
-</n-button>
-                <n-button type="primary" secondary @click="runHealth" :loading="runningHealth">
-{{
-                  runningHealth ? 'Running...' : 'Run Health Check'
-                }}
-</n-button>
-              </n-space>
+            <CindorTabPanel value="health" label="Health">
+              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
+                <CindorButton :disabled="loadingHealth" @click="loadHealth">
+                  {{ loadingHealth ? 'Loading...' : 'Refresh Status' }}
+                </CindorButton>
+                <CindorButton variant="ghost" :disabled="runningHealth" @click="runHealth">
+                  {{ runningHealth ? 'Running...' : 'Run Health Check' }}
+                </CindorButton>
+              </CindorStack>
               <div v-if="formattedHealthUpdated" style="opacity: 0.75; margin-bottom: 0.5rem">
                 Last updated: {{ formattedHealthUpdated }}
               </div>
               <div v-if="healthDetails.length">
-                <n-data-table
-                  :columns="healthColumns"
-                  :data="healthDetails"
-                  :bordered="false"
-                  :row-key="row => row.id"
-                />
+                <CindorDataTable row-id-key="id" :columns="healthColumns" :rows="healthDetails" />
               </div>
               <div v-else style="opacity: 0.6">No health data yet. Run a health check.</div>
               <div class="foot">
                 Channel health statuses are stored in <code>data/lineup_status.json</code>.
               </div>
-            </n-tab-pane>
-            <n-tab-pane name="usage">
-              <template #tab>
-                <n-badge :value="activeUsage.length" :show="activeUsage.length > 0" :max="99">
-                  Usage
-                </n-badge>
-              </template>
-              <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-button type="primary" @click="loadUsage" :loading="loadingUsage">
-{{
-                  loadingUsage ? 'Loading...' : 'Refresh'
-                }}
-</n-button>
-              </n-space>
+            </CindorTabPanel>
+
+            <CindorTabPanel value="usage" :label="usageTabLabel">
+              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
+                <CindorButton :disabled="loadingUsage" @click="loadUsage">
+                  {{ loadingUsage ? 'Loading...' : 'Refresh' }}
+                </CindorButton>
+              </CindorStack>
               <div v-if="activeUsage.length">
-                <n-data-table
-                  :columns="usageColumns"
-                  :data="activeUsage"
-                  :bordered="false"
-                  :row-key="row => row.key"
-                />
+                <CindorDataTable row-id-key="key" :columns="usageColumns" :rows="activeUsage" />
               </div>
               <div v-else style="opacity: 0.6">No active viewers detected.</div>
               <div class="foot">Active usage is tracked in-memory and refreshed periodically.</div>
-            </n-tab-pane>
-            <n-tab-pane name="tasks" tab="Tasks">
-              <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-button type="primary" @click="loadTasks" :loading="loadingTasks">
-{{
-                  loadingTasks ? 'Loading...' : 'Refresh'
-                }}
-</n-button>
-              </n-space>
+            </CindorTabPanel>
+
+            <CindorTabPanel value="tasks" label="Tasks">
+              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
+                <CindorButton :disabled="loadingTasks" @click="loadTasks">
+                  {{ loadingTasks ? 'Loading...' : 'Refresh' }}
+                </CindorButton>
+              </CindorStack>
               <div v-if="tasks.length">
-                <n-data-table
+                <CindorDataTable
+                  row-id-key="name"
                   :columns="taskColumns"
-                  :data="tasks"
-                  :bordered="false"
-                  :row-key="row => row.name"
+                  :rows="tasks"
+                  @row-action="handleTaskRowAction"
                 />
               </div>
               <div v-else style="opacity: 0.6">No scheduled tasks found.</div>
               <div class="foot">
                 Scheduled tasks run automatically. You can also trigger them manually.
               </div>
-            </n-tab-pane>
-            <n-tab-pane name="backups" tab="Backups">
-              <n-space align="center" wrap style="margin-bottom: 0.75rem">
-                <n-button type="primary" @click="createBackup" :loading="creatingBackup">
-{{
-                  creatingBackup ? 'Creating...' : 'Create Backup'
-                }}
-</n-button>
-                <n-button @click="loadBackups" :loading="loadingBackups">
-{{
-                  loadingBackups ? 'Loading...' : 'Refresh'
-                }}
-</n-button>
-              </n-space>
+            </CindorTabPanel>
+
+            <CindorTabPanel value="backups" label="Backups">
+              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
+                <CindorButton :disabled="creatingBackup" @click="createBackup">
+                  {{ creatingBackup ? 'Creating...' : 'Create Backup' }}
+                </CindorButton>
+                <CindorButton variant="ghost" :disabled="loadingBackups" @click="loadBackups">
+                  {{ loadingBackups ? 'Loading...' : 'Refresh' }}
+                </CindorButton>
+              </CindorStack>
               <div v-if="backups.length">
-                <n-data-table
+                <CindorDataTable
+                  row-id-key="name"
                   :columns="backupColumns"
-                  :data="backups"
-                  :bordered="false"
-                  :row-key="row => row.name"
+                  :rows="backups"
+                  @row-action="handleBackupRowAction"
                 />
               </div>
               <div v-else style="opacity: 0.6">
@@ -521,106 +248,231 @@ Copy debug info
                 Backups are stored in <code>data/backups/</code> and include the SQLite snapshot
                 plus compatibility exports.
               </div>
-            </n-tab-pane>
-          </n-tabs>
+            </CindorTabPanel>
+          </CindorTabs>
         </div>
-      </n-layout-content>
-    </n-layout>
-  </n-config-provider>
+      </CindorLayoutContent>
+    </CindorLayout>
+
+    <CindorDialog v-model:open="showVideoModal" modal aria-labelledby="preview-dialog-title">
+      <div v-if="previewWatchingChannel" class="dialog-body">
+        <div id="preview-dialog-title" class="dialog-title">
+          {{ previewWatchingChannel ? previewWatchingChannel.name : 'Watch Channel' }}
+        </div>
+        <div
+          style="
+            background: #000;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            position: relative;
+          "
+        >
+          <video
+            ref="videoPlayerEl"
+            controls
+            autoplay
+            style="width: 100%; max-height: 360px; display: block"
+            preload="auto"
+          />
+          <div
+            v-if="state.playerError"
+            role="alert"
+            aria-live="assertive"
+            style="
+              position: absolute;
+              inset: 0;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              background: rgba(0, 0, 0, 0.85);
+              color: #fff;
+              padding: 1.5rem;
+              text-align: center;
+              gap: 0.5rem;
+            "
+          >
+            <div aria-hidden="true" style="font-size: 1.5rem">⚠️</div>
+            <div style="font-weight: 600">{{ state.playerError }}</div>
+            <CindorButton
+              v-if="showTranscodeButton"
+              class="compact-button"
+              style="margin-top: 0.25rem"
+              @click="setupTranscodePlayer"
+            >
+              Try Server Transcoding
+            </CindorButton>
+            <div style="font-size: 0.8em; opacity: 0.7">
+              Try opening the stream URL directly in VLC or another IPTV player.
+            </div>
+          </div>
+        </div>
+
+        <div class="dialog-toolbar">
+          <span style="opacity: 0.7; font-size: 0.85em; flex-shrink: 0">Stream URL:</span>
+          <code class="dialog-code">{{ previewStreamUrl }}</code>
+          <CindorButton class="compact-button" variant="ghost" @click="copyStreamUrl">Copy</CindorButton>
+          <a
+            :href="previewStreamUrl"
+            target="_blank"
+            rel="noopener"
+            style="font-size: 0.8em; opacity: 0.7"
+            >Open ↗</a>
+        </div>
+
+        <div v-if="state.playerDebug" class="debug-panel">
+          <button
+            type="button"
+            class="debug-toggle"
+            :aria-expanded="state.showPlayerDebug"
+            @click="state.showPlayerDebug = !state.showPlayerDebug"
+          >
+            <span style="font-size: 0.8em; opacity: 0.75">
+              🔍 Stream Debug
+              <span
+                v-if="state.playerDebug.playerMode"
+                style="margin-left: 0.5em; opacity: 0.6"
+              >
+                — player: {{ state.playerDebug.playerMode }}
+              </span>
+            </span>
+            <span style="font-size: 0.75em; opacity: 0.5">{{
+              state.showPlayerDebug ? '▲ hide' : '▼ show'
+            }}</span>
+          </button>
+          <div v-if="state.showPlayerDebug" style="padding: 0.5rem 0.6rem; font-size: 0.75em; opacity: 0.85">
+            <div class="debug-grid">
+              <span style="opacity: 0.6">HDHomeRun</span>
+              <span>{{ state.playerDebug.hdhomerun }}</span>
+              <span style="opacity: 0.6">Player mode</span>
+              <span>{{ state.playerDebug.playerMode ?? '(pending)' }}</span>
+              <span style="opacity: 0.6">Probe URL</span>
+              <code style="word-break: break-all; font-size: 0.9em">{{ state.playerDebug.probeUrl }}</code>
+              <span style="opacity: 0.6">Probe result</span>
+              <code style="word-break: break-all; font-size: 0.9em">{{
+                state.playerDebug.probeResult ? JSON.stringify(state.playerDebug.probeResult) : '(pending)'
+              }}</code>
+              <template v-if="state.playerDebug.hlsError">
+                <span style="opacity: 0.6">HLS.js error</span>
+                <code style="word-break: break-all; font-size: 0.9em">{{
+                  JSON.stringify(state.playerDebug.hlsError)
+                }}</code>
+              </template>
+            </div>
+            <div style="margin-bottom: 0.4rem; opacity: 0.6; font-size: 0.9em">Events:</div>
+            <pre class="debug-pre">{{ state.playerDebug.events.join('\n') }}</pre>
+            <div style="margin-top: 0.5rem">
+              <CindorButton class="compact-button" variant="ghost" @click="copyPlayerDebug">
+                Copy debug info
+              </CindorButton>
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 0.75rem">
+          <div style="font-weight: 600; margin-bottom: 0.5rem">Guide</div>
+          <div v-if="loadingGuide" style="opacity: 0.6; font-size: 0.9em">Loading guide data…</div>
+          <div v-else-if="!previewGuide.length" style="opacity: 0.5; font-size: 0.9em">
+            No guide data available for this channel.
+          </div>
+          <div v-else style="max-height: 220px; overflow-y: auto">
+            <div
+              v-for="(prog, idx) in previewGuide"
+              :key="idx"
+              style="
+                display: flex;
+                gap: 0.75rem;
+                padding: 0.35rem 0;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+              "
+            >
+              <span
+                style="
+                  opacity: 0.6;
+                  font-size: 0.85em;
+                  white-space: nowrap;
+                  min-width: 85px;
+                "
+              >
+                {{ formatXMLTVTime(prog.start) }}
+              </span>
+              <div style="flex: 1; min-width: 0">
+                <div style="font-size: 0.9em; font-weight: 500">{{ prog.title }}</div>
+                <div
+                  v-if="prog.desc"
+                  style="
+                    font-size: 0.8em;
+                    opacity: 0.55;
+                    margin-top: 0.1rem;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                  "
+                >
+                  {{ prog.desc }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </CindorDialog>
+
+    <CindorDialog
+      v-model:open="confirmDialog.open"
+      modal
+      aria-labelledby="confirm-dialog-title"
+      @cancel="resolveConfirmDialog(false)"
+      @close="resolveConfirmDialog(false)"
+    >
+      <div class="dialog-body">
+        <div id="confirm-dialog-title" class="dialog-title">{{ confirmDialog.title }}</div>
+        <div class="dialog-copy">{{ confirmDialog.content }}</div>
+        <CindorStack direction="horizontal" justify="end" gap="sm" wrap>
+          <CindorButton variant="ghost" @click="resolveConfirmDialog(false)">
+            {{ confirmDialog.negativeText }}
+          </CindorButton>
+          <CindorButton
+            :class="{
+              'danger-button': confirmDialog.tone === 'danger',
+              'warning-button': confirmDialog.tone === 'warning',
+            }"
+            @click="resolveConfirmDialog(true)"
+          >
+            {{ confirmDialog.positiveText }}
+          </CindorButton>
+        </CindorStack>
+      </div>
+    </CindorDialog>
+  </CindorProvider>
 </template>
 
 <script setup>
-import { reactive, toRefs, h, watch, computed, ref, nextTick } from 'vue';
+import { reactive, toRefs, watch, computed, ref, nextTick } from 'vue';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
 import AppSettingsPane from './components/AppSettingsPane.vue';
 import ChannelsPane from './components/ChannelsPane.vue';
 import SourcesPane from './components/SourcesPane.vue';
 import {
-  darkTheme,
-  NInput,
-  NSelect,
-  NButton,
-  NForm,
-  NFormItem,
-  NSpace,
-  NTabs,
-  NTabPane,
-  NLayout,
-  NLayoutContent,
-  NLayoutHeader,
-  NConfigProvider,
-  NDataTable,
-  NBadge,
-  NModal,
-  NTooltip,
-  createDiscreteApi,
-} from 'naive-ui';
-const { message, dialog } = createDiscreteApi(['message', 'dialog']);
-
-const themeOverrides = {
-  common: {
-    fontFamily: 'var(--font-sans)',
-    fontFamilyMono: 'var(--font-mono)',
-    bodyColor: '#0f0e0c',
-    cardColor: '#161512',
-    modalColor: '#161512',
-    popoverColor: '#161512',
-    tableColor: '#161512',
-    primaryColor: '#e07d2c',
-    primaryColorHover: '#ec9f59',
-    primaryColorPressed: '#f4c496',
-    primaryColorSuppl: '#e07d2c',
-    infoColor: '#e07d2c',
-    successColor: '#7ac74f',
-    warningColor: '#d4a017',
-    errorColor: '#b91c1c',
-    textColorBase: '#f3f1ec',
-    textColor1: '#f3f1ec',
-    textColor2: '#b8b3a2',
-    textColor3: '#878273',
-    borderColor: '#2c2a26',
-    dividerColor: '#2c2a26',
-    inputColor: '#1d1c19',
-    actionColor: '#1d1c19',
-    hoverColor: 'rgba(243, 241, 236, 0.06)',
-  },
-  Button: {
-    borderRadiusSmall: '4px',
-    borderRadiusMedium: '4px',
-    borderRadiusLarge: '4px',
-    fontWeight: '500',
-  },
-  Card: {
-    borderRadius: '6px',
-    color: '#161512',
-  },
-  DataTable: {
-    thColor: '#161512',
-    tdColor: '#161512',
-    thTextColor: '#878273',
-    tdTextColor: '#f3f1ec',
-    borderColor: '#2c2a26',
-  },
-  Input: {
-    borderRadius: '4px',
-    color: '#1d1c19',
-  },
-  Select: {
-    peers: {
-      InternalSelection: {
-        color: '#1d1c19',
-      },
-    },
-  },
-  Tabs: {
-    tabBorderRadius: '4px',
-    tabColor: 'transparent',
-    tabTextColorLine: '#878273',
-    tabTextColorActiveLine: '#f3f1ec',
-    barColor: '#e07d2c',
-  },
-};
+  CindorButton,
+  CindorDataTable,
+  CindorDialog,
+  CindorForm,
+  CindorFormField,
+  CindorInput,
+  CindorLayout,
+  CindorLayoutContent,
+  CindorLayoutHeader,
+  CindorPasswordInput,
+  CindorProvider,
+  CindorSelect,
+  CindorStack,
+  CindorTabPanel,
+  CindorTabs,
+  showToast,
+} from 'cindor-ui-vue';
 
 // CSRF token for mutating API requests — fetched after login
 let _csrfToken = '';
@@ -650,6 +502,63 @@ async function fetchCsrfToken() {
     }
   } catch (_) {
     /* non-fatal: CSRF token may not be needed when auth is off */
+  }
+}
+
+function notify(content, tone = 'neutral') {
+  showToast({
+    content,
+    dismissible: true,
+    tone,
+  });
+}
+
+const message = {
+  error(content) {
+    notify(content, 'danger');
+  },
+  success(content) {
+    notify(content, 'success');
+  },
+  warning(content) {
+    notify(content, 'warning');
+  },
+};
+
+const confirmDialog = reactive({
+  open: false,
+  tone: 'warning',
+  title: '',
+  content: '',
+  positiveText: 'Confirm',
+  negativeText: 'Cancel',
+  resolve: null,
+});
+
+function openConfirmDialog({
+  tone = 'warning',
+  title,
+  content,
+  positiveText = 'Confirm',
+  negativeText = 'Cancel',
+}) {
+  return new Promise(resolve => {
+    confirmDialog.open = true;
+    confirmDialog.tone = tone;
+    confirmDialog.title = title;
+    confirmDialog.content = content;
+    confirmDialog.positiveText = positiveText;
+    confirmDialog.negativeText = negativeText;
+    confirmDialog.resolve = resolve;
+  });
+}
+
+function resolveConfirmDialog(confirmed) {
+  const resolver = confirmDialog.resolve;
+  confirmDialog.open = false;
+  confirmDialog.resolve = null;
+  if (typeof resolver === 'function') {
+    resolver(confirmed);
   }
 }
 
@@ -953,6 +862,31 @@ function removeProvider(i) {
   state.providers.splice(i, 1);
 }
 
+function handleProviderCellEdit(event) {
+  const { columnKey, rowId, value } = event?.detail || {};
+  if (!columnKey) {
+    return;
+  }
+
+  const provider = state.providers.find(entry => String(entry?._id) === String(rowId));
+  if (!provider) {
+    return;
+  }
+
+  provider[columnKey] = value;
+}
+
+function handleProviderRowAction(event) {
+  if (event?.detail?.actionKey !== 'remove') {
+    return;
+  }
+
+  const index = state.providers.findIndex(entry => String(entry?._id) === String(event.detail.rowId));
+  if (index >= 0) {
+    removeProvider(index);
+  }
+}
+
 async function loadHealth() {
   try {
     state.loadingHealth = true;
@@ -1072,6 +1006,12 @@ async function runTask(taskName) {
     setStatus(e.message, false);
     message.error(e.message);
     state.runningTask = null;
+  }
+}
+
+function handleTaskRowAction(event) {
+  if (event?.detail?.actionKey === 'run' && event.detail.row?.name) {
+    runTask(event.detail.row.name);
   }
 }
 
@@ -1333,32 +1273,36 @@ function deleteSelectedOutputProfile() {
     return;
   }
 
-  dialog.warning({
+  openConfirmDialog({
+    tone: 'danger',
     title: 'Delete output profile?',
     content: `Delete "${profile.name}" and all of its channel overrides?`,
     positiveText: 'Delete',
     negativeText: 'Cancel',
-    onPositiveClick: async () => {
-      try {
-        state.savingOutputProfile = true;
-        const response = await apiFetch(`/api/output-profiles/${encodeURIComponent(profile.slug)}`, {
-          method: 'DELETE',
-        });
-        const json = await response.json();
-        if (!response.ok) {
-          throw new Error(json.error || 'Failed to delete output profile');
-        }
+  }).then(async confirmed => {
+    if (!confirmed) {
+      return;
+    }
 
-        state.selectedOutputProfileSlug = 'default';
-        await loadChannelAuthoringData();
-        message.success('Output profile deleted');
-      } catch (e) {
-        setStatus(e.message, false);
-        message.error(e.message);
-      } finally {
-        state.savingOutputProfile = false;
+    try {
+      state.savingOutputProfile = true;
+      const response = await apiFetch(`/api/output-profiles/${encodeURIComponent(profile.slug)}`, {
+        method: 'DELETE',
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error || 'Failed to delete output profile');
       }
-    },
+
+      state.selectedOutputProfileSlug = 'default';
+      await loadChannelAuthoringData();
+      message.success('Output profile deleted');
+    } catch (e) {
+      setStatus(e.message, false);
+      message.error(e.message);
+    } finally {
+      state.savingOutputProfile = false;
+    }
   });
 }
 
@@ -1579,27 +1523,12 @@ async function createBackup() {
 }
 
 async function restoreBackup(name) {
-  const confirmed = await new Promise(resolve => {
-    let resolved = false;
-    const safeResolve = value => {
-      if (resolved) return;
-      resolved = true;
-      resolve(value);
-    };
-    dialog.warning({
-      title: 'Restore Backup',
-      content: `Restore config from "${formatBackupTimestamp(name) || name}"? This will overwrite your current configuration and apply it immediately.`,
-      positiveText: 'Restore',
-      negativeText: 'Cancel',
-      maskClosable: false,
-      closeOnEsc: false,
-      closable: false,
-      onPositiveClick: () => safeResolve(true),
-      onNegativeClick: () => safeResolve(false),
-      onClose: () => safeResolve(false),
-      onMaskClick: () => safeResolve(false),
-      onEsc: () => safeResolve(false),
-    });
+  const confirmed = await openConfirmDialog({
+    title: 'Restore Backup',
+    content: `Restore config from "${formatBackupTimestamp(name) || name}"? This will overwrite your current configuration and apply it immediately.`,
+    positiveText: 'Restore',
+    negativeText: 'Cancel',
+    tone: 'warning',
   });
   if (!confirmed) return;
   try {
@@ -1656,27 +1585,12 @@ async function downloadBackup(name) {
 }
 
 async function deleteBackup(name) {
-  const confirmed = await new Promise(resolve => {
-    let resolved = false;
-    const safeResolve = value => {
-      if (resolved) return;
-      resolved = true;
-      resolve(value);
-    };
-    dialog.error({
-      title: 'Delete Backup',
-      content: `Delete backup "${formatBackupTimestamp(name) || name}"? This cannot be undone.`,
-      positiveText: 'Delete',
-      negativeText: 'Cancel',
-      maskClosable: false,
-      closeOnEsc: false,
-      closable: false,
-      onPositiveClick: () => safeResolve(true),
-      onNegativeClick: () => safeResolve(false),
-      onClose: () => safeResolve(false),
-      onMaskClick: () => safeResolve(false),
-      onEsc: () => safeResolve(false),
-    });
+  const confirmed = await openConfirmDialog({
+    tone: 'danger',
+    title: 'Delete Backup',
+    content: `Delete backup "${formatBackupTimestamp(name) || name}"? This cannot be undone.`,
+    positiveText: 'Delete',
+    negativeText: 'Cancel',
   });
   if (!confirmed) return;
   try {
@@ -1693,6 +1607,21 @@ async function deleteBackup(name) {
     message.error(e.message);
   } finally {
     state.deletingBackup = null;
+  }
+}
+
+function handleBackupRowAction(event) {
+  const backupName = event?.detail?.row?.name;
+  if (!backupName) {
+    return;
+  }
+
+  if (event.detail.actionKey === 'restore') {
+    restoreBackup(backupName);
+  } else if (event.detail.actionKey === 'download') {
+    downloadBackup(backupName);
+  } else if (event.detail.actionKey === 'delete') {
+    deleteBackup(backupName);
   }
 }
 
@@ -2196,6 +2125,12 @@ function watchChannel(channel) {
   if (channel.tvg_id) loadGuide(channel.tvg_id);
 }
 
+function handlePreviewRowAction(event) {
+  if (event?.detail?.actionKey === 'watch' && event.detail.row) {
+    watchChannel(event.detail.row);
+  }
+}
+
 function copyStreamUrl() {
   const relativeUrl = previewStreamUrl.value;
   if (!relativeUrl) {
@@ -2328,6 +2263,10 @@ const {
   previewGuide,
   loadingGuide,
 } = toRefs(state);
+
+const usageTabLabel = computed(() =>
+  activeUsage.value.length > 0 ? `Usage (${Math.min(activeUsage.value.length, 99)})` : 'Usage'
+);
 
 const channelWorkflowsLoading = computed(
   () => loadingChannelAuthoring.value || state.loadingOutputProfileEntries
@@ -2655,23 +2594,16 @@ const healthDetails = computed(() =>
 );
 
 const healthColumns = [
-  { title: 'Channel ID', key: 'id' },
+  { label: 'Channel ID', key: 'id', sortable: true },
   {
-    title: 'Status',
+    label: 'Status',
     key: 'status',
-    render(row) {
-      return h(
-        'span',
-        {
-          style: `font-weight:600;color:${row.status === 'online' ? 'var(--success)' : 'var(--danger)'}`,
-        },
-        row.status
-      );
-    },
+    sortable: true,
+    cellRenderer: ({ row }) => (row.status === 'online' ? 'Online' : 'Offline'),
   },
-  { title: 'Latency (ms)', key: 'ms' },
-  { title: 'Content-Type', key: 'contentType' },
-  { title: 'Error', key: 'error' },
+  { label: 'Latency (ms)', key: 'ms', sortable: true },
+  { label: 'Content-Type', key: 'contentType' },
+  { label: 'Error', key: 'error' },
 ];
 
 const formattedHealthUpdated = computed(() => {
@@ -2685,146 +2617,89 @@ const formattedHealthUpdated = computed(() => {
 });
 
 const usageColumns = [
-  { title: 'IP', key: 'ip' },
-  { title: 'Channel ID', key: 'channelId' },
-  { title: 'Name', key: 'name' },
-  { title: 'tvg-id', key: 'tvg_id' },
-  {
-    title: 'Client',
-    key: 'client',
-    render(row) {
-      const label = row.client || h('span', { style: 'opacity:.5' }, '—');
-      if (!row.userAgent) return label;
-      return h(NTooltip, null, {
-        trigger: () =>
-          h('span', { style: 'cursor:default;border-bottom:1px dotted currentColor' }, label),
-        default: () => h('span', { style: 'font-size:.8em;word-break:break-all' }, row.userAgent),
-      });
-    },
-  },
-  { title: 'Started', key: 'startedAt' },
-  { title: 'Last Seen', key: 'lastSeenAt' },
+  { label: 'IP', key: 'ip', sortable: true },
+  { label: 'Channel ID', key: 'channelId', sortable: true },
+  { label: 'Name', key: 'name', sortable: true },
+  { label: 'tvg-id', key: 'tvg_id', sortable: true },
+  { label: 'Client', key: 'client' },
+  { label: 'User Agent', key: 'userAgent', tooltip: true, truncate: true },
+  { label: 'Started', key: 'startedAt', sortable: true },
+  { label: 'Last Seen', key: 'lastSeenAt', sortable: true },
 ];
 
 const taskColumns = [
-  { title: 'Task Name', key: 'name' },
+  { label: 'Task Name', key: 'name', sortable: true },
+  { label: 'Schedule', key: 'schedule' },
   {
-    title: 'Schedule',
-    key: 'schedule',
-    render(row) {
-      return h('code', { style: 'font-size:.85em;opacity:.8' }, row.schedule);
-    },
-  },
-  {
-    title: 'Status',
+    label: 'Status',
     key: 'status',
-    render(row) {
-      if (row.isRunning || state.runningTask === row.name)
-        return h('span', { style: 'color:var(--warning);font-weight:600' }, '⏳ Running');
-      if (!row.lastStatus) return h('span', { style: 'opacity:.6' }, '—');
-      const color = row.lastStatus === 'success' ? 'var(--success)' : 'var(--danger)';
-      const icon = row.lastStatus === 'success' ? '✓' : '✗';
-      return h('span', { style: `color:${color};font-weight:600` }, `${icon} ${row.lastStatus}`);
+    cellRenderer: ({ row }) => {
+      if (row.isRunning || state.runningTask === row.name) {
+        return 'Running';
+      }
+      if (!row.lastStatus) {
+        return '—';
+      }
+      return row.lastStatus === 'success' ? 'Success' : `Failed: ${row.lastStatus}`;
     },
   },
   {
-    title: 'Last Run',
+    label: 'Last Run',
     key: 'lastRun',
-    render(row) {
-      if (!row.lastRun) return h('span', { style: 'opacity:.6' }, 'Never');
-      return new Date(row.lastRun).toLocaleString();
-    },
+    cellRenderer: ({ row }) => (row.lastRun ? new Date(row.lastRun).toLocaleString() : 'Never'),
   },
   {
-    title: 'Duration',
+    label: 'Duration',
     key: 'lastDuration',
-    render(row) {
-      if (row.lastDuration == null) return h('span', { style: 'opacity:.6' }, '—');
-      return `${row.lastDuration}ms`;
-    },
+    cellRenderer: ({ row }) => (row.lastDuration == null ? '—' : `${row.lastDuration}ms`),
   },
   {
-    title: 'Actions',
+    label: 'Actions',
     key: 'actions',
-    render(row) {
-      return h(
-        NButton,
-        {
-          type: 'primary',
-          size: 'small',
-          secondary: true,
-          disabled: row.isRunning || state.runningTask === row.name,
-          loading: state.runningTask === row.name,
-          onClick: () => runTask(row.name),
-        },
-        { default: () => (row.isRunning ? 'Running...' : 'Run Now') }
-      );
-    },
+    actions: [
+      {
+        key: 'run',
+        label: 'Run Now',
+        variant: 'ghost',
+        disabled: ({ row }) => row.isRunning || state.runningTask === row.name,
+      },
+    ],
   },
 ];
 
 const providerColumns = [
   {
-    title: 'Name',
+    label: 'Name',
     key: 'name',
-    render(row) {
-      return h(NInput, { value: row?.name ?? '', onUpdateValue: v => (row.name = v) });
-    },
+    editor: { type: 'input', placeholder: 'Source name' },
   },
   {
-    title: 'Type',
+    label: 'Type',
     key: 'type',
-    render(row) {
-      return h(NSelect, {
-        value: row?.type ?? 'm3u',
-        options: [
-          { label: 'M3U', value: 'm3u' },
-          { label: 'HDHomeRun', value: 'hdhomerun' },
-        ],
-        onUpdateValue: v => (row.type = v),
-      });
+    editor: {
+      type: 'select',
+      options: [
+        { label: 'M3U', value: 'm3u' },
+        { label: 'HDHomeRun', value: 'hdhomerun' },
+      ],
     },
   },
   {
-    title: 'Source URL',
+    label: 'Source URL',
     key: 'url',
-    render(row) {
-      return h(NInput, { value: row?.url ?? '', onUpdateValue: v => (row.url = v) });
-    },
+    editor: { type: 'input', placeholder: 'https://example.com/playlist.m3u' },
   },
   {
-    title: 'EPG URL (optional)',
+    label: 'EPG URL (optional)',
     key: 'epg',
-    render(row) {
-      return h(NInput, {
-        value: row?.epg ?? '',
-        placeholder: 'https://...epg.xml (optional)',
-        onUpdateValue: v => (row.epg = v),
-      });
-    },
+    editor: { type: 'input', placeholder: 'https://...epg.xml (optional)' },
   },
   {
-    title: 'Remove',
-    key: 'remove',
-    render(row) {
-      return h(
-        NButton,
-        {
-          type: 'error',
-          size: 'small',
-          onClick: () => removeProvider(providers.value.indexOf(row)),
-        },
-        { default: () => '✕' }
-      );
-    },
+    label: 'Actions',
+    key: 'actions',
+    actions: [{ key: 'remove', label: 'Remove', variant: 'ghost' }],
   },
 ];
-
-function rowKeyFn(row) {
-  // Use stable _id if available, otherwise generate a fallback
-  if (row?._id) return row._id;
-  return (row?.name || '') + '|' + (row?.url ?? row?.tvg_id ?? '');
-}
 
 /**
  * Format a backup name (e.g. "backup-2024-01-15T14-30-00") into a human-readable
@@ -2841,57 +2716,33 @@ function formatBackupTimestamp(name) {
 
 const backupColumns = [
   {
-    title: 'Backup',
+    label: 'Backup',
     key: 'name',
-    render(row) {
-      const ts = formatBackupTimestamp(row.name);
-      return h('code', { style: 'font-size:.85em' }, ts || row.name);
-    },
+    sortable: true,
+    cellRenderer: ({ row }) => formatBackupTimestamp(row.name) || row.name,
   },
   {
-    title: 'Actions',
+    label: 'Actions',
     key: 'actions',
-    render(row) {
-      return h(
-        NSpace,
-        { align: 'center' },
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                secondary: true,
-                loading: state.restoringBackup === row.name,
-                disabled: !!state.restoringBackup || !!state.deletingBackup,
-                onClick: () => restoreBackup(row.name),
-              },
-              { default: () => (state.restoringBackup === row.name ? 'Restoring...' : 'Restore') }
-            ),
-            h(
-              NButton,
-              {
-                size: 'small',
-                secondary: true,
-                onClick: () => downloadBackup(row.name),
-              },
-              { default: () => 'Download' }
-            ),
-            h(
-              NButton,
-              {
-                type: 'error',
-                size: 'small',
-                loading: state.deletingBackup === row.name,
-                disabled: !!state.restoringBackup || !!state.deletingBackup,
-                onClick: () => deleteBackup(row.name),
-              },
-              { default: () => '✕' }
-            ),
-          ],
-        }
-      );
-    },
+    actions: [
+      {
+        key: 'restore',
+        label: 'Restore',
+        variant: 'ghost',
+        disabled: () => Boolean(state.restoringBackup || state.deletingBackup),
+      },
+      {
+        key: 'download',
+        label: 'Download',
+        variant: 'ghost',
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        variant: 'ghost',
+        disabled: () => Boolean(state.restoringBackup || state.deletingBackup),
+      },
+    ],
   },
 ];
 
@@ -2908,6 +2759,13 @@ const filteredPreviewChannels = computed(() => {
       (c.source || '').toLowerCase().includes(q)
   );
 });
+
+const previewTableRows = computed(() =>
+  filteredPreviewChannels.value.map((channel, index) => ({
+    ...channel,
+    previewKey: channel.original_url || `${channel.source}|${channel.name}|${channel.guideNumber}|${index}`,
+  }))
+);
 
 const previewStreamUrl = computed(() => {
   const ch = state.previewWatchingChannel;
@@ -2933,83 +2791,116 @@ const previewTranscodeUrl = computed(() => {
 // (i.e. the stream is live but uses codecs the browser cannot decode).
 const showTranscodeButton = computed(() => state.playerError === ERR_UNSUPPORTED_CODEC);
 
+function createPreviewLogoFallbackElement() {
+  const fallback = document.createElement('span');
+  fallback.textContent = '📺';
+  fallback.setAttribute('aria-hidden', 'true');
+  fallback.style.cssText = [
+    'display:inline-flex',
+    'align-items:center',
+    'justify-content:center',
+    'width:32px',
+    'height:32px',
+    'max-width:32px',
+    'max-height:32px',
+    'overflow:hidden',
+    'border-radius:4px',
+    'background:rgba(255,255,255,0.06)',
+    'font-size:1.05rem',
+    'line-height:1',
+    'vertical-align:middle',
+  ].join(';');
+  return fallback;
+}
+
+function renderPreviewLogoCell({ row }) {
+  if (typeof document === 'undefined') {
+    return row.logo ? '' : '📺';
+  }
+
+  const wrapper = document.createElement('span');
+  wrapper.style.cssText = [
+    'display:inline-flex',
+    'align-items:center',
+    'justify-content:center',
+    'width:32px',
+    'height:32px',
+    'max-width:32px',
+    'max-height:32px',
+    'flex:0 0 32px',
+    'overflow:hidden',
+    'vertical-align:middle',
+  ].join(';');
+
+  if (!row.logo) {
+    wrapper.append(createPreviewLogoFallbackElement());
+    return wrapper;
+  }
+
+  const image = document.createElement('img');
+  image.src = row.logo;
+  image.alt = '';
+  image.style.cssText = [
+    'display:block',
+    'width:100%',
+    'height:100%',
+    'max-width:32px',
+    'max-height:32px',
+    'object-fit:contain',
+    'border-radius:4px',
+  ].join(';');
+  image.addEventListener('error', () => {
+    wrapper.replaceChildren(createPreviewLogoFallbackElement());
+  });
+  wrapper.append(image);
+  return wrapper;
+}
+
 const previewColumns = [
   {
-    title: '',
+    label: '',
     key: 'logo',
-    width: 44,
-    render(row) {
-      if (!row.logo) return h('span', { style: 'opacity:.25;font-size:1.3em;line-height:1' }, '📺');
-      return h('img', {
-        src: row.logo,
-        style: 'width:32px;height:32px;object-fit:contain;vertical-align:middle;border-radius:2px;',
-        onerror: e => {
-          e.target.style.display = 'none';
-        },
-      });
-    },
+    align: 'center',
+    width: '56px',
+    cellRenderer: renderPreviewLogoCell,
   },
   {
-    title: 'Ch #',
+    label: 'Ch #',
     key: 'guideNumber',
-    width: 68,
-    sorter: (a, b) => {
-      const n = v => {
-        const x = parseFloat(String(v?.guideNumber ?? ''));
-        return Number.isFinite(x) ? x : 99999;
-      };
-      return n(a) - n(b);
+    sortable: true,
+    sortValue: row => {
+      const value = parseFloat(String(row?.guideNumber ?? ''));
+      return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
     },
-    render(row) {
-      return h('span', { style: 'opacity:.85' }, row.guideNumber || '—');
-    },
+    cellRenderer: ({ row }) => row.guideNumber || '—',
   },
   {
-    title: 'Name',
+    label: 'Name',
     key: 'name',
-    sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
-    ellipsis: { tooltip: true },
+    sortable: true,
   },
   {
-    title: 'Group',
+    label: 'Group',
     key: 'group',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('span', { style: 'opacity:.8' }, row.group || '—');
-    },
+    tooltip: true,
+    cellRenderer: ({ row }) => row.group || '—',
   },
   {
-    title: 'Source',
+    label: 'Source',
     key: 'source',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('span', { style: 'opacity:.7;font-size:.85em' }, row.source || '—');
-    },
+    tooltip: true,
   },
   {
-    title: 'TVG-ID',
+    label: 'TVG-ID',
     key: 'tvg_id',
-    ellipsis: { tooltip: true },
-    render(row) {
-      return h('code', { style: 'font-size:.78em;opacity:.75' }, row.tvg_id || '—');
-    },
+    tooltip: true,
+    cellRenderer: ({ row }) => row.tvg_id || '—',
   },
   {
-    title: '',
+    label: 'Actions',
     key: 'actions',
-    width: 90,
-    render(row) {
-      return h(
-        NButton,
-        {
-          size: 'small',
-          secondary: true,
-          type: 'primary',
-          onClick: () => watchChannel(row),
-        },
-        { default: () => '▶ Watch' }
-      );
-    },
+    width: '120px',
+    actions: [{ key: 'watch', label: 'Watch', icon: 'play', variant: 'ghost' }],
   },
 ];
 </script>
@@ -3100,82 +2991,21 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
-.admin-tabs .n-tabs-nav {
-  margin: 0 !important;
-  padding: 16px 20px 0;
-  background: var(--bg-subtle);
-  border-bottom: 1px solid var(--border);
-}
-
-.admin-tabs .n-tabs-nav-scroll-wrapper {
-  padding-bottom: 12px;
-}
-
-.admin-tabs .n-tabs-tab {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.admin-tabs-pane-wrapper {
-  padding: 0 32px 32px;
-}
-
-.admin-tabs .n-tab-pane {
-  padding-top: 28px;
-}
-
-.admin-tabs .n-form {
-  max-width: 760px;
-}
-
-.admin-tabs .n-form-item {
-  margin-bottom: 18px;
-}
-
-.admin-tabs .n-form-item:last-child {
-  margin-bottom: 0;
-}
-
-.admin-tabs .n-space {
-  margin-top: 8px;
-}
-
 .admin-tabs h3 {
   margin-top: 0;
   margin-bottom: 16px !important;
 }
 
-.admin-tabs .n-data-table {
+.admin-tabs {
+  display: block;
+  padding: 20px;
+  background: var(--bg-subtle);
+}
+
+.admin-tabs cindor-data-table {
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
-}
-
-.admin-tabs .n-collapse {
-  margin-bottom: 16px;
-}
-
-.admin-tabs .n-input,
-.admin-tabs .n-base-selection,
-.admin-tabs .n-card,
-.admin-tabs .n-modal,
-.admin-tabs .n-data-table-wrapper {
-  font-family: var(--font-sans);
-}
-
-.admin-tabs .n-input .n-input-wrapper,
-.admin-tabs .n-base-selection .n-base-selection-label,
-.admin-tabs .n-base-selection .n-base-selection-tags {
-  background: var(--bg-muted);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
-}
-
-.admin-tabs .n-input .n-input-wrapper:hover,
-.admin-tabs .n-base-selection:hover .n-base-selection-label,
-.admin-tabs .n-base-selection:hover .n-base-selection-tags {
-  box-shadow: inset 0 0 0 1px var(--fg-subtle);
 }
 
 .admin-tabs code,
@@ -3183,15 +3013,171 @@ body {
   font-family: var(--font-mono);
 }
 
-.admin-tabs .n-data-table-th {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.setup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 14, 12, 0.72);
+  backdrop-filter: blur(10px);
 }
 
-.admin-tabs .n-button {
-  letter-spacing: -0.005em;
+.setup-card {
+  width: min(460px, 100%);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.setup-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.setup-copy {
+  margin: 0 0 1rem;
+  opacity: 0.8;
+}
+
+.setup-error {
+  margin-bottom: 0.75rem;
+  color: var(--danger);
+}
+
+.compact-button {
+  --cindor-button-min-height: 30px;
+  --cindor-button-padding-inline: var(--space-3);
+}
+
+.warning-button {
+  --cindor-button-solid-background: var(--warning);
+  --cindor-button-solid-border-color: var(--warning);
+  --cindor-button-solid-color: #111;
+  --cindor-button-solid-hover-background: color-mix(in srgb, var(--warning) 85%, white);
+  --cindor-button-solid-hover-border-color: color-mix(in srgb, var(--warning) 85%, white);
+}
+
+.danger-button {
+  --cindor-button-solid-background: var(--danger);
+  --cindor-button-solid-border-color: var(--danger);
+  --cindor-button-solid-hover-background: color-mix(in srgb, var(--danger) 85%, white);
+  --cindor-button-solid-hover-border-color: color-mix(in srgb, var(--danger) 85%, white);
+  --cindor-button-ghost-border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  --cindor-button-ghost-color: var(--danger);
+  --cindor-button-hover-border-color: var(--danger);
+  --cindor-button-hover-color: var(--danger);
+}
+
+.toolbar-count {
+  opacity: 0.6;
+  font-size: 0.9em;
+}
+
+.preview-logo-cell,
+.preview-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  max-width: 32px;
+  max-height: 32px;
+  flex: 0 0 32px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.preview-logo-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 32px;
+  max-height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.preview-logo-fallback {
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.dialog-body {
+  display: grid;
+  gap: 1rem;
+  min-width: min(720px, 90vw);
+}
+
+.dialog-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.dialog-copy {
+  line-height: 1.5;
+}
+
+.dialog-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.dialog-code {
+  flex: 1;
+  font-size: 0.78em;
+  word-break: break-all;
+  opacity: 0.85;
+}
+
+.debug-panel {
+  margin-bottom: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.debug-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.6rem;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  user-select: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.debug-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.debug-pre {
+  font-size: 0.85em;
+  line-height: 1.4;
+  max-height: 140px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.4rem;
+  border-radius: 3px;
+  margin: 0;
 }
 
 @media (max-width: 900px) {
@@ -3204,12 +3190,12 @@ body {
     padding: 14px;
   }
 
-  .admin-tabs-pane-wrapper {
-    padding: 0 20px 20px;
+  .admin-tabs {
+    padding: 16px;
   }
 
-  .admin-tabs .n-tab-pane {
-    padding-top: 20px;
+  .dialog-body {
+    min-width: min(100%, 90vw);
   }
 }
 </style>

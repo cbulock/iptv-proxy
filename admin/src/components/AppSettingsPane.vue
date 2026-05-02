@@ -1,66 +1,63 @@
 <template>
   <div class="tab-panel">
-    <n-form label-placement="left" label-width="120">
-      <n-form-item label="Base URL">
-        <n-input v-model:value="appBaseUrl" placeholder="https://example.com" />
-      </n-form-item>
-      <n-space>
-        <n-button type="primary" @click="saveApp" :loading="savingApp">
-{{
-          savingApp ? 'Saving...' : 'Save App'
-        }}
-</n-button>
-      </n-space>
-    </n-form>
+    <CindorForm>
+      <CindorFormField label="Base URL">
+        <CindorInput v-model="appBaseUrl" placeholder="https://example.com" />
+      </CindorFormField>
+      <CindorStack direction="horizontal" gap="sm">
+        <CindorButton :disabled="savingApp" @click="saveApp">
+          {{ savingApp ? 'Saving...' : 'Save App' }}
+        </CindorButton>
+      </CindorStack>
+    </CindorForm>
     <div class="foot">
       Used for absolute URL generation behind proxies and external clients.
     </div>
 
     <div v-if="authConfigured" style="margin-top: 2rem">
       <h3 style="margin-bottom: 0.75rem">Security</h3>
-      <n-form label-placement="left" label-width="160" style="max-width: 520px">
-        <n-form-item label="Current Password">
-          <n-input
-            v-model:value="passwordCurrent"
-            type="password"
-            show-password-on="click"
+      <CindorForm style="max-width: 520px">
+        <CindorFormField label="Current Password">
+          <CindorPasswordInput
+            v-model="passwordCurrent"
             placeholder="Enter current password"
             :disabled="savingPassword"
           />
-        </n-form-item>
-        <n-form-item label="New Password">
-          <n-input
-            v-model:value="passwordNew"
-            type="password"
-            show-password-on="click"
+        </CindorFormField>
+        <CindorFormField label="New Password">
+          <CindorPasswordInput
+            v-model="passwordNew"
             placeholder="Min. 8 characters"
             :disabled="savingPassword"
           />
-        </n-form-item>
-        <n-form-item label="Confirm New Password">
-          <n-input
-            v-model:value="passwordConfirm"
-            type="password"
-            show-password-on="click"
+        </CindorFormField>
+        <CindorFormField label="Confirm New Password">
+          <CindorPasswordInput
+            v-model="passwordConfirm"
             placeholder="Repeat new password"
             :disabled="savingPassword"
           />
-        </n-form-item>
-        <n-form-item>
-          <n-button type="primary" :loading="savingPassword" @click="changePassword">
-{{
-            savingPassword ? 'Saving...' : 'Change Password'
-          }}
-</n-button>
-        </n-form-item>
-      </n-form>
+        </CindorFormField>
+        <CindorStack direction="horizontal" gap="sm">
+          <CindorButton :disabled="savingPassword" @click="changePassword">
+            {{ savingPassword ? 'Saving...' : 'Change Password' }}
+          </CindorButton>
+        </CindorStack>
+      </CindorForm>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
-import { NButton, NForm, NFormItem, NInput, NSpace } from 'naive-ui';
+import {
+  CindorButton,
+  CindorForm,
+  CindorFormField,
+  CindorInput,
+  CindorPasswordInput,
+  CindorStack,
+} from 'cindor-ui-vue';
 
 const props = defineProps({
   appBaseUrl: { type: String, required: true },

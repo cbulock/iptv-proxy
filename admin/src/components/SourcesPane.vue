@@ -1,18 +1,14 @@
 <template>
   <div class="tab-panel">
-    <n-space align="center" wrap style="margin-bottom: 0.5rem">
-      <n-button type="primary" secondary @click="addProvider">Add Source</n-button>
-      <n-button type="primary" @click="saveProviders" :loading="savingProviders">
-{{
-        savingProviders ? 'Saving...' : 'Save Sources'
-      }}
-</n-button>
-      <n-button @click="loadEPGValidation" :loading="loadingEPGValidation">
-{{
-        loadingEPGValidation ? 'Validating...' : 'Validate EPG'
-      }}
-</n-button>
-    </n-space>
+    <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.5rem">
+      <CindorButton variant="ghost" @click="addProvider">Add Source</CindorButton>
+      <CindorButton :disabled="savingProviders" @click="saveProviders">
+        {{ savingProviders ? 'Saving...' : 'Save Sources' }}
+      </CindorButton>
+      <CindorButton variant="ghost" :disabled="loadingEPGValidation" @click="loadEPGValidation">
+        {{ loadingEPGValidation ? 'Validating...' : 'Validate EPG' }}
+      </CindorButton>
+    </CindorStack>
     <div
       v-if="epgValidation"
       style="
@@ -137,12 +133,13 @@
         </div>
       </div>
     </div>
-    <n-data-table
+    <CindorDataTable
       v-if="Array.isArray(providers) && providers.length"
+      row-id-key="_id"
       :columns="providerColumns"
-      :data="providers"
-      :bordered="false"
-      :row-key="rowKeyFn"
+      :rows="providers"
+      @cell-edit="$emit('cell-edit', $event)"
+      @row-action="$emit('row-action', $event)"
     />
     <div v-else style="margin-top: 1rem; opacity: 0.7">No sources configured yet.</div>
     <div class="foot">
@@ -153,19 +150,20 @@
 </template>
 
 <script setup>
-import { NButton, NDataTable, NSpace } from 'naive-ui';
+import { CindorButton, CindorDataTable, CindorStack } from 'cindor-ui-vue';
 
 defineProps({
   providers: { type: Array, required: true },
   epgValidation: { type: Object, default: null },
   providerColumns: { type: Array, required: true },
-  rowKeyFn: { type: Function, required: true },
   savingProviders: { type: Boolean, required: true },
   loadingEPGValidation: { type: Boolean, required: true },
   addProvider: { type: Function, required: true },
   saveProviders: { type: Function, required: true },
   loadEPGValidation: { type: Function, required: true },
 });
+
+defineEmits(['cell-edit', 'row-action']);
 </script>
 
 <style scoped>

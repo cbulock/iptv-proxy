@@ -1,63 +1,57 @@
 <template>
   <div class="tab-panel">
-    <n-space align="center" wrap style="margin-bottom: 0.75rem">
-      <n-select
+    <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
+      <CindorSelect
         style="min-width: 220px"
-        :value="selectedProfileSlug"
-        :options="profileOptions"
-        placeholder="Select output profile"
+        :model-value="selectedProfileSlug"
         :disabled="loading || !profileOptions.length"
-        @update:value="changeSelectedProfile"
-      />
-      <n-input
+        @update:model-value="changeSelectedProfile"
+      >
+        <option value="" disabled>Select output profile</option>
+        <option v-for="profile in profileOptions" :key="profile.value" :value="profile.value">
+          {{ profile.label }}
+        </option>
+      </CindorSelect>
+      <CindorInput
         style="min-width: 220px"
-        :value="selectedProfile?.name || ''"
+        :model-value="selectedProfile?.name || ''"
         placeholder="Profile name"
         :disabled="loading || !selectedProfile"
-        @update:value="updateProfileName"
+        @update:model-value="updateProfileName"
       />
-      <n-switch
-        :value="selectedProfile?.enabled ?? true"
+      <label class="toolbar-switch">
+        <span>Enabled</span>
+        <CindorSwitch
+          :model-value="selectedProfile?.enabled ?? true"
+          :disabled="loading || !selectedProfile || selectedProfile?.isDefault"
+          @update:model-value="updateProfileEnabled"
+        />
+      </label>
+      <CindorButton variant="ghost" :disabled="loading" @click="createProfile">New Profile</CindorButton>
+      <CindorButton variant="ghost" :disabled="loading || !selectedProfile" @click="duplicateProfile">
+        Duplicate
+      </CindorButton>
+      <CindorButton
+        class="danger-button"
+        variant="ghost"
         :disabled="loading || !selectedProfile || selectedProfile?.isDefault"
-        @update:value="updateProfileEnabled"
-      >
-        <template #checked>Enabled</template>
-        <template #unchecked>Disabled</template>
-      </n-switch>
-      <n-button @click="createProfile" :disabled="loading">New Profile</n-button>
-      <n-button @click="duplicateProfile" :disabled="loading || !selectedProfile">Duplicate</n-button>
-      <n-button
-        tertiary
-        type="error"
         @click="deleteProfile"
-        :disabled="loading || !selectedProfile || selectedProfile?.isDefault"
-        >
-Delete
-</n-button>
-      <n-button @click="refreshChannels" :loading="loading">
-{{
-        loading ? 'Refreshing...' : 'Refresh'
-      }}
-</n-button>
-      <n-button @click="reloadChannels" :loading="reloadingChannels">
-{{
-        reloadingChannels ? 'Reloading Channels...' : 'Reload Channels'
-      }}
-</n-button>
-      <n-button @click="reloadEPG" :loading="reloadingEPG">
-{{
-        reloadingEPG ? 'Reloading EPG...' : 'Reload EPG'
-      }}
-</n-button>
-      <n-button
-        type="primary"
-        @click="saveProfileChanges"
-        :disabled="!profileDirty"
-        :loading="savingProfile"
-        >
-{{ savingProfile ? 'Saving Output...' : 'Save Output Changes' }}
-</n-button>
-    </n-space>
+      >
+        Delete
+      </CindorButton>
+      <CindorButton variant="ghost" :disabled="loading" @click="refreshChannels">
+        {{ loading ? 'Refreshing...' : 'Refresh' }}
+      </CindorButton>
+      <CindorButton variant="ghost" :disabled="reloadingChannels" @click="reloadChannels">
+        {{ reloadingChannels ? 'Reloading Channels...' : 'Reload Channels' }}
+      </CindorButton>
+      <CindorButton variant="ghost" :disabled="reloadingEPG" @click="reloadEPG">
+        {{ reloadingEPG ? 'Reloading EPG...' : 'Reload EPG' }}
+      </CindorButton>
+      <CindorButton :disabled="!profileDirty || savingProfile" @click="saveProfileChanges">
+        {{ savingProfile ? 'Saving Output...' : 'Save Output Changes' }}
+      </CindorButton>
+    </CindorStack>
 
     <div v-if="selectedProfile" class="profile-meta">
       <div class="profile-meta-item">
@@ -73,14 +67,12 @@ Delete
     <div v-if="selectedProfile && profileEndpointInfo" class="endpoint-card">
       <div class="endpoint-card-header">
         <div class="endpoint-card-title">{{ profileEndpointInfo.title }}</div>
-        <n-tag
-          size="small"
-          round
-          :bordered="false"
-          :type="profileEndpointInfo.available ? 'success' : 'warning'"
+        <CindorTag
+          :tone="profileEndpointInfo.available ? 'success' : 'neutral'"
+          :class="{ 'status-warning': !profileEndpointInfo.available }"
         >
           {{ profileEndpointInfo.available ? 'Active for this profile' : 'Disabled' }}
-        </n-tag>
+        </CindorTag>
       </div>
       <div class="endpoint-card-message">{{ profileEndpointInfo.message }}</div>
       <div class="endpoint-list">
@@ -128,29 +120,23 @@ Delete
         <tbody>
           <tr v-for="row in rows" :key="row.id">
             <td class="cell-center">
-              <n-switch
-                :value="row.outputEnabled"
+              <CindorSwitch
+                :model-value="row.outputEnabled"
                 :disabled="row.enableToggleDisabled"
-                @update:value="value => updateOutputEnabled(row.id, value)"
+                @update:model-value="value => updateOutputEnabled(row.id, value)"
               />
             </td>
             <td>
               <div class="channel-name">{{ row.name }}</div>
               <div class="meta-line">
-                <n-tag size="small" round :bordered="false">{{ row.tvg_id || 'no tvg-id' }}</n-tag>
-                <n-tag size="small" round :bordered="false" type="info">
-{{
-                  row.guideNumber || 'no guide #'
-                }}
-</n-tag>
-                <n-tag size="small" round :bordered="false" type="success">
-                  {{ row.sourceBindings.length }} source{{
-                    row.sourceBindings.length === 1 ? '' : 's'
-                  }}
-                </n-tag>
-                <n-tag v-if="row.outputEnabled" size="small" round :bordered="false" type="warning">
+                <CindorTag tone="neutral">{{ row.tvg_id || 'no tvg-id' }}</CindorTag>
+                <CindorTag tone="accent">{{ row.guideNumber || 'no guide #' }}</CindorTag>
+                <CindorTag tone="success">
+                  {{ row.sourceBindings.length }} source{{ row.sourceBindings.length === 1 ? '' : 's' }}
+                </CindorTag>
+                <CindorTag v-if="row.outputEnabled" class="status-warning" tone="neutral">
                   output {{ row.effectiveGuideNumber || row.guideNumber || 'default' }}
-                </n-tag>
+                </CindorTag>
               </div>
               <div class="source-list">
                 {{ row.sourceBindingsSummary || 'No source bindings available yet.' }}
@@ -160,41 +146,50 @@ Delete
               </div>
             </td>
             <td>
-              <n-select
-                :value="row.preferredSourceChannelId"
-                :options="row.preferredStreamOptions"
-                placeholder="No stream choices"
+              <CindorSelect
+                :model-value="row.preferredSourceChannelId || ''"
                 :disabled="row.preferredStreamOptions.length === 0"
-                :loading="updatingPreferredStreamId === row.id"
-                @update:value="value => updatePreferredStream(row.id, value)"
-              />
+                @update:model-value="value => updatePreferredStream(row.id, value)"
+              >
+                <option value="" disabled>No stream choices</option>
+                <option
+                  v-for="option in row.preferredStreamOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </CindorSelect>
             </td>
             <td>
-              <n-select
-                :value="row.selectedGuideBindingValue"
-                :options="row.guideBindingOptions"
-                placeholder="No guide choices"
+              <CindorSelect
+                :model-value="row.selectedGuideBindingValue || ''"
                 :disabled="row.guideBindingOptions.length === 0"
-                :loading="updatingGuideBindingId === row.id"
-                @update:value="value => updateGuideBinding(row.id, value)"
-              />
+                @update:model-value="value => updateGuideBinding(row.id, value)"
+              >
+                <option value="" disabled>No guide choices</option>
+                <option
+                  v-for="option in row.guideBindingOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </CindorSelect>
             </td>
             <td>
               <div class="guide-state">
-                <n-tag
-                  size="small"
-                  round
-                  :bordered="false"
-                  :type="row.guideDisplayWarning ? 'error' : row.guideDisplaySource === 'override' ? 'success' : 'info'"
+                <CindorTag
+                  :tone="row.guideDisplaySource === 'override' ? 'success' : 'accent'"
+                  :class="{ 'status-danger': row.guideDisplayWarning }"
                 >
                   {{ row.guideDisplayLabel }}
-                </n-tag>
+                </CindorTag>
               </div>
-              <n-input
-                :value="row.guideNumberOverrideInput"
-                clearable
+              <CindorInput
+                :model-value="row.guideNumberOverrideInput"
                 placeholder="Use canonical"
-                @update:value="value => updateGuideNumberOverrideInput(row.id, value)"
+                @update:model-value="value => updateGuideNumberOverrideInput(row.id, value)"
                 @blur="() => commitGuideNumberOverride(row.id)"
               />
               <div class="guide-help" :class="{ warning: row.guideDisplayWarning }">
@@ -215,7 +210,14 @@ Delete
 
 <script setup>
 import { computed } from 'vue';
-import { NButton, NInput, NSelect, NSpace, NSwitch, NTag } from 'naive-ui';
+import {
+  CindorButton,
+  CindorInput,
+  CindorSelect,
+  CindorStack,
+  CindorSwitch,
+  CindorTag,
+} from 'cindor-ui-vue';
 
 const props = defineProps({
   profiles: { type: Array, required: true },
@@ -429,6 +431,13 @@ const profileOptions = computed(() =>
   opacity: 1;
 }
 
+.toolbar-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
 .cell-center {
   text-align: center;
   vertical-align: middle;
@@ -438,6 +447,21 @@ const profileOptions = computed(() =>
   padding: 2rem 0;
   text-align: center;
   opacity: 0.65;
+}
+
+.danger-button {
+  --cindor-button-ghost-border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  --cindor-button-ghost-color: var(--danger);
+  --cindor-button-hover-border-color: var(--danger);
+  --cindor-button-hover-color: var(--danger);
+}
+
+.status-warning {
+  color: var(--warning);
+}
+
+.status-danger {
+  color: var(--danger);
 }
 
 @media (max-width: 900px) {
