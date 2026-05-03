@@ -7,8 +7,8 @@
     "build": "vite build"
   },
   "dependencies": {
-    "cindor-ui-core": "^0.1.1",
-    "cindor-ui-vue": "^0.1.1",
+    "cindor-ui-core": "^0.1.2",
+    "cindor-ui-vue": "^0.1.2",
     "hls.js": "^1.5.15",
     "mpegts.js": "^1.8.0",
     "vue": "^3.5.11"
