@@ -9,11 +9,19 @@
         </p>
         <CindorForm>
           <CindorFormField label="Username">
-            <CindorInput v-model="setupForm.username" placeholder="admin" :disabled="savingSetup" />
+            <CindorInput
+              v-model="setupForm.username"
+              name="username"
+              autocomplete="username"
+              placeholder="admin"
+              :disabled="savingSetup"
+            />
           </CindorFormField>
           <CindorFormField label="Password">
             <CindorPasswordInput
               v-model="setupForm.password"
+              name="new-password"
+              autocomplete="new-password"
               placeholder="Min. 8 characters"
               :disabled="savingSetup"
             />
@@ -21,6 +29,8 @@
           <CindorFormField label="Confirm Password">
             <CindorPasswordInput
               v-model="setupForm.confirm"
+              name="confirm-password"
+              autocomplete="new-password"
               placeholder="Repeat password"
               :disabled="savingSetup"
             />
@@ -66,6 +76,7 @@
                 <CindorFormField label="Username">
                   <CindorInput
                     v-model="loginForm.username"
+                    name="username"
                     autocomplete="username"
                     :disabled="loggingIn"
                   />
@@ -73,6 +84,7 @@
                 <CindorFormField label="Password">
                   <CindorPasswordInput
                     v-model="loginForm.password"
+                    name="password"
                     autocomplete="current-password"
                     :disabled="loggingIn"
                   />

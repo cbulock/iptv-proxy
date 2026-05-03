@@ -16,6 +16,8 @@
         <CindorFormField label="Current Password">
           <CindorPasswordInput
             v-model="passwordCurrent"
+            name="current-password"
+            autocomplete="current-password"
             placeholder="Enter current password"
             :disabled="savingPassword"
           />
@@ -23,6 +25,8 @@
         <CindorFormField label="New Password">
           <CindorPasswordInput
             v-model="passwordNew"
+            name="new-password"
+            autocomplete="new-password"
             placeholder="Min. 8 characters"
             :disabled="savingPassword"
           />
@@ -30,6 +34,8 @@
         <CindorFormField label="Confirm New Password">
           <CindorPasswordInput
             v-model="passwordConfirm"
+            name="confirm-password"
+            autocomplete="new-password"
             placeholder="Repeat new password"
             :disabled="savingPassword"
           />
