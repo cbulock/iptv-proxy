@@ -53,11 +53,13 @@
         </div>
       </CindorLayoutHeader>
       <CindorLayoutContent class="admin-content login-content">
-        <div class="workspace-frame login-frame">
-          <div class="login-card">
-            <div class="login-title">Loading admin…</div>
+        <main class="admin-main login-main">
+          <div class="workspace-frame login-frame">
+            <div class="login-card">
+              <div class="login-title">Loading admin…</div>
+            </div>
           </div>
-        </div>
+        </main>
       </CindorLayoutContent>
     </CindorLayout>
 
@@ -71,36 +73,38 @@
         </div>
       </CindorLayoutHeader>
       <CindorLayoutContent class="admin-content login-content">
-        <div class="workspace-frame login-frame">
-          <div class="login-card">
-            <h1 class="login-title">Sign In</h1>
-            <p class="login-copy">Sign in to manage sources, mappings, backups, and live channel health.</p>
-            <form class="login-form" @submit.prevent="submitLogin">
-              <CindorForm>
-                <CindorFormField label="Username">
-                  <CindorInput
-                    v-model="loginForm.username"
-                    name="username"
-                    autocomplete="username"
-                    :disabled="loggingIn"
-                  />
-                </CindorFormField>
-                <CindorFormField label="Password">
-                  <CindorPasswordInput
-                    v-model="loginForm.password"
-                    name="password"
-                    autocomplete="current-password"
-                    :disabled="loggingIn"
-                  />
-                </CindorFormField>
-              </CindorForm>
-              <div v-if="loginError" class="setup-error">{{ loginError }}</div>
-              <CindorButton type="submit" :disabled="loggingIn">
-                {{ loggingIn ? 'Signing In...' : 'Sign In' }}
-              </CindorButton>
-            </form>
+        <main class="admin-main login-main">
+          <div class="workspace-frame login-frame">
+            <div class="login-card">
+              <h1 class="login-title">Sign In</h1>
+              <p class="login-copy">Sign in to manage sources, mappings, backups, and live channel health.</p>
+              <form class="login-form" @submit.prevent="submitLogin">
+                <CindorForm>
+                  <CindorFormField label="Username">
+                    <CindorInput
+                      v-model="loginForm.username"
+                      name="username"
+                      autocomplete="username"
+                      :disabled="loggingIn"
+                    />
+                  </CindorFormField>
+                  <CindorFormField label="Password">
+                    <CindorPasswordInput
+                      v-model="loginForm.password"
+                      name="password"
+                      autocomplete="current-password"
+                      :disabled="loggingIn"
+                    />
+                  </CindorFormField>
+                </CindorForm>
+                <div v-if="loginError" class="setup-error">{{ loginError }}</div>
+                <CindorButton type="submit" :disabled="loggingIn">
+                  {{ loggingIn ? 'Signing In...' : 'Sign In' }}
+                </CindorButton>
+              </form>
+            </div>
           </div>
-        </div>
+        </main>
       </CindorLayoutContent>
     </CindorLayout>
 
@@ -123,8 +127,9 @@
         </div>
       </CindorLayoutHeader>
       <CindorLayoutContent class="admin-content">
-        <div class="workspace-frame">
-          <CindorTabs v-model:value="tab" class="admin-tabs">
+        <main class="admin-main">
+          <div class="workspace-frame">
+            <CindorTabs v-model:value="tab" class="admin-tabs">
             <CindorTabPanel value="app" label="App">
               <app-settings-pane
                 :app-base-url="app.base_url"
@@ -307,8 +312,9 @@
                 No backups yet. Click "Create Backup" to save the current config.
               </div>
             </CindorTabPanel>
-          </CindorTabs>
-        </div>
+            </CindorTabs>
+          </div>
+        </main>
       </CindorLayoutContent>
     </CindorLayout>
 
@@ -3153,8 +3159,18 @@ body {
   padding: 24px;
 }
 
+.admin-main {
+  display: block;
+}
+
 .login-content {
   min-height: calc(100vh - 73px);
+  display: grid;
+  place-items: center;
+}
+
+.login-main {
+  width: 100%;
   display: grid;
   place-items: center;
 }
