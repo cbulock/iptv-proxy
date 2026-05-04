@@ -15,7 +15,10 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "mocha \"test/**/*.test.js\" --timeout 5000",
+    "test": "npm run test:non-integration && npm run test:integration:parallel",
+    "test:non-integration": "mocha \"test/*.test.js\" \"test/unit/**/*.test.js\" --timeout 5000",
+    "test:integration": "mocha \"test/integration/**/*.test.js\" --timeout 5000",
+    "test:integration:parallel": "mocha \"test/integration/**/*.test.js\" --timeout 5000 --parallel --jobs 4",
     "test:watch": "mocha \"test/**/*.test.js\" --watch",
     "test:coverage": "c8 mocha \"test/**/*.test.js\"",
     "lint": "eslint .",

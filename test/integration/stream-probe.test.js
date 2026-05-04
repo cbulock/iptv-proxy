@@ -11,6 +11,7 @@ import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
 import { setupStreamProbeRoutes, parseMpegTsCodecs } from '../../server/stream-probe.js';
 import { errorHandler } from '../../server/error-handler.js';
 import { invalidateAuthCache } from '../../server/auth.js';
+import { closeDatabase } from '../../libs/database.js';
 
 // ---------------------------------------------------------------------------
 // MPEG-TS test data builders
@@ -188,7 +189,7 @@ describe('parseMpegTsCodecs', () => {
 // ---------------------------------------------------------------------------
 
 describe('Stream Probe Route Integration', () => {
-  const channelsFile = getDataPath('channels.json');
+  let channelsFile = '';
   let originalChannels = null;
   let hadOriginalChannelsFile = false;
   let server = null;
@@ -196,7 +197,9 @@ describe('Stream Probe Route Integration', () => {
   // CONFIG_PATH isolation — keeps the real app.yaml untouched and ensures
   // requireAuth sees no admin_auth regardless of local developer config.
   let tmpConfigDir = null;
+  let tmpDataDir = null;
   let originalConfigPath = undefined;
+  let originalDataPath = undefined;
 
   const testChannels = [
     {
@@ -219,11 +222,16 @@ describe('Stream Probe Route Integration', () => {
     // always passes through (no admin_auth present), regardless of the
     // developer's local config/app.yaml.
     tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stream-probe-test-'));
+    tmpDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stream-probe-data-test-'));
     await fs.writeFile(path.join(tmpConfigDir, 'app.yaml'), '{}\n', 'utf8');
     originalConfigPath = process.env.CONFIG_PATH;
+    originalDataPath = process.env.DATA_PATH;
     process.env.CONFIG_PATH = tmpConfigDir;
+    process.env.DATA_PATH = tmpDataDir;
+    closeDatabase();
     invalidateAuthCache();
 
+    channelsFile = getDataPath('channels.json');
     await fs.mkdir(path.dirname(channelsFile), { recursive: true });
     try {
       originalChannels = await fs.readFile(channelsFile, 'utf8');
@@ -255,6 +263,7 @@ describe('Stream Probe Route Integration', () => {
       await new Promise(resolve => server.close(resolve));
     }
     cleanupCache();
+    closeDatabase();
 
     if (hadOriginalChannelsFile && originalChannels !== null) {
       await fs.writeFile(channelsFile, originalChannels, 'utf8');
@@ -272,10 +281,18 @@ describe('Stream Probe Route Integration', () => {
     } else {
       process.env.CONFIG_PATH = originalConfigPath;
     }
+    if (originalDataPath === undefined) {
+      delete process.env.DATA_PATH;
+    } else {
+      process.env.DATA_PATH = originalDataPath;
+    }
     invalidateAuthCache();
 
     if (tmpConfigDir) {
       await fs.rm(tmpConfigDir, { recursive: true, force: true });
+    }
+    if (tmpDataDir) {
+      await fs.rm(tmpDataDir, { recursive: true, force: true });
     }
   });
 
