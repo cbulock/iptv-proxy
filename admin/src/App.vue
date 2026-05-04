@@ -45,9 +45,11 @@
 
     <CindorLayout v-if="!authStateReady" class="admin-shell">
       <CindorLayoutHeader class="admin-header">
-        <div class="brand-lockup">
-          <div class="brand-mark">IP</div>
-          <div class="brand-title">IPTV Proxy Admin</div>
+        <div class="admin-header-row">
+          <div class="brand-lockup">
+            <div class="brand-mark">IP</div>
+            <div class="brand-title">IPTV Proxy Admin</div>
+          </div>
         </div>
       </CindorLayoutHeader>
       <CindorLayoutContent class="admin-content login-content">
@@ -61,9 +63,11 @@
 
     <CindorLayout v-else-if="showLoginView" class="admin-shell">
       <CindorLayoutHeader class="admin-header">
-        <div class="brand-lockup">
-          <div class="brand-mark">IP</div>
-          <div class="brand-title">IPTV Proxy Admin</div>
+        <div class="admin-header-row">
+          <div class="brand-lockup">
+            <div class="brand-mark">IP</div>
+            <div class="brand-title">IPTV Proxy Admin</div>
+          </div>
         </div>
       </CindorLayoutHeader>
       <CindorLayoutContent class="admin-content login-content">
@@ -102,19 +106,21 @@
 
     <CindorLayout v-else class="admin-shell">
       <CindorLayoutHeader class="admin-header">
-        <div class="brand-lockup">
-          <div class="brand-mark">IP</div>
-          <div class="brand-title">IPTV Proxy Admin</div>
+        <div class="admin-header-row">
+          <div class="brand-lockup">
+            <div class="brand-mark">IP</div>
+            <div class="brand-title">IPTV Proxy Admin</div>
+          </div>
+          <CindorButton
+            v-if="authConfigured"
+            class="compact-button signout-button"
+            variant="ghost"
+            :disabled="loggingOut"
+            @click="logout"
+          >
+            Sign Out
+          </CindorButton>
         </div>
-        <CindorButton
-          v-if="authConfigured"
-          class="compact-button signout-button"
-          variant="ghost"
-          :disabled="loggingOut"
-          @click="logout"
-        >
-          Sign Out
-        </CindorButton>
       </CindorLayoutHeader>
       <CindorLayoutContent class="admin-content">
         <div class="workspace-frame">
@@ -3096,13 +3102,17 @@ body {
 }
 
 .admin-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border) !important;
   background: rgba(15, 14, 12, 0.9);
   backdrop-filter: blur(10px);
+}
+
+.admin-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
 }
 
 .brand-lockup {
@@ -3194,7 +3204,6 @@ body {
 }
 
 .admin-tabs cindor-tab-panel {
-  display: block;
   padding-top: 12px;
 }
 
