@@ -68,7 +68,11 @@
               {{ preset.verified ? 'Verified callbacks' : 'Template - add your own callback URI' }}
             </div>
             <p class="preset-card-copy">{{ preset.description }}</p>
-            <CindorButton class="preset-button" :disabled="savingApp" @click="addPresetClient(preset.key)">
+            <CindorButton
+              class="preset-button"
+              :disabled="savingApp"
+              @click="addPresetClient(preset.key)"
+            >
               Use Preset
             </CindorButton>
           </div>
@@ -101,7 +105,11 @@
         </div>
 
         <div v-if="oauthClients.length" class="oauth-client-list">
-          <div v-for="(client, index) in oauthClients" :key="client._id || index" class="oauth-client-card">
+          <div
+            v-for="(client, index) in oauthClients"
+            :key="client._id || index"
+            class="oauth-client-card"
+          >
             <div class="client-card-header">
               <div>
                 <div class="client-card-title">
@@ -111,7 +119,11 @@
                   Public OAuth client for `/mcp` authorization-code + PKCE only.
                 </div>
               </div>
-              <CindorButton class="remove-button" :disabled="savingApp" @click="removeClient(index)">
+              <CindorButton
+                class="remove-button"
+                :disabled="savingApp"
+                @click="removeClient(index)"
+              >
                 Remove Client
               </CindorButton>
             </div>
@@ -323,7 +335,11 @@ function addPresetClient(presetKey) {
 }
 
 function updateClient(index, patch) {
-  updateClients(props.oauthClients.map((client, clientIndex) => (clientIndex === index ? { ...client, ...patch } : client)));
+  updateClients(
+    props.oauthClients.map((client, clientIndex) =>
+      clientIndex === index ? { ...client, ...patch } : client
+    )
+  );
 }
 
 function removeClient(index) {
