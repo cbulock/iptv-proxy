@@ -149,16 +149,45 @@ The MCP interface (`POST /mcp`) exposes IPTV proxy functionality to AI assistant
 - **Changing a data shape** (e.g., channel fields, EPG fields, provider config)? Update any affected MCP tools to reflect the new shape.
 - **Removing or renaming functionality?** Remove or rename the corresponding MCP tool so the interface doesn't advertise broken capabilities.
 
-The six current MCP tools and their server-side dependencies are:
+The MCP surface is designed for agent use and currently exposes these tools:
 
-| MCP Tool          | Server dependency                                   |
-| ----------------- | --------------------------------------------------- |
-| `list_channels`   | `libs/channels-cache.js` → `getChannels()`          |
-| `get_guide`       | `server/epg.js` → `getGuideData()`                  |
-| `list_providers`  | `libs/config-loader.js` → `loadConfig('providers')` |
-| `get_status`      | `server/status.js` → `getSourceStatus()`            |
-| `reload_channels` | `scripts/parseM3U.js` → `parseAll()`                |
-| `reload_epg`      | `server/epg.js` → `refreshEPG()`                    |
+| MCP Tool                               | Purpose |
+| -------------------------------------- | ------- |
+| `get_agent_workflow`                   | Explain the recommended MCP workflow, tool groups, and mutating tool side effects |
+| `diagnose_agent_readiness`             | Summarize current provider, channel, guide, and output profile state with issues and recommended next actions |
+| `list_providers`                       | List configured source providers |
+| `list_channels`                        | List discovered source channels |
+| `list_canonical_channels`              | List canonical channels |
+| `list_channel_bindings`                | List source-to-canonical bindings |
+| `list_guide_bindings`                  | List canonical-to-guide bindings |
+| `get_guide`                            | Read guide data for a channel |
+| `list_output_profiles`                 | List output lineup profiles |
+| `create_output_profile`                | Create a profile |
+| `update_output_profile`                | Rename or enable/disable a profile |
+| `delete_output_profile`                | Delete a non-default profile |
+| `get_output_profile_channels`          | List enabled channels emitted by a profile |
+| `list_output_profile_entries`          | List editable per-profile channel settings |
+| `set_canonical_channel_published`      | Toggle canonical publish state |
+| `set_canonical_channel_preferred_stream` | Choose the preferred stream for a canonical channel |
+| `set_canonical_channel_guide_binding`  | Choose the active guide source and EPG channel ID for a canonical channel |
+| `update_output_profile_channels`       | Update per-profile ordering, enabled state, and guide number overrides |
+| `get_status`                           | Read overall source and refresh status |
+| `reload_channels`                      | Rebuild discovered channels from configured sources |
+| `reload_epg`                           | Refresh guide data |
+
+Tool results should stay agent-friendly:
+
+- Return `structuredContent` with a stable JSON envelope containing `ok`, `tool`, `summary`, `data`, `sideEffects`, and `nextSuggestedTools`.
+- Keep text content aligned with `structuredContent` so non-structured MCP clients still receive useful output.
+- Make mutating tool side effects explicit so an agent can reason about follow-up reads and refreshes.
+
+The recommended MCP starting sequence for an agent is:
+
+1. `get_agent_workflow` for operating guidance
+2. `diagnose_agent_readiness` for current issues and next steps
+3. Targeted read tools (`list_*`, `get_status`, `get_guide`)
+4. Mutating tools only after inspection
+5. `reload_channels` or `reload_epg` when rebuilds are needed, followed by another diagnostic pass
 
 Each MCP tool also has corresponding integration tests in `test/integration/mcp.test.js` that must be kept up to date.
 

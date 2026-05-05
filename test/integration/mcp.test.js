@@ -52,6 +52,31 @@ function startServer(app) {
   });
 }
 
+function getToolPayload(msg) {
+  expect(msg).to.not.be.null;
+  return msg.result.structuredContent || JSON.parse(msg.result.content[0].text);
+}
+
+function expectToolSuccess(msg, toolName) {
+  const payload = getToolPayload(msg);
+  expect(msg.result.isError).to.not.equal(true);
+  expect(payload.ok).to.equal(true);
+  expect(payload.tool).to.equal(toolName);
+  expect(payload.summary).to.be.a('string');
+  expect(payload.nextSuggestedTools).to.be.an('array');
+  return payload;
+}
+
+function expectToolError(msg, toolName) {
+  const payload = getToolPayload(msg);
+  expect(msg.result.isError).to.equal(true);
+  expect(payload.ok).to.equal(false);
+  expect(payload.tool).to.equal(toolName);
+  expect(payload.error).to.include.keys('code', 'message');
+  expect(payload.nextSuggestedTools).to.be.an('array');
+  return payload;
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('MCP Route Integration', () => {
@@ -147,6 +172,8 @@ describe('MCP Route Integration', () => {
     const tools = msg.result.tools;
     const names = tools.map(t => t.name);
     expect(names).to.include.members([
+      'get_agent_workflow',
+      'diagnose_agent_readiness',
       'list_channels',
       'get_guide',
       'list_providers',
@@ -169,6 +196,31 @@ describe('MCP Route Integration', () => {
     ]);
   });
 
+  it('get_agent_workflow returns workflow guidance for agents', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'get_agent_workflow',
+      arguments: {},
+    });
+    const payload = expectToolSuccess(msg, 'get_agent_workflow');
+    expect(payload.data).to.have.property('recommendedEntryTool', 'diagnose_agent_readiness');
+    expect(payload.data.phases).to.be.an('array').that.is.not.empty;
+    expect(payload.data.toolGroups.overview).to.include('get_status');
+  });
+
+  it('diagnose_agent_readiness returns a readiness summary', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'diagnose_agent_readiness',
+      arguments: {},
+    });
+    const payload = expectToolSuccess(msg, 'diagnose_agent_readiness');
+    expect(payload.data.counts).to.include({
+      providers: 2,
+      discoveredChannels: 3,
+    });
+    expect(payload.data.profileSummaries).to.be.an('array');
+    expect(payload.data.issues).to.be.an('array');
+  });
+
   // ── list_channels ──────────────────────────────────────────────────────────
 
   it('list_channels returns all channels without filters', async () => {
@@ -176,10 +228,9 @@ describe('MCP Route Integration', () => {
       name: 'list_channels',
       arguments: {},
     });
-    expect(msg).to.not.be.null;
-    const channels = JSON.parse(msg.result.content[0].text);
+    const payload = expectToolSuccess(msg, 'list_channels');
+    const channels = payload.data;
     expect(channels).to.have.lengthOf(3);
-    // Verify the public channel shape exposed by the MCP tool
     expect(channels[0]).to.have.all.keys(
       'name',
       'source',
@@ -195,7 +246,7 @@ describe('MCP Route Integration', () => {
       name: 'list_channels',
       arguments: { source: 'TestProvider' },
     });
-    const channels = JSON.parse(msg.result.content[0].text);
+    const channels = expectToolSuccess(msg, 'list_channels').data;
     expect(channels).to.have.lengthOf(2);
     expect(channels.every(c => c.source === 'TestProvider')).to.be.true;
   });
@@ -205,7 +256,7 @@ describe('MCP Route Integration', () => {
       name: 'list_channels',
       arguments: { search: 'fox' },
     });
-    const channels = JSON.parse(msg.result.content[0].text);
+    const channels = expectToolSuccess(msg, 'list_channels').data;
     expect(channels).to.have.lengthOf(1);
     expect(channels[0].name).to.equal('Fox News');
   });
@@ -215,7 +266,7 @@ describe('MCP Route Integration', () => {
       name: 'list_channels',
       arguments: { limit: 2 },
     });
-    const channels = JSON.parse(msg.result.content[0].text);
+    const channels = expectToolSuccess(msg, 'list_channels').data;
     expect(channels).to.have.lengthOf(2);
   });
 
@@ -226,8 +277,7 @@ describe('MCP Route Integration', () => {
       name: 'list_providers',
       arguments: {},
     });
-    expect(msg).to.not.be.null;
-    const providers = JSON.parse(msg.result.content[0].text);
+    const providers = expectToolSuccess(msg, 'list_providers').data;
     expect(providers).to.have.lengthOf(2);
     expect(providers[0]).to.have.all.keys('name', 'type', 'hasEpg');
     expect(providers.map(p => p.name)).to.include.members(['TestProvider', 'OtherProvider']);
@@ -238,8 +288,7 @@ describe('MCP Route Integration', () => {
       name: 'list_canonical_channels',
       arguments: {},
     });
-    expect(msg).to.not.be.null;
-    const channels = JSON.parse(msg.result.content[0].text);
+    const channels = expectToolSuccess(msg, 'list_canonical_channels').data;
     expect(channels).to.be.an('array');
   });
 
@@ -248,8 +297,7 @@ describe('MCP Route Integration', () => {
       name: 'list_channel_bindings',
       arguments: {},
     });
-    expect(msg).to.not.be.null;
-    const bindings = JSON.parse(msg.result.content[0].text);
+    const bindings = expectToolSuccess(msg, 'list_channel_bindings').data;
     expect(bindings).to.be.an('array');
   });
 
@@ -258,8 +306,7 @@ describe('MCP Route Integration', () => {
       name: 'list_guide_bindings',
       arguments: {},
     });
-    expect(msg).to.not.be.null;
-    const bindings = JSON.parse(msg.result.content[0].text);
+    const bindings = expectToolSuccess(msg, 'list_guide_bindings').data;
     expect(bindings).to.be.an('array');
   });
 
@@ -268,8 +315,7 @@ describe('MCP Route Integration', () => {
       name: 'list_output_profiles',
       arguments: {},
     });
-    expect(msg).to.not.be.null;
-    const profiles = JSON.parse(msg.result.content[0].text);
+    const profiles = expectToolSuccess(msg, 'list_output_profiles').data;
     expect(profiles).to.be.an('array');
   });
 
@@ -278,8 +324,10 @@ describe('MCP Route Integration', () => {
       name: 'create_output_profile',
       arguments: { name: 'Bedroom TV', enabled: false },
     });
-    expect(createResult.msg).to.not.be.null;
-    const createdProfile = JSON.parse(createResult.msg.result.content[0].text);
+    const createdProfile = expectToolSuccess(
+      createResult.msg,
+      'create_output_profile'
+    ).data;
     expect(createdProfile).to.include({
       name: 'Bedroom TV',
       slug: 'bedroom-tv',
@@ -290,8 +338,10 @@ describe('MCP Route Integration', () => {
       name: 'update_output_profile',
       arguments: { slug: 'bedroom-tv', name: 'Bedroom TV Night', enabled: true },
     });
-    expect(updateResult.msg).to.not.be.null;
-    const updatedProfile = JSON.parse(updateResult.msg.result.content[0].text);
+    const updatedProfile = expectToolSuccess(
+      updateResult.msg,
+      'update_output_profile'
+    ).data;
     expect(updatedProfile).to.include({
       name: 'Bedroom TV Night',
       slug: 'bedroom-tv',
@@ -302,8 +352,10 @@ describe('MCP Route Integration', () => {
       name: 'delete_output_profile',
       arguments: { slug: 'bedroom-tv' },
     });
-    expect(deleteResult.msg).to.not.be.null;
-    const deletedProfile = JSON.parse(deleteResult.msg.result.content[0].text);
+    const deletedProfile = expectToolSuccess(
+      deleteResult.msg,
+      'delete_output_profile'
+    ).data;
     expect(deletedProfile).to.deep.equal({ deleted: true, slug: 'bedroom-tv' });
   });
 
@@ -312,8 +364,7 @@ describe('MCP Route Integration', () => {
       name: 'get_output_profile_channels',
       arguments: { slug: 'default' },
     });
-    expect(msg).to.not.be.null;
-    const channels = JSON.parse(msg.result.content[0].text);
+    const channels = expectToolSuccess(msg, 'get_output_profile_channels').data;
     expect(channels).to.be.an('array');
   });
 
@@ -322,8 +373,7 @@ describe('MCP Route Integration', () => {
       name: 'list_output_profile_entries',
       arguments: { slug: 'default' },
     });
-    expect(msg).to.not.be.null;
-    const channels = JSON.parse(msg.result.content[0].text);
+    const channels = expectToolSuccess(msg, 'list_output_profile_entries').data;
     expect(channels).to.be.an('array');
   });
 
@@ -332,9 +382,8 @@ describe('MCP Route Integration', () => {
       name: 'set_canonical_channel_published',
       arguments: { id: 'missing-canonical-channel', published: false },
     });
-    expect(msg).to.not.be.null;
-    expect(msg.result.isError).to.equal(true);
-    expect(msg.result.content[0].text).to.include('Canonical channel not found');
+    const payload = expectToolError(msg, 'set_canonical_channel_published');
+    expect(payload.error.message).to.include('Canonical channel not found');
   });
 
   it('set_canonical_channel_preferred_stream returns an error for an unknown channel', async () => {
@@ -345,9 +394,8 @@ describe('MCP Route Integration', () => {
         source_channel_id: 'missing-source-channel',
       },
     });
-    expect(msg).to.not.be.null;
-    expect(msg.result.isError).to.equal(true);
-    expect(msg.result.content[0].text).to.include('Canonical channel not found');
+    const payload = expectToolError(msg, 'set_canonical_channel_preferred_stream');
+    expect(payload.error.message).to.include('Canonical channel not found');
   });
 
   it('set_canonical_channel_guide_binding returns an error for an unknown channel', async () => {
@@ -359,9 +407,8 @@ describe('MCP Route Integration', () => {
         epg_channel_id: 'missing-epg',
       },
     });
-    expect(msg).to.not.be.null;
-    expect(msg.result.isError).to.equal(true);
-    expect(msg.result.content[0].text).to.include('Canonical channel not found');
+    const payload = expectToolError(msg, 'set_canonical_channel_guide_binding');
+    expect(payload.error.message).to.include('Canonical channel not found');
   });
 
   it('update_output_profile_channels returns an error for an unknown profile', async () => {
@@ -372,9 +419,8 @@ describe('MCP Route Integration', () => {
         channels: [],
       },
     });
-    expect(msg).to.not.be.null;
-    expect(msg.result.isError).to.equal(true);
-    expect(msg.result.content[0].text).to.include('Output profile not found');
+    const payload = expectToolError(msg, 'update_output_profile_channels');
+    expect(payload.error.message).to.include('Output profile not found');
   });
 
   // ── get_status ─────────────────────────────────────────────────────────────
@@ -384,8 +430,7 @@ describe('MCP Route Integration', () => {
       name: 'get_status',
       arguments: {},
     });
-    expect(msg).to.not.be.null;
-    const status = JSON.parse(msg.result.content[0].text);
+    const status = expectToolSuccess(msg, 'get_status').data;
     expect(status).to.have.property('totalChannels', 3);
     expect(status).to.have.property('sources').that.is.an('object');
     expect(status).to.have.property('recentErrors').that.is.an('array');
@@ -398,8 +443,7 @@ describe('MCP Route Integration', () => {
       name: 'get_guide',
       arguments: { tvg_id: 'cnn.us' },
     });
-    expect(msg).to.not.be.null;
-    expect(msg.result.isError).to.be.true;
-    expect(msg.result.content[0].text).to.include('EPG data is not available');
+    const payload = expectToolError(msg, 'get_guide');
+    expect(payload.error.message).to.include('EPG data is not available');
   });
 });
