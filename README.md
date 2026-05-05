@@ -82,12 +82,52 @@ The MCP interface includes tools for:
 
 ### Authentication
 
-`/mcp` uses the same auth gate as the admin UI:
+`/mcp` has two modes:
 
-- if `admin_auth` is **not** configured, you can call `POST /mcp` directly
-- if `admin_auth` **is** configured, authenticate first and send the same session cookie you use for the admin UI
+1. if `admin_auth` is **not** configured, you can call `POST /mcp` directly
+2. if `admin_auth` **is** configured **and** OAuth clients are configured, `/mcp` requires an OAuth bearer token with the `mcp` scope
 
-The endpoint is management-oriented and is not intended to be publicly exposed without the same protections you would apply to `/admin`.
+The admin UI remains session-based. OAuth is used specifically for MCP clients.
+
+### Built-in OAuth endpoints
+
+When `app.yaml` defines `oauth.clients`, IPTV Proxy exposes:
+
+- `GET /.well-known/oauth-authorization-server`
+- `GET /.well-known/openid-configuration`
+- `GET /.well-known/oauth-protected-resource/mcp`
+- `GET /oauth/authorize`
+- `POST /oauth/token`
+- `POST /oauth/revoke`
+
+The server currently supports:
+
+- authorization code flow
+- PKCE (`S256` and `plain`)
+- public clients (`token_endpoint_auth_method: none`)
+- opaque bearer access tokens for the `mcp` scope
+
+### OAuth configuration
+
+Add OAuth client definitions to `app.yaml`:
+
+```yaml
+oauth:
+  authorization_code_ttl_seconds: 300
+  access_token_ttl_seconds: 3600
+  clients:
+    - client_id: 'chatgpt'
+      client_name: 'ChatGPT'
+      redirect_uris:
+        - 'https://chat.openai.com/aip/oauth/callback'
+      scope: 'mcp'
+```
+
+Optional:
+
+- `oauth.issuer` - override the externally visible issuer URL used in discovery metadata
+
+If `oauth.issuer` is omitted, IPTV Proxy uses `app.base_url` when present, otherwise it derives the issuer from the incoming request headers.
 
 ### Transport and request shape
 
@@ -95,6 +135,7 @@ The endpoint is management-oriented and is not intended to be publicly exposed w
 - protocol: JSON-RPC over MCP Streamable HTTP
 - unsupported methods like `GET /mcp` return `405 Method Not Allowed`
 - responses include human-readable `content` plus machine-friendly `structuredContent`
+- when bearer auth is required and missing, `/mcp` returns `401` with a `WWW-Authenticate: Bearer ...` challenge
 
 ### Discover available tools
 
@@ -108,6 +149,20 @@ curl -X POST http://localhost:34400/mcp \
     "method": "tools/list",
     "params": {}
   }'
+```
+
+### Discovery metadata for OAuth clients
+
+```bash
+curl http://localhost:34400/.well-known/oauth-authorization-server
+```
+
+### Exchange an authorization code for an access token
+
+```bash
+curl -X POST http://localhost:34400/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code&client_id=chatgpt&code=YOUR_CODE&redirect_uri=https%3A%2F%2Fchat.openai.com%2Faip%2Foauth%2Fcallback&code_verifier=YOUR_CODE_VERIFIER"
 ```
 
 ### Ask the MCP interface how to operate
@@ -150,6 +205,7 @@ curl -X POST http://localhost:34400/mcp \
 curl -X POST http://localhost:34400/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": 4,
@@ -196,11 +252,13 @@ Error results set `isError: true` and return:
 
 ### Recommended agent flow
 
-1. Call `get_agent_workflow`
-2. Call `diagnose_agent_readiness`
-3. Inspect state with read tools such as `list_providers`, `list_channel_bindings`, `list_guide_bindings`, and `list_output_profile_entries`
-4. Apply targeted mutations only after inspection
-5. Re-run diagnostics or status tools after changes
+1. Discover OAuth metadata (when auth is enabled)
+2. Complete the authorization code + PKCE flow and get a bearer token for the `mcp` scope
+3. Call `get_agent_workflow`
+4. Call `diagnose_agent_readiness`
+5. Inspect state with read tools such as `list_providers`, `list_channel_bindings`, `list_guide_bindings`, and `list_output_profile_entries`
+6. Apply targeted mutations only after inspection
+7. Re-run diagnostics or status tools after changes
 
 ---
 
@@ -239,7 +297,8 @@ admin_auth:
 
 - When `admin_auth` is configured, the admin UI and all management API endpoints require session-based authentication
 - Access the admin UI at `/admin` — you will be redirected to the login page if not authenticated
-- Protects endpoints: `/`, `/admin`, `/mcp`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
+- Protects endpoints: `/`, `/admin`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
+- When both `admin_auth` and `oauth.clients` are configured, `/mcp` requires OAuth bearer tokens instead of the admin session cookie
 - Media endpoints (M3U playlist, XMLTV guide, streams) remain accessible without authentication
 - **Important:** Passwords must be bcrypt hashed for security
 

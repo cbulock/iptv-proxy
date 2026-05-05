@@ -28,6 +28,7 @@ This directory contains comprehensive example configuration files for IPTV Proxy
 
 - **`app.example.yaml`** - Application configuration
   - Base URL configuration
+  - OAuth client configuration for MCP access
   - Scheduler configuration (cron)
   - Reverse proxy setup
   - Environment variables
@@ -85,6 +86,7 @@ Then edit the files to add your actual sources and mappings.
 ### Application Settings
 
 - `base_url` is auto-detected from request headers if not set
+- `oauth.clients` enables the built-in OAuth server for `/mcp`
 - Scheduler settings are currently hardcoded (see app.example.yaml for details)
 - Jobs can be manually triggered via API endpoints
 - See examples for reverse proxy configuration

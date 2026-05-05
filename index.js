@@ -33,6 +33,7 @@ import { notFoundHandler, errorHandler } from './server/error-handler.js';
 import { requireAuthHTML } from './server/auth.js';
 import { csrfMiddleware } from './server/csrf.js';
 import authRoutesRouter from './server/auth-routes.js';
+import oauthRouter from './server/oauth.js';
 import backupRouter from './server/backup.js';
 import { initDatabase } from './libs/database.js';
 
@@ -297,6 +298,7 @@ onChannelsUpdate(invalidateLineupCaches);
 
 // Register routes
 app.use(authRoutesRouter);
+app.use(oauthRouter);
 app.use('/channels', channelsRoute);
 app.use(configRoute);
 app.use(mappingRouter);

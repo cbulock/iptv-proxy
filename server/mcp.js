@@ -4,8 +4,8 @@ import * as z from 'zod';
 import { getChannels } from '../libs/channels-cache.js';
 import { getGuideData, hasEPGRefresh, refreshEPG } from './epg.js';
 import { getSourceStatus } from './status.js';
-import { requireAuth } from './auth.js';
 import { parseAll } from '../scripts/parseM3U.js';
+import { requireMcpBearerAuth } from './oauth.js';
 import { listSources } from '../libs/source-service.js';
 import {
   listCanonicalChannels,
@@ -1013,7 +1013,7 @@ function createMcpServer() {
  * @param {import('express').Application} app
  */
 export function setupMCPRoutes(app) {
-  app.post('/mcp', requireAuth, async (req, res) => {
+  app.post('/mcp', requireMcpBearerAuth, async (req, res) => {
     const server = createMcpServer();
     try {
       const transport = new StreamableHTTPServerTransport({

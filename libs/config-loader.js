@@ -117,6 +117,49 @@ const appSchema = Joi.object({
   base_url: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
     'string.uri': 'app.yaml "base_url" must be a valid URL',
   }),
+  oauth: Joi.object({
+    issuer: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
+      'string.uri': 'app.yaml "oauth.issuer" must be a valid URL',
+    }),
+    authorization_code_ttl_seconds: Joi.number().integer().min(60).max(1800).optional().messages({
+      'number.base': 'oauth.authorization_code_ttl_seconds must be a number',
+      'number.integer': 'oauth.authorization_code_ttl_seconds must be an integer',
+      'number.min': 'oauth.authorization_code_ttl_seconds must be at least 60',
+      'number.max': 'oauth.authorization_code_ttl_seconds must be 1800 or less',
+    }),
+    access_token_ttl_seconds: Joi.number().integer().min(60).max(86400).optional().messages({
+      'number.base': 'oauth.access_token_ttl_seconds must be a number',
+      'number.integer': 'oauth.access_token_ttl_seconds must be an integer',
+      'number.min': 'oauth.access_token_ttl_seconds must be at least 60',
+      'number.max': 'oauth.access_token_ttl_seconds must be 86400 or less',
+    }),
+    clients: Joi.array()
+      .items(
+        Joi.object({
+          client_id: Joi.string().trim().required().messages({
+            'any.required': 'Each OAuth client must have a "client_id"',
+            'string.empty': 'OAuth client "client_id" cannot be empty',
+          }),
+          client_name: Joi.string().trim().optional().allow(''),
+          redirect_uris: Joi.array()
+            .items(
+              Joi.string().uri({ allowRelative: false }).required().messages({
+                'string.uri': 'Each OAuth redirect URI must be a valid absolute URL',
+              })
+            )
+            .min(1)
+            .required()
+            .messages({
+              'any.required': 'Each OAuth client must define at least one redirect URI',
+              'array.min': 'Each OAuth client must define at least one redirect URI',
+            }),
+          scope: Joi.string().trim().optional().allow('').messages({
+            'string.base': 'OAuth client "scope" must be a string',
+          }),
+        })
+      )
+      .optional(),
+  }).optional(),
   cache: Joi.object({
     epg_ttl: Joi.number().integer().min(0).optional().messages({
       'number.base': 'cache.epg_ttl must be a number',

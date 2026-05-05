@@ -46,6 +46,44 @@
 # - Never commit real credentials to version control
 
 # ============================================================================
+# OAuth Configuration for MCP Clients
+# ============================================================================
+
+# Optional: Enable a built-in OAuth authorization server for MCP clients.
+# The admin UI still uses the normal session login. OAuth is used for /mcp.
+#
+# Configure one or more public OAuth clients that use Authorization Code + PKCE.
+# The redirect URIs must exactly match what your MCP client sends.
+#
+# oauth:
+#   # Optional: Override the issuer URL shown in discovery metadata.
+#   # If omitted, the app uses base_url or the incoming request host.
+#   issuer: "https://iptv.example.com"
+#
+#   # Optional: Authorization code lifetime in seconds (default: 300)
+#   authorization_code_ttl_seconds: 300
+#
+#   # Optional: Access token lifetime in seconds (default: 3600)
+#   access_token_ttl_seconds: 3600
+#
+#   clients:
+#     - client_id: "chatgpt"
+#       client_name: "ChatGPT"
+#       redirect_uris:
+#         - "https://chat.openai.com/aip/oauth/callback"
+#       scope: "mcp"
+#
+# OAuth discovery endpoints:
+# - /.well-known/oauth-authorization-server
+# - /.well-known/openid-configuration
+# - /.well-known/oauth-protected-resource/mcp
+#
+# OAuth runtime endpoints:
+# - GET /oauth/authorize
+# - POST /oauth/token
+# - POST /oauth/revoke
+
+# ============================================================================
 # Cache Configuration
 # ============================================================================
 
