@@ -171,5 +171,15 @@ defineEmits(['cell-edit', 'row-action']);
   .tab-panel {
     padding: 20px 20px 20px;
   }
+
+  .tab-panel :deep(cindor-button),
+  .tab-panel :deep(cindor-data-table) {
+    width: 100%;
+  }
+
+  .tab-panel :deep(cindor-data-table) {
+    display: block;
+    overflow-x: auto;
+  }
 }
 </style>

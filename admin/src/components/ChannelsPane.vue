@@ -1,6 +1,13 @@
 <template>
   <div class="tab-panel">
-    <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
+    <CindorStack
+      class="channel-toolbar"
+      direction="horizontal"
+      align="center"
+      wrap
+      gap="sm"
+      style="margin-bottom: 0.75rem"
+    >
       <CindorSelect
         style="min-width: 220px"
         :model-value="selectedProfileSlug"
@@ -115,24 +122,21 @@
         </thead>
         <tbody>
           <tr v-for="row in rows" :key="row.id">
-            <td class="cell-center">
+            <td class="cell-center" data-label="Enabled">
               <CindorSwitch
                 :model-value="row.outputEnabled"
                 :disabled="row.enableToggleDisabled"
                 @update:model-value="value => updateOutputEnabled(row.id, value)"
               />
             </td>
-            <td>
+            <td data-label="Channel">
               <div class="channel-name">{{ row.name }}</div>
-              <div class="meta-line">
-                <CindorTag tone="neutral">{{ row.tvg_id || 'no tvg-id' }}</CindorTag>
-                <CindorTag tone="accent">{{ row.guideNumber || 'no guide #' }}</CindorTag>
-                <CindorTag tone="success">
+              <div v-if="row.tvg_id || row.guideNumber || row.sourceBindings.length" class="channel-meta">
+                <span v-if="row.tvg_id">TVG ID: {{ row.tvg_id }}</span>
+                <span v-if="row.guideNumber">Guide: {{ row.guideNumber }}</span>
+                <span>
                   {{ row.sourceBindings.length }} source{{ row.sourceBindings.length === 1 ? '' : 's' }}
-                </CindorTag>
-                <CindorTag v-if="row.outputEnabled" class="status-warning" tone="neutral">
-                  output {{ row.effectiveGuideNumber || row.guideNumber || 'default' }}
-                </CindorTag>
+                </span>
               </div>
               <div class="source-list">
                 {{ row.sourceBindingsSummary || 'No source bindings available yet.' }}
@@ -141,7 +145,7 @@
                 Source refs: {{ row.sourceGuideReferencesSummary }}
               </div>
             </td>
-            <td>
+            <td data-label="Preferred Stream">
               <CindorSelect
                 :model-value="row.preferredSourceChannelId || ''"
                 :disabled="row.preferredStreamOptions.length === 0"
@@ -157,7 +161,7 @@
                 </option>
               </CindorSelect>
             </td>
-            <td>
+            <td data-label="Guide Source">
               <CindorSelect
                 :model-value="row.selectedGuideBindingValue || ''"
                 :disabled="row.guideBindingOptions.length === 0"
@@ -173,21 +177,23 @@
                 </option>
               </CindorSelect>
             </td>
-            <td>
-              <div class="guide-state">
+            <td data-label="Guide Number">
+              <div class="guide-control-row">
                 <CindorTag
                   :tone="row.guideDisplaySource === 'override' ? 'success' : 'accent'"
                   :class="{ 'status-danger': row.guideDisplayWarning }"
                 >
                   {{ row.guideDisplayLabel }}
                 </CindorTag>
+                <CindorInput
+                  class="guide-input"
+                  :model-value="row.guideNumberOverrideInput"
+                  maxlength="5"
+                  placeholder="Guide #"
+                  @update:model-value="value => updateGuideNumberOverrideInput(row.id, value)"
+                  @blur="() => commitGuideNumberOverride(row.id)"
+                />
               </div>
-              <CindorInput
-                :model-value="row.guideNumberOverrideInput"
-                placeholder="Use canonical"
-                @update:model-value="value => updateGuideNumberOverrideInput(row.id, value)"
-                @blur="() => commitGuideNumberOverride(row.id)"
-              />
               <div class="guide-help" :class="{ warning: row.guideDisplayWarning }">
                 {{ row.guideHelpText }}
               </div>
@@ -388,17 +394,19 @@ const profileOptions = computed(() =>
   margin-bottom: 0.35rem;
 }
 
-.meta-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 0.35rem;
-}
-
 .source-list {
   font-size: 0.82rem;
   opacity: 0.72;
   line-height: 1.4;
+}
+
+.channel-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  opacity: 0.72;
 }
 
 .source-reference {
@@ -407,8 +415,16 @@ const profileOptions = computed(() =>
   opacity: 0.68;
 }
 
-.guide-state {
-  margin-bottom: 0.35rem;
+.guide-control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.guide-input {
+  width: 6.5rem;
+  min-width: 6.5rem;
 }
 
 .guide-help {
@@ -458,6 +474,84 @@ const profileOptions = computed(() =>
 @media (max-width: 900px) {
   .tab-panel {
     padding: 20px 20px 20px;
+  }
+
+  .channel-toolbar > * {
+    width: 100%;
+  }
+
+  .channel-toolbar :deep(cindor-select),
+  .channel-toolbar :deep(cindor-input),
+  .channel-toolbar :deep(cindor-button) {
+    width: 100%;
+  }
+
+  .endpoint-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .table-shell {
+    overflow: visible;
+    border: none;
+  }
+
+  .channel-table {
+    min-width: 0;
+  }
+
+  .channel-table thead {
+    display: none;
+  }
+
+  .channel-table,
+  .channel-table tbody,
+  .channel-table tr,
+  .channel-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .channel-table tr {
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .channel-table td {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.75rem;
+  }
+
+  .channel-table td:last-child {
+    border-bottom: none;
+  }
+
+  .channel-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    opacity: 0.65;
+    text-transform: uppercase;
+  }
+
+  .cell-center {
+    text-align: left;
+  }
+
+  .guide-control-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .guide-input {
+    width: 100%;
+    min-width: 0;
   }
 }
 </style>

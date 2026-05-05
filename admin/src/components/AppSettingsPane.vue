@@ -110,5 +110,12 @@ const passwordConfirm = computed({
   .tab-panel {
     padding: 20px 20px 20px;
   }
+
+  .tab-panel :deep(cindor-button),
+  .tab-panel :deep(cindor-input),
+  .tab-panel :deep(cindor-password-input),
+  .tab-panel :deep(cindor-stack) {
+    width: 100%;
+  }
 }
 </style>
