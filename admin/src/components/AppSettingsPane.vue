@@ -1,5 +1,43 @@
 <template>
   <div class="tab-panel">
+    <div v-if="authConfigured" class="security-section">
+      <h3 class="section-title">Security</h3>
+      <CindorForm class="security-form">
+        <CindorFormField label="Current Password">
+          <CindorPasswordInput
+            v-model="passwordCurrent"
+            name="current-password"
+            autocomplete="current-password"
+            placeholder="Enter current password"
+            :disabled="savingPassword"
+          />
+        </CindorFormField>
+        <CindorFormField label="New Password">
+          <CindorPasswordInput
+            v-model="passwordNew"
+            name="new-password"
+            autocomplete="new-password"
+            placeholder="Min. 8 characters"
+            :disabled="savingPassword"
+          />
+        </CindorFormField>
+        <CindorFormField label="Confirm New Password">
+          <CindorPasswordInput
+            v-model="passwordConfirm"
+            name="confirm-password"
+            autocomplete="new-password"
+            placeholder="Repeat new password"
+            :disabled="savingPassword"
+          />
+        </CindorFormField>
+        <CindorStack direction="horizontal" gap="sm" wrap>
+          <CindorButton :disabled="savingPassword" @click="changePassword">
+            {{ savingPassword ? 'Saving...' : 'Change Password' }}
+          </CindorButton>
+        </CindorStack>
+      </CindorForm>
+    </div>
+
     <CindorForm class="settings-form">
       <h3 class="section-title">Core Settings</h3>
       <CindorFormField label="Base URL">
@@ -15,27 +53,24 @@
               admin sign-in, which continues to use the normal session-based login.
             </p>
           </div>
-          <CindorStack direction="horizontal" gap="sm" wrap>
-            <CindorButton variant="ghost" :disabled="savingApp" @click="addClient">
-              Add Client
-            </CindorButton>
-          </CindorStack>
+        </div>
+
+        <div class="section-actions">
+          <CindorButton class="action-button" :disabled="savingApp" @click="addClient">
+            Add MCP Client
+          </CindorButton>
         </div>
 
         <div class="preset-grid">
           <div v-for="preset in oauthClientPresets" :key="preset.key" class="preset-card">
-            <div class="preset-card-header">
-              <div>
-                <div class="preset-card-title">{{ preset.label }}</div>
-                <div class="preset-card-meta">
-                  {{ preset.verified ? 'Verified callbacks' : 'Template - add your own callback URI' }}
-                </div>
-              </div>
-              <CindorButton variant="ghost" :disabled="savingApp" @click="addPresetClient(preset.key)">
-                Add Preset
-              </CindorButton>
+            <div class="preset-card-title">{{ preset.label }}</div>
+            <div class="preset-card-meta">
+              {{ preset.verified ? 'Verified callbacks' : 'Template - add your own callback URI' }}
             </div>
             <p class="preset-card-copy">{{ preset.description }}</p>
+            <CindorButton class="preset-button" :disabled="savingApp" @click="addPresetClient(preset.key)">
+              Use Preset
+            </CindorButton>
           </div>
         </div>
 
@@ -76,8 +111,8 @@
                   Public OAuth client for `/mcp` authorization-code + PKCE only.
                 </div>
               </div>
-              <CindorButton variant="ghost" :disabled="savingApp" @click="removeClient(index)">
-                Remove
+              <CindorButton class="remove-button" :disabled="savingApp" @click="removeClient(index)">
+                Remove Client
               </CindorButton>
             </div>
 
@@ -122,52 +157,14 @@
         <div v-else class="empty-note">
           No MCP OAuth clients configured yet. Add a client or start with one of the presets above.
         </div>
-      </div>
 
-      <CindorStack direction="horizontal" gap="sm" wrap>
-        <CindorButton :disabled="savingApp" @click="saveApp">
-          {{ savingApp ? 'Saving...' : 'Save App' }}
-        </CindorButton>
-      </CindorStack>
-    </CindorForm>
-
-    <div v-if="authConfigured" class="security-section">
-      <h3 class="section-title">Security</h3>
-      <CindorForm class="security-form">
-        <CindorFormField label="Current Password">
-          <CindorPasswordInput
-            v-model="passwordCurrent"
-            name="current-password"
-            autocomplete="current-password"
-            placeholder="Enter current password"
-            :disabled="savingPassword"
-          />
-        </CindorFormField>
-        <CindorFormField label="New Password">
-          <CindorPasswordInput
-            v-model="passwordNew"
-            name="new-password"
-            autocomplete="new-password"
-            placeholder="Min. 8 characters"
-            :disabled="savingPassword"
-          />
-        </CindorFormField>
-        <CindorFormField label="Confirm New Password">
-          <CindorPasswordInput
-            v-model="passwordConfirm"
-            name="confirm-password"
-            autocomplete="new-password"
-            placeholder="Repeat new password"
-            :disabled="savingPassword"
-          />
-        </CindorFormField>
         <CindorStack direction="horizontal" gap="sm" wrap>
-          <CindorButton :disabled="savingPassword" @click="changePassword">
-            {{ savingPassword ? 'Saving...' : 'Change Password' }}
+          <CindorButton class="action-button" :disabled="savingApp" @click="saveApp">
+            {{ savingApp ? 'Saving...' : 'Save App Settings' }}
           </CindorButton>
         </CindorStack>
-      </CindorForm>
-    </div>
+      </div>
+    </CindorForm>
   </div>
 </template>
 
@@ -349,11 +346,13 @@ function removeClient(index) {
 }
 
 .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.section-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 1.25rem;
 }
 
 .section-title {
@@ -368,11 +367,18 @@ function removeClient(index) {
 }
 
 .oauth-section {
-  margin: 1rem 0 0.5rem;
+  margin-top: 2rem;
   padding: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
+}
+
+.action-button,
+.preset-button,
+.remove-button {
+  min-width: 152px;
+  white-space: nowrap;
 }
 
 .preset-grid {
@@ -383,34 +389,36 @@ function removeClient(index) {
 }
 
 .preset-card {
-  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.preset-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 0.55rem;
-}
-
 .preset-card-title {
   font-weight: 600;
-  margin-bottom: 0.15rem;
+  margin: 0;
 }
 
 .preset-card-meta {
   opacity: 0.65;
   font-size: 0.82rem;
+  margin: 0;
 }
 
 .preset-card-copy {
   margin: 0;
   opacity: 0.78;
   font-size: 0.92rem;
+  flex: 1;
+}
+
+.preset-button {
+  margin-top: 0.35rem;
 }
 
 .oauth-grid {
@@ -438,7 +446,7 @@ function removeClient(index) {
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 1rem;
 }
 
 .client-card-title {
@@ -461,9 +469,12 @@ function removeClient(index) {
   }
 
   .section-header,
-  .client-card-header,
-  .preset-card-header {
+  .client-card-header {
     flex-direction: column;
+  }
+
+  .section-actions {
+    justify-content: stretch;
   }
 
   .tab-panel :deep(cindor-button),
