@@ -133,6 +133,10 @@
             <CindorTabPanel value="app" label="App">
               <app-settings-pane
                 :app-base-url="app.base_url"
+                :oauth-issuer="app.oauth.issuer"
+                :oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds"
+                :oauth-access-token-ttl="app.oauth.access_token_ttl_seconds"
+                :oauth-clients="app.oauth.clients"
                 :auth-configured="authConfigured"
                 :password-current="passwordForm.current"
                 :password-new="passwordForm.newPass"
@@ -142,6 +146,10 @@
                 :save-app="saveApp"
                 :change-password="changePassword"
                 @update:app-base-url="app.base_url = $event"
+                @update:oauth-issuer="app.oauth.issuer = $event"
+                @update:oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds = $event"
+                @update:oauth-access-token-ttl="app.oauth.access_token_ttl_seconds = $event"
+                @update:oauth-clients="app.oauth.clients = $event"
                 @update:password-current="passwordForm.current = $event"
                 @update:password-new="passwordForm.newPass = $event"
                 @update:password-confirm="passwordForm.confirm = $event"
@@ -655,7 +663,7 @@ function resolveConfirmDialog(confirmed) {
 
 const state = reactive({
   tab: 'app',
-  app: { base_url: '' },
+  app: normalizeAppConfig(),
   authStateReady: false,
   authConfigured: false,
   sessionAuthenticated: false,
@@ -736,6 +744,111 @@ function normalizeProvider(provider = {}, index = 0) {
     url: provider.url || '',
     epg: provider.epg || '',
   };
+}
+
+function normalizeOAuthClient(client = {}, index = 0) {
+  return {
+    _id: client._id || `oauth_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`,
+    client_id: client.client_id || '',
+    client_name: client.client_name || '',
+    redirectUrisText: Array.isArray(client.redirect_uris)
+      ? client.redirect_uris.filter(Boolean).join('\n')
+      : client.redirectUrisText || '',
+    scope: client.scope ?? 'mcp',
+  };
+}
+
+function normalizeOAuthConfig(oauth = {}) {
+  return {
+    issuer: oauth.issuer || '',
+    authorization_code_ttl_seconds:
+      oauth.authorization_code_ttl_seconds === null ||
+      oauth.authorization_code_ttl_seconds === undefined
+        ? ''
+        : String(oauth.authorization_code_ttl_seconds),
+    access_token_ttl_seconds:
+      oauth.access_token_ttl_seconds === null || oauth.access_token_ttl_seconds === undefined
+        ? ''
+        : String(oauth.access_token_ttl_seconds),
+    clients: Array.isArray(oauth.clients) ? oauth.clients.map(normalizeOAuthClient) : [],
+  };
+}
+
+function normalizeAppConfig(appConfig = {}) {
+  return {
+    ...appConfig,
+    base_url: appConfig.base_url || '',
+    oauth: normalizeOAuthConfig(appConfig.oauth || {}),
+  };
+}
+
+function parseOptionalInteger(value) {
+  if (value === '' || value === null || value === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function buildAppConfigPayload(appConfig = {}) {
+  const { oauth, ...rest } = appConfig;
+  delete rest.admin_auth;
+
+  const payload = {
+    ...rest,
+    base_url: typeof appConfig.base_url === 'string' ? appConfig.base_url.trim() : '',
+  };
+
+  const oauthClients = Array.isArray(oauth?.clients)
+    ? oauth.clients
+      .map(client => {
+        const clientId = String(client?.client_id || '').trim();
+        const clientName = String(client?.client_name || '').trim();
+        const scope = String(client?.scope ?? 'mcp').trim() || 'mcp';
+        const redirectUris = String(client?.redirectUrisText || '')
+          .split(/\r?\n/)
+          .map(uri => uri.trim())
+          .filter(Boolean);
+        const isCompletelyBlank = !clientId && !clientName && !String(client?.redirectUrisText || '').trim();
+
+        if (isCompletelyBlank) {
+          return null;
+        }
+
+        return {
+          client_id: clientId,
+          client_name: clientName,
+          redirect_uris: redirectUris,
+          scope,
+        };
+      })
+      .filter(Boolean)
+    : [];
+
+  const oauthIssuer = String(oauth?.issuer || '').trim();
+  const authorizationCodeTtl = parseOptionalInteger(oauth?.authorization_code_ttl_seconds);
+  const accessTokenTtl = parseOptionalInteger(oauth?.access_token_ttl_seconds);
+
+  if (
+    oauthIssuer ||
+    authorizationCodeTtl !== undefined ||
+    accessTokenTtl !== undefined ||
+    oauthClients.length > 0
+  ) {
+    payload.oauth = {
+      ...(oauthIssuer ? { issuer: oauthIssuer } : {}),
+      ...(authorizationCodeTtl !== undefined
+        ? { authorization_code_ttl_seconds: authorizationCodeTtl }
+        : {}),
+      ...(accessTokenTtl !== undefined ? { access_token_ttl_seconds: accessTokenTtl } : {}),
+      ...(oauthClients.length > 0 ? { clients: oauthClients } : {}),
+    };
+  } else {
+    delete payload.oauth;
+  }
+
+  return payload;
 }
 
 function getSelectedOutputProfileRecord() {
@@ -852,7 +965,8 @@ async function loadApp() {
   try {
     const r = await apiFetch('/api/config/app');
     const cfg = await r.json();
-    state.app = { base_url: cfg.base_url || '' };
+    state.app = normalizeAppConfig(cfg || {});
+    setStatus('Loaded app settings');
   } catch (e) {
     setStatus('Failed to load app config: ' + e.message, false);
     message.error(e.message);
@@ -931,7 +1045,7 @@ async function reloadEPG() {
 async function saveApp() {
   try {
     state.savingApp = true;
-    const body = { base_url: state.app.base_url || '' };
+    const body = buildAppConfigPayload(state.app);
     const r = await apiFetch('/api/config/app', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -939,6 +1053,17 @@ async function saveApp() {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Save app failed');
+    state.app = normalizeAppConfig({
+      ...state.app,
+      base_url: body.base_url,
+      oauth: body.oauth
+          ? {
+              ...state.app.oauth,
+              ...body.oauth,
+              clients: state.app.oauth.clients,
+            }
+        : normalizeOAuthConfig(),
+    });
     setStatus('App settings saved.');
     message.success('App settings saved');
   } catch (e) {
