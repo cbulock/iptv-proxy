@@ -8,14 +8,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
-import authRouter from '../../server/auth-routes.js';
-import oauthRouter from '../../server/oauth.js';
-import { setupMCPRoutes } from '../../server/mcp.js';
-import { csrfMiddleware } from '../../server/csrf.js';
-import { closeDatabase } from '../../libs/database.js';
-import { invalidateAuthCache } from '../../server/auth.js';
-
-function buildApp() {
+function buildApp({ authRouter, oauthRouter, csrfMiddleware, setupMCPRoutes }) {
   const app = express();
   app.use(express.json());
   app.use(
@@ -93,6 +86,8 @@ describe('OAuth Integration', () => {
   let tmpDataDir;
   let originalConfigPath;
   let originalDataPath;
+  let closeDatabase;
+  let invalidateAuthCache;
 
   before(async () => {
     tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-oauth-config-'));
@@ -102,7 +97,20 @@ describe('OAuth Integration', () => {
     process.env.CONFIG_PATH = tmpConfigDir;
     process.env.DATA_PATH = tmpDataDir;
 
-    const app = buildApp();
+    const [{ default: authRouter }, { default: oauthRouter }, { setupMCPRoutes }, { csrfMiddleware }, databaseModule, authModule] =
+      await Promise.all([
+        import('../../server/auth-routes.js'),
+        import('../../server/oauth.js'),
+        import('../../server/mcp.js'),
+        import('../../server/csrf.js'),
+        import('../../libs/database.js'),
+        import('../../server/auth.js'),
+      ]);
+
+    closeDatabase = databaseModule.closeDatabase;
+    invalidateAuthCache = authModule.invalidateAuthCache;
+
+    const app = buildApp({ authRouter, oauthRouter, csrfMiddleware, setupMCPRoutes });
     ({ server, baseUrl } = await startServer(app));
   });
 
