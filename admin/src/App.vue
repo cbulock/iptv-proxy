@@ -3215,8 +3215,13 @@ body {
 
 .admin-tabs {
   display: block;
+  min-width: 0;
   padding: 20px;
   background: var(--bg-subtle);
+}
+
+.admin-tabs::part(list) {
+  max-width: 100%;
 }
 
 .admin-tabs cindor-tab-panel {
@@ -3382,6 +3387,16 @@ body {
 
   .admin-tabs {
     padding: 16px;
+  }
+
+  .admin-tabs::part(list) {
+    flex-wrap: wrap;
+  }
+
+  .admin-tabs::part(tab) {
+    flex: 1 1 140px;
+    min-width: 0;
+    text-align: center;
   }
 
   .dialog-body {

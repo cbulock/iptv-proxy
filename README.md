@@ -49,6 +49,7 @@ By default, the server runs on `http://localhost:34400` and serves:
 - `http://localhost:34400/lineup.m3u`
 - `http://localhost:34400/lineup.json`
 - `http://localhost:34400/xmltv.xml`
+- `http://localhost:34400/mcp`
 
 These public endpoints serve the **Default Output** profile. Named profiles can also be published with profile-specific paths such as:
 
@@ -61,6 +62,145 @@ To use a custom port, set the `PORT` environment variable:
 ```bash
 PORT=8080 npm start
 ```
+
+---
+
+## MCP Interface
+
+IPTV Proxy exposes a **Model Context Protocol** endpoint at `POST /mcp` for AI agents and other MCP-compatible clients. The MCP surface is designed for discovery, diagnostics, and controlled channel/output management without scraping the admin UI.
+
+### What it exposes
+
+The MCP interface includes tools for:
+
+- understanding the recommended workflow (`get_agent_workflow`)
+- checking current system readiness (`diagnose_agent_readiness`)
+- listing providers, channels, canonical channels, bindings, guide bindings, and output profiles
+- reading guide data and source status
+- updating preferred streams, guide bindings, canonical publish state, and output-profile channel settings
+- reloading channels and EPG data
+
+### Authentication
+
+`/mcp` uses the same auth gate as the admin UI:
+
+- if `admin_auth` is **not** configured, you can call `POST /mcp` directly
+- if `admin_auth` **is** configured, authenticate first and send the same session cookie you use for the admin UI
+
+The endpoint is management-oriented and is not intended to be publicly exposed without the same protections you would apply to `/admin`.
+
+### Transport and request shape
+
+- endpoint: `POST /mcp`
+- protocol: JSON-RPC over MCP Streamable HTTP
+- unsupported methods like `GET /mcp` return `405 Method Not Allowed`
+- responses include human-readable `content` plus machine-friendly `structuredContent`
+
+### Discover available tools
+
+```bash
+curl -X POST http://localhost:34400/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+  }'
+```
+
+### Ask the MCP interface how to operate
+
+```bash
+curl -X POST http://localhost:34400/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "get_agent_workflow",
+      "arguments": {}
+    }
+  }'
+```
+
+### Get a readiness/diagnostic summary
+
+```bash
+curl -X POST http://localhost:34400/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "diagnose_agent_readiness",
+      "arguments": {}
+    }
+  }'
+```
+
+### Example tool call with arguments
+
+```bash
+curl -X POST http://localhost:34400/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "list_channels",
+      "arguments": {
+        "source": "HDHomeRun",
+        "limit": 25
+      }
+    }
+  }'
+```
+
+### Result format
+
+Successful tool calls return `structuredContent` with a stable envelope:
+
+```json
+{
+  "ok": true,
+  "tool": "diagnose_agent_readiness",
+  "summary": "Readiness is review-recommended with 2 diagnostic issue(s).",
+  "data": {},
+  "sideEffects": [],
+  "nextSuggestedTools": ["list_channel_bindings", "list_guide_bindings"]
+}
+```
+
+Error results set `isError: true` and return:
+
+```json
+{
+  "ok": false,
+  "tool": "get_guide",
+  "error": {
+    "code": "epg-not-loaded",
+    "message": "EPG data is not available yet. Try again after the EPG has been loaded."
+  },
+  "sideEffects": [],
+  "nextSuggestedTools": ["get_status", "reload_epg"]
+}
+```
+
+### Recommended agent flow
+
+1. Call `get_agent_workflow`
+2. Call `diagnose_agent_readiness`
+3. Inspect state with read tools such as `list_providers`, `list_channel_bindings`, `list_guide_bindings`, and `list_output_profile_entries`
+4. Apply targeted mutations only after inspection
+5. Re-run diagnostics or status tools after changes
 
 ---
 
@@ -99,7 +239,7 @@ admin_auth:
 
 - When `admin_auth` is configured, the admin UI and all management API endpoints require session-based authentication
 - Access the admin UI at `/admin` — you will be redirected to the login page if not authenticated
-- Protects endpoints: `/`, `/admin`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
+- Protects endpoints: `/`, `/admin`, `/mcp`, `/api/config/*`, `/api/reload/*`, `/api/scheduler/*`, `/api/mapping/*`, `/api/channel-health/*`, `/api/usage/*`, `/api/channels/*`, `/api/cache/*`
 - Media endpoints (M3U playlist, XMLTV guide, streams) remain accessible without authentication
 - **Important:** Passwords must be bcrypt hashed for security
 
