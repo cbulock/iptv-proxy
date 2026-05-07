@@ -32,6 +32,53 @@ export function proxyURL(channel) {
   return `/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
 }
 
+function hasStructuredChannelMetadata(extinfLine) {
+  if (!extinfLine || !extinfLine.startsWith('#EXTINF')) {
+    return false;
+  }
+
+  if (/tvg-id=|tvg-logo=|group-title=|tvg-chno=|channel-number=/i.test(extinfLine)) {
+    return true;
+  }
+
+  const extinfMatch = extinfLine.match(/^#EXTINF:([^,]*),(.*)$/i);
+  if (!extinfMatch) {
+    return false;
+  }
+
+  const [, durationText, nameText] = extinfMatch;
+  if (!nameText.trim()) {
+    return false;
+  }
+
+  return !/^\d+(\.\d+)?$/.test(durationText.trim());
+}
+
+function isLikelyDirectStreamManifest(lines) {
+  const nonEmptyLines = lines.map(line => line.trim()).filter(Boolean);
+  const hasHlsTags = nonEmptyLines.some(line => line.startsWith('#EXT-X-'));
+  const hasStructuredChannels = nonEmptyLines.some(hasStructuredChannelMetadata);
+
+  return hasHlsTags && !hasStructuredChannels;
+}
+
+function buildDirectStreamChannel(source) {
+  return {
+    name: source.name,
+    tvg_id: '',
+    logo: '',
+    guideNumber: '',
+    group: '',
+    source: source.name,
+    url: proxyURL({
+      name: source.name,
+      source: source.name,
+    }),
+    original_url: source.url,
+    external_key: source.id || `${source.name}:${source.url}`,
+  };
+}
+
 /**
  * Process a single M3U source
  * @param {Object} source - Source configuration
@@ -120,64 +167,71 @@ async function processSource(source, map) {
         console.warn(`Warning: ${source.name} missing #EXTM3U header`);
       }
 
-      // Valid streaming protocols
-      const validProtocols = ['http://', 'https://', 'rtsp://', 'rtp://', 'udp://'];
-      let current = {};
-      let lineNumber = 0;
+      if (isLikelyDirectStreamManifest(lines)) {
+        const discoveredChannel = buildDirectStreamChannel(source);
+        discoveredChannels.push(discoveredChannel);
+        channels.push(_applyMapping({ ...discoveredChannel }, map, reverseIndex));
+        console.log(`Detected direct stream manifest for ${source.name}; created a single channel`);
+      } else {
+        // Valid streaming protocols
+        const validProtocols = ['http://', 'https://', 'rtsp://', 'rtp://', 'udp://'];
+        let current = {};
+        let lineNumber = 0;
 
-      for (const line of lines) {
-        lineNumber++;
-        const trimmedLine = line.trim();
+        for (const line of lines) {
+          lineNumber++;
+          const trimmedLine = line.trim();
 
-        if (!trimmedLine) continue; // Skip empty lines
+          if (!trimmedLine) continue; // Skip empty lines
 
-        if (trimmedLine.startsWith('#EXTINF')) {
-          try {
-            const nameMatch = trimmedLine.match(/,(.*)$/);
-            const tvgIdMatch = trimmedLine.match(/tvg-id="(.*?)"/);
-            const tvgLogoMatch = trimmedLine.match(/tvg-logo="(.*?)"/);
-            const tvgChnoMatch =
-              trimmedLine.match(/tvg-chno="(.*?)"/) ||
-              trimmedLine.match(/channel-number="(.*?)"/);
-            const groupTitleMatch = trimmedLine.match(/group-title="(.*?)"/);
+          if (trimmedLine.startsWith('#EXTINF')) {
+            try {
+              const nameMatch = trimmedLine.match(/,(.*)$/);
+              const tvgIdMatch = trimmedLine.match(/tvg-id="(.*?)"/);
+              const tvgLogoMatch = trimmedLine.match(/tvg-logo="(.*?)"/);
+              const tvgChnoMatch =
+                trimmedLine.match(/tvg-chno="(.*?)"/) ||
+                trimmedLine.match(/channel-number="(.*?)"/);
+              const groupTitleMatch = trimmedLine.match(/group-title="(.*?)"/);
 
-            current = {
-              name: nameMatch ? nameMatch[1].trim() : 'Unknown',
-              tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
-              logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
-              guideNumber: tvgChnoMatch ? tvgChnoMatch[1] : '',
-              group: groupTitleMatch ? groupTitleMatch[1] : '',
-              source: source.name,
-            };
-          } catch (lineErr) {
-            console.warn(`[${source.name}:${lineNumber}] Malformed EXTINF: ${lineErr.message}`);
-            current = {};
-          }
-        } else if (trimmedLine && !trimmedLine.startsWith('#')) {
-          // Validate URL format using valid protocols array
-          const hasValidProtocol = validProtocols.some(protocol =>
-            trimmedLine.startsWith(protocol)
-          );
-
-          if (!hasValidProtocol) {
-            console.warn(
-              `[${source.name}:${lineNumber}] Invalid stream URL format: ${trimmedLine.substring(0, 50)}`
+              current = {
+                name: nameMatch ? nameMatch[1].trim() : 'Unknown',
+                tvg_id: tvgIdMatch ? tvgIdMatch[1] : '',
+                logo: tvgLogoMatch ? tvgLogoMatch[1] : '',
+                guideNumber: tvgChnoMatch ? tvgChnoMatch[1] : '',
+                group: groupTitleMatch ? groupTitleMatch[1] : '',
+                source: source.name,
+              };
+            } catch (lineErr) {
+              console.warn(`[${source.name}:${lineNumber}] Malformed EXTINF: ${lineErr.message}`);
+              current = {};
+            }
+          } else if (trimmedLine && !trimmedLine.startsWith('#')) {
+            // Validate URL format using valid protocols array
+            const hasValidProtocol = validProtocols.some(protocol =>
+              trimmedLine.startsWith(protocol)
             );
-            current = {};
-            continue;
-          }
 
-          if (current.name) {
-            const discoveredChannel = {
-              ...current,
-              url: proxyURL(current),
-              original_url: trimmedLine,
-              external_key: current.tvg_id || `${source.name}:${current.name}:${trimmedLine}`,
-            };
-            discoveredChannels.push(discoveredChannel);
-            channels.push(_applyMapping({ ...discoveredChannel }, map, reverseIndex));
+            if (!hasValidProtocol) {
+              console.warn(
+                `[${source.name}:${lineNumber}] Invalid stream URL format: ${trimmedLine.substring(0, 50)}`
+              );
+              current = {};
+              continue;
+            }
+
+            if (current.name) {
+              const discoveredChannel = {
+                ...current,
+                url: proxyURL(current),
+                original_url: trimmedLine,
+                external_key: current.tvg_id || `${source.name}:${current.name}:${trimmedLine}`,
+              };
+              discoveredChannels.push(discoveredChannel);
+              channels.push(_applyMapping({ ...discoveredChannel }, map, reverseIndex));
+            }
+            current = {};
           }
-          current = {};
         }
       }
     }

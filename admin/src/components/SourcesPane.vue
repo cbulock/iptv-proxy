@@ -56,12 +56,41 @@
             >{{ epgValidation.summary?.errorCount || 0 }}</span>
         </div>
         <div>
+          <span style="opacity: 0.7">Sources:</span>
+          <span
+            :style="{
+              color: epgValidation.sources?.failed > 0 ? 'var(--danger)' : 'var(--success)',
+            }"
+            >{{ epgValidation.sources?.valid || 0 }}/{{ epgValidation.sources?.total || 0 }} loaded</span>
+        </div>
+        <div>
           <span style="opacity: 0.7">Warnings:</span>
           <span
             :style="{
               color: epgValidation.summary?.warningCount > 0 ? 'var(--warning)' : 'var(--success)',
             }"
             >{{ epgValidation.summary?.warningCount || 0 }}</span>
+        </div>
+      </div>
+      <div
+        v-if="epgValidation.sources?.failed > 0"
+        style="
+          margin-top: 0.5rem;
+          padding: 0.5rem;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 4px;
+        "
+      >
+        <div style="font-weight: 600; margin-bottom: 0.25rem; color: var(--danger)">
+          Failed Sources:
+        </div>
+        <div
+          v-for="(source, idx) in epgValidation.sources.results.filter(result => result.status === 'error')"
+          :key="idx"
+          style="padding-left: 1rem; font-size: 0.9em; margin-bottom: 0.35rem"
+        >
+          <div>• {{ source.source }} — {{ source.error }}</div>
+          <div style="opacity: 0.65; padding-left: 0.85rem">{{ source.url }}</div>
         </div>
       </div>
       <div

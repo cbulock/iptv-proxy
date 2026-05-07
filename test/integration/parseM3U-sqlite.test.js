@@ -140,4 +140,100 @@ describe('parseAll SQLite persistence', () => {
       sourceGuideNumber: '6.1',
     });
   });
+
+  it('treats a direct HLS manifest as a single discovered channel', async () => {
+    await fs.writeFile(
+      path.join(configDir, 'providers.yaml'),
+      [
+        'providers:',
+        '  - name: NAS Stream',
+        '    url: "http://nas6:8081/hls/stream.m3u8"',
+        '    type: "m3u"',
+      ].join('\n'),
+      'utf8'
+    );
+
+    nock('http://nas6:8081')
+      .get('/hls/stream.m3u8')
+      .reply(
+        200,
+        [
+          '#EXTM3U',
+          '#EXT-X-VERSION:3',
+          '#EXT-X-TARGETDURATION:6',
+          '#EXTINF:6.006,',
+          'segment000.ts',
+          '#EXTINF:6.006,',
+          'segment001.ts',
+          '#EXT-X-ENDLIST',
+        ].join('\n'),
+        { 'Content-Type': 'application/vnd.apple.mpegurl' }
+      );
+
+    const count = await parseM3UModule.parseAll();
+    expect(count).to.equal(1);
+
+    const source = databaseModule.get('SELECT id, name FROM sources WHERE name = ?', ['NAS Stream']);
+    expect(source).to.not.equal(undefined);
+
+    const discovered = databaseModule.get(
+      'SELECT name, tvg_id, guide_number, stream_url FROM source_channels WHERE source_id = ?',
+      [source.id]
+    );
+    expect(discovered).to.deep.equal({
+      name: 'NAS Stream',
+      tvg_id: null,
+      guide_number: null,
+      stream_url: 'http://nas6:8081/hls/stream.m3u8',
+    });
+  });
+
+  it('treats a titled direct HLS manifest as a single discovered channel', async () => {
+    await fs.writeFile(
+      path.join(configDir, 'providers.yaml'),
+      [
+        'providers:',
+        '  - name: NAS Titled Stream',
+        '    url: "http://nas6:8081/hls/titled-stream.m3u8"',
+        '    type: "m3u"',
+      ].join('\n'),
+      'utf8'
+    );
+
+    nock('http://nas6:8081')
+      .get('/hls/titled-stream.m3u8')
+      .reply(
+        200,
+        [
+          '#EXTM3U',
+          '#EXT-X-VERSION:3',
+          '#EXT-X-TARGETDURATION:6',
+          '#EXTINF:6.006,Breaking News Segment',
+          'segment000.ts',
+          '#EXTINF:6.006,Another Segment',
+          'segment001.ts',
+          '#EXT-X-ENDLIST',
+        ].join('\n'),
+        { 'Content-Type': 'application/vnd.apple.mpegurl' }
+      );
+
+    const count = await parseM3UModule.parseAll();
+    expect(count).to.equal(1);
+
+    const source = databaseModule.get('SELECT id, name FROM sources WHERE name = ?', [
+      'NAS Titled Stream',
+    ]);
+    expect(source).to.not.equal(undefined);
+
+    const discovered = databaseModule.get(
+      'SELECT name, tvg_id, guide_number, stream_url FROM source_channels WHERE source_id = ?',
+      [source.id]
+    );
+    expect(discovered).to.deep.equal({
+      name: 'NAS Titled Stream',
+      tvg_id: null,
+      guide_number: null,
+      stream_url: 'http://nas6:8081/hls/titled-stream.m3u8',
+    });
+  });
 });

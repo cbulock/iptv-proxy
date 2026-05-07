@@ -55,6 +55,7 @@ let epgCache = null;
 
 // Module-level merged EPG XML string (set by setupEPGRoutes)
 let mergedEPG = null;
+let lastEPGSourceResults = [];
 
 // Maximum number of programmes returned per guide query (matches /api/guide behaviour)
 const MAX_GUIDE_PROGRAMMES = 20;
@@ -201,6 +202,7 @@ export function getGuideData(tvgId, hours = 24) {
  */
 export function _resetMergedEPGForTesting() {
   mergedEPG = null;
+  lastEPGSourceResults = [];
 }
 
 function loadOutputChannels(slug = '') {
@@ -305,6 +307,7 @@ export async function setupEPGRoutes(app) {
       buildGuideSelection(allChannels);
     const merged = { tv: { channel: [], programme: [] } };
     const epgSources = loadEPGSources();
+    const sourceResults = [];
 
     for (const source of epgSources) {
       const sourceName = source.name;
@@ -400,8 +403,17 @@ export async function setupEPGRoutes(app) {
             });
 
           merged.tv.channel.push(...channels);
+
+          sourceResults.push({
+            source: sourceName,
+            url: sourceUrl,
+            status: 'ok',
+            channelCount: channels.length,
+            programmeCount: 0,
+          });
         }
 
+        let sourceProgrammeCount = 0;
         if (parsed.tv?.programme) {
           const programmes = []
             .concat(parsed.tv.programme)
@@ -428,11 +440,31 @@ export async function setupEPGRoutes(app) {
             });
 
           merged.tv.programme.push(...programmes);
+          sourceProgrammeCount = programmes.length;
+        }
+
+        const existingSourceResult = sourceResults.find(result => result.source === sourceName);
+        if (existingSourceResult) {
+          existingSourceResult.programmeCount = sourceProgrammeCount;
+        } else {
+          sourceResults.push({
+            source: sourceName,
+            url: sourceUrl,
+            status: 'ok',
+            channelCount: 0,
+            programmeCount: sourceProgrammeCount,
+          });
         }
 
         console.log(`Loaded ${merged.tv.programme.length} programmes from ${sourceName}`);
       } catch (err) {
         console.error(`❌ Failed to load EPG from ${sourceName}: ${err.message}`);
+        sourceResults.push({
+          source: sourceName,
+          url: sourceUrl,
+          status: 'error',
+          error: err.message,
+        });
 
         // Provide actionable error messages
         if (sourceUrl.startsWith('file://')) {
@@ -481,6 +513,8 @@ export async function setupEPGRoutes(app) {
         }
       }
     }
+
+    lastEPGSourceResults = sourceResults;
 
     try {
       mergedEPG = builder.build(merged);
@@ -582,21 +616,33 @@ export async function setupEPGRoutes(app) {
     try {
       const channels = loadOutputChannels();
       const validation = validateEPGCoverage(mergedEPG, channels);
+      const sourceErrors = lastEPGSourceResults
+        .filter(source => source.status === 'error')
+        .map(source => `EPG source "${source.source}" failed: ${source.error}`);
+      const errors = validation.errors.concat(sourceErrors);
+      const sources = {
+        total: lastEPGSourceResults.length,
+        valid: lastEPGSourceResults.filter(source => source.status === 'ok').length,
+        failed: lastEPGSourceResults.filter(source => source.status === 'error').length,
+        results: lastEPGSourceResults,
+      };
+      const valid = validation.valid && sourceErrors.length === 0;
 
       res.json({
-        valid: validation.valid,
+        valid,
         summary: {
           channels: validation.channelCount,
           programmes: validation.programmeCount,
           validChannels: validation.validChannels,
           validProgrammes: validation.validProgrammes,
-          errorCount: validation.errors.length,
+          errorCount: errors.length,
           warningCount: validation.warnings.length,
         },
         coverage: validation.coverage || null,
-        errors: validation.errors,
+        errors,
         warnings: validation.warnings,
         details: validation.details,
+        sources,
       });
     } catch (err) {
       res.status(500).json({ error: 'Validation failed', detail: err.message });

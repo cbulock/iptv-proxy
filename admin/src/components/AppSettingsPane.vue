@@ -38,7 +38,7 @@
       </CindorForm>
     </div>
 
-    <CindorForm class="settings-form">
+    <CindorForm class="settings-form app-settings-form">
       <h3 class="section-title">Core Settings</h3>
       <CindorFormField label="Base URL">
         <CindorInput v-model="appBaseUrl" placeholder="https://example.com" />
@@ -170,7 +170,7 @@
           No MCP OAuth clients configured yet. Add a client or start with one of the presets above.
         </div>
 
-        <CindorStack direction="horizontal" gap="sm" wrap>
+        <CindorStack class="oauth-save-actions" direction="horizontal" gap="sm" wrap>
           <CindorButton class="action-button" :disabled="savingApp" @click="saveApp">
             {{ savingApp ? 'Saving...' : 'Save App Settings' }}
           </CindorButton>
@@ -357,7 +357,15 @@ function removeClient(index) {
   gap: 0.9rem;
 }
 
+.app-settings-form {
+  margin-top: 0;
+}
+
 .security-section {
+  margin-top: 2rem;
+}
+
+.security-section + .app-settings-form {
   margin-top: 2rem;
 }
 
@@ -384,7 +392,7 @@ function removeClient(index) {
 
 .oauth-section {
   margin-top: 2rem;
-  padding: 1rem;
+  padding: 1rem 1rem 1.25rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
@@ -448,6 +456,11 @@ function removeClient(index) {
   flex-direction: column;
   gap: 1rem;
   margin-top: 1rem;
+}
+
+.oauth-save-actions {
+  margin-top: 1.25rem;
+  padding-top: 0.25rem;
 }
 
 .oauth-client-card {
