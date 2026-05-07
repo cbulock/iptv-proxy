@@ -4,9 +4,9 @@ import nock from 'nock';
 import fs from 'fs/promises';
 import path from 'path';
 import { getDataPath } from '../../libs/paths.js';
+import { loadChannelSnapshot, replaceChannelSnapshot } from '../../libs/channel-snapshot-service.js';
 import { runHealthCheck } from '../../scripts/check-channel-health.js';
 
-const CHANNELS_FILE = getDataPath('channels.json');
 const STATUS_FILE = getDataPath('lineup_status.json');
 const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
 
@@ -14,11 +14,13 @@ describe('check-channel-health', () => {
   // Track original content (or absence) of every file the health check touches,
   // so we can restore them exactly — avoiding data loss if tests run against a
   // real data directory.
-  const trackedFiles = [CHANNELS_FILE, STATUS_FILE, LAST_LOG_FILE];
+  const trackedFiles = [STATUS_FILE, LAST_LOG_FILE];
   const originalContents = new Map(); // path → string | null (null = did not exist)
+  let originalChannels = [];
 
   before(async () => {
-    await fs.mkdir(path.dirname(CHANNELS_FILE), { recursive: true });
+    await fs.mkdir(path.dirname(STATUS_FILE), { recursive: true });
+    originalChannels = loadChannelSnapshot();
     for (const f of trackedFiles) {
       try {
         originalContents.set(f, await fs.readFile(f, 'utf8'));
@@ -45,6 +47,7 @@ describe('check-channel-health', () => {
         }
       }
     }
+    replaceChannelSnapshot(originalChannels);
   });
 
   afterEach(() => {
@@ -82,7 +85,7 @@ describe('check-channel-health', () => {
       },
     ];
 
-    await fs.writeFile(CHANNELS_FILE, JSON.stringify(channels));
+    replaceChannelSnapshot(channels);
 
     // Expect exactly one call to the device discover endpoint
     nock('http://hdhomerun.local:5004')
@@ -126,7 +129,7 @@ describe('check-channel-health', () => {
       },
     ];
 
-    await fs.writeFile(CHANNELS_FILE, JSON.stringify(channels));
+    replaceChannelSnapshot(channels);
 
     nock('http://offline-device.local:5004')
       .get('/discover.json')
@@ -160,7 +163,7 @@ describe('check-channel-health', () => {
       },
     ];
 
-    await fs.writeFile(CHANNELS_FILE, JSON.stringify(channels));
+    replaceChannelSnapshot(channels);
 
     // HDHomeRun: device-level check only
     nock('http://hdhomerun2.local:5004')

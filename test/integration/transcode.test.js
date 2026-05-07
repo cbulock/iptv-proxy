@@ -5,8 +5,8 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { getDataPath } from '../../libs/paths.js';
 import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
+import { loadChannelSnapshot, replaceChannelSnapshot } from '../../libs/channel-snapshot-service.js';
 import { setupTranscodeRoutes } from '../../server/transcode.js';
 import { errorHandler } from '../../server/error-handler.js';
 
@@ -47,23 +47,14 @@ function setProcessPath(value) {
 }
 
 describe('Transcode Route Integration', () => {
-  const channelsFile = getDataPath('channels.json');
   let originalChannels = null;
-  let hadOriginalChannelsFile = false;
   let server = null;
   let baseUrl = '';
   let tmpBinDir = null;
   let originalPath = '';
 
   before(async () => {
-    // Preserve original channels file
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
-    try {
-      originalChannels = await fs.readFile(channelsFile, 'utf8');
-      hadOriginalChannelsFile = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-    }
+    originalChannels = loadChannelSnapshot();
 
     const testChannels = [
       {
@@ -75,7 +66,7 @@ describe('Transcode Route Integration', () => {
       },
     ];
 
-    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+    replaceChannelSnapshot(testChannels);
     await initChannelsCache();
 
     // Create a temporary directory for fake ffmpeg binaries
@@ -104,15 +95,7 @@ describe('Transcode Route Integration', () => {
     }
     cleanupCache();
 
-    if (hadOriginalChannelsFile && originalChannels !== null) {
-      await fs.writeFile(channelsFile, originalChannels, 'utf8');
-    } else {
-      try {
-        await fs.unlink(channelsFile);
-      } catch (err) {
-        if (err.code !== 'ENOENT') throw err;
-      }
-    }
+    replaceChannelSnapshot(originalChannels || []);
 
     if (tmpBinDir) {
       await fs.rm(tmpBinDir, { recursive: true, force: true });

@@ -4,6 +4,7 @@ import RateLimit from 'express-rate-limit';
 import { runHealthCheck } from '../scripts/check-channel-health.js';
 import { getDataPath } from '../libs/paths.js';
 import { getChannels } from '../libs/channels-cache.js';
+import { getChannelSnapshotMetadata } from '../libs/channel-snapshot-service.js';
 import { asyncHandler } from './error-handler.js';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from './auth.js';
@@ -11,7 +12,6 @@ import { requireAuth } from './auth.js';
 const router = express.Router();
 const STATUS_FILE = getDataPath('lineup_status.json');
 const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
-const CHANNELS_FILE = getDataPath('channels.json');
 
 // Rate limiter for health check endpoints
 const healthLimiter = RateLimit({
@@ -79,19 +79,18 @@ router.get(
       };
     }
 
-    // Check if channels file exists and is readable
-    try {
-      const stats = await fs.stat(CHANNELS_FILE);
-      checks.checks.channelsFile = {
+    const snapshotMetadata = getChannelSnapshotMetadata();
+    if (snapshotMetadata) {
+      checks.checks.channelsSnapshot = {
         status: 'ok',
-        size: stats.size,
-        modified: stats.mtime.toISOString(),
+        size: snapshotMetadata.sizeBytes,
+        modified: snapshotMetadata.updatedAt,
       };
-    } catch (err) {
+    } else {
       checks.ready = false;
-      checks.checks.channelsFile = {
+      checks.checks.channelsSnapshot = {
         status: 'error',
-        message: 'Channels file not found or not readable',
+        message: 'Channel snapshot not found or not readable',
       };
     }
 

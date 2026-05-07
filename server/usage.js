@@ -1,6 +1,5 @@
 import express from 'express';
-import fs from 'fs/promises';
-import { getDataPath } from '../libs/paths.js';
+import { loadChannelSnapshot } from '../libs/channel-snapshot-service.js';
 import { requireAuth } from './auth.js';
 
 const router = express.Router();
@@ -13,11 +12,7 @@ const HISTORY_MAX = 100;
 let channelsCache = [];
 
 async function loadChannels() {
-  try {
-    channelsCache = JSON.parse(await fs.readFile(getDataPath('channels.json'), 'utf8')) || [];
-  } catch {
-    channelsCache = [];
-  }
+  channelsCache = loadChannelSnapshot();
 }
 
 function findChannelMeta(channelId) {

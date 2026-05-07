@@ -1,14 +1,7 @@
-import fs from 'fs';
-import fsPromises from 'fs/promises';
-import { getDataPath } from './paths.js';
-
-function getChannelsFilePath() {
-  return getDataPath('channels.json');
-}
+import { loadChannelSnapshot } from './channel-snapshot-service.js';
 
 // In-memory cache
 let channelsCache = null;
-let fileWatcher = null;
 
 // Callback hooks for when channels are updated
 const updateCallbacks = [];
@@ -22,67 +15,19 @@ export function onChannelsUpdate(callback) {
 }
 
 /**
- * Load channels from disk and cache them
- * @returns {Promise<Array>}
+ * Load channels from the database snapshot and cache them.
+ * @returns {Array}
  */
-async function loadChannelsFromDisk() {
-  const channelsFile = getChannelsFilePath();
-  try {
-    const data = await fsPromises.readFile(channelsFile, 'utf8');
-    return JSON.parse(data);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      console.warn(`Channels file not found: ${channelsFile}`);
-      return [];
-    }
-    throw err;
-  }
+function loadChannelsFromSnapshot() {
+  return loadChannelSnapshot();
 }
 
 /**
- * Initialize the cache and set up file watching
+ * Initialize the cache from the database snapshot.
  */
 export async function initChannelsCache() {
-  // Load initial data
-  channelsCache = await loadChannelsFromDisk();
-  const channelsFile = getChannelsFilePath();
-
-  let reloadInProgress = false;
-
-  // Watch for file changes to invalidate cache
-  if (!fileWatcher && fs.existsSync(channelsFile)) {
-    fileWatcher = fs.watch(channelsFile, { persistent: false }, async eventType => {
-      if (eventType === 'change') {
-        // Prevent concurrent reloads
-        if (reloadInProgress) {
-          console.log('[Cache] Reload already in progress, skipping...');
-          return;
-        }
-
-        reloadInProgress = true;
-        console.log('[Cache] Channels file changed, reloading...');
-        try {
-          channelsCache = await loadChannelsFromDisk();
-          console.log(`[Cache] Reloaded ${channelsCache.length} channels`);
-
-          // Notify all registered callbacks (await to catch async errors)
-          for (const callback of updateCallbacks) {
-            try {
-              await callback();
-            } catch (err) {
-              console.error('[Cache] Error in update callback:', err.message);
-            }
-          }
-        } catch (err) {
-          console.error('[Cache] Failed to reload channels:', err.message);
-        } finally {
-          reloadInProgress = false;
-        }
-      }
-    });
-  }
-
-  console.log(`[Cache] Initialized with ${channelsCache.length} channels`);
+  channelsCache = loadChannelsFromSnapshot();
+  console.log(`[Cache] Initialized with ${channelsCache.length} channels from database snapshot`);
 }
 
 /**
@@ -99,11 +44,11 @@ export function getChannels() {
 }
 
 /**
- * Invalidate the cache and reload from disk
+ * Invalidate the cache and reload from the database snapshot.
  * @returns {Promise<void>}
  */
 export async function invalidateCache() {
-  channelsCache = await loadChannelsFromDisk();
+  channelsCache = loadChannelsFromSnapshot();
   console.log(`[Cache] Cache invalidated, reloaded ${channelsCache.length} channels`);
 
   // Notify all registered callbacks (await to catch async errors)
@@ -117,11 +62,8 @@ export async function invalidateCache() {
 }
 
 /**
- * Clean up file watcher
+ * Clean up cache state.
  */
 export function cleanupCache() {
-  if (fileWatcher) {
-    fileWatcher.close();
-    fileWatcher = null;
-  }
+  channelsCache = null;
 }

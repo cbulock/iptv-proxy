@@ -1,13 +1,11 @@
 import express from 'express';
-import fs from 'fs/promises';
-import { getDataPath } from '../libs/paths.js';
+import { loadChannelSnapshot } from '../libs/channel-snapshot-service.js';
 import { generateSuggestions, detectDuplicates } from '../libs/channel-matcher.js';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from './auth.js';
 import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
 
 const router = express.Router();
-const CHANNELS_FILE = getDataPath('channels.json');
 
 const conflictsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -32,13 +30,7 @@ const duplicatesLimiter = rateLimit({
 
 router.get('/api/mapping/conflicts', requireAuth, conflictsLimiter, async (req, res) => {
   try {
-    let channels = [];
-    try {
-      channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
-    } catch (err) {
-      if (err.code !== 'ENOENT')
-        console.warn('[Mapping] Could not read channels file:', err.message);
-    }
+    const channels = loadChannelSnapshot();
 
     const byName = new Map();
     for (const ch of Array.isArray(channels) ? channels : []) {
@@ -80,12 +72,7 @@ router.get('/api/mapping/conflicts', requireAuth, conflictsLimiter, async (req, 
 // New endpoint: detect duplicate channels
 router.get('/api/mapping/duplicates', requireAuth, duplicatesLimiter, async (req, res) => {
   try {
-    let channels = [];
-    try {
-      channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
-    } catch (err) {
-      return res.status(500).json({ error: 'Failed to load channels', detail: err.message });
-    }
+    const channels = loadChannelSnapshot();
 
     const duplicates = detectDuplicates(channels);
 
@@ -109,12 +96,7 @@ router.get('/api/mapping/duplicates', requireAuth, duplicatesLimiter, async (req
 // New endpoint: auto-suggest mappings for unmapped channels
 router.get('/api/mapping/suggestions', requireAuth, suggestionsLimiter, async (req, res) => {
   try {
-    let channels = [];
-    try {
-      channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
-    } catch (err) {
-      return res.status(500).json({ error: 'Failed to load channels', detail: err.message });
-    }
+    const channels = loadChannelSnapshot();
 
     let mapping = {};
     try {

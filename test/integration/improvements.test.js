@@ -497,11 +497,13 @@ describe('GET /channels?mapped_only=true', () => {
   let server;
   let baseUrl;
   let originalConfigPath;
+  let originalDataPath;
   let originalChannels;
   let hadOriginalChannels;
 
   before(async () => {
     originalConfigPath = process.env.CONFIG_PATH;
+    originalDataPath = process.env.DATA_PATH;
 
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-channels-mapped-test-'));
 
@@ -513,25 +515,21 @@ describe('GET /channels?mapped_only=true', () => {
     );
 
     process.env.CONFIG_PATH = tmpDir;
+    process.env.DATA_PATH = tmpDir;
+    closeDatabase();
 
-    // Write channels.json to the real data path (same pattern as lineup.test.js)
-    const { getDataPath } = await import('../../libs/paths.js');
-    const channelsFile = getDataPath('channels.json');
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
+    const { loadChannelSnapshot, replaceChannelSnapshot } = await import(
+      '../../libs/channel-snapshot-service.js'
+    );
 
-    try {
-      originalChannels = await fs.readFile(channelsFile, 'utf8');
-      hadOriginalChannels = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-      hadOriginalChannels = false;
-    }
+    originalChannels = loadChannelSnapshot();
+    hadOriginalChannels = originalChannels.length > 0;
 
     const testChannels = [
       { name: 'Mapped Channel', tvg_id: 'mapped.1', source: 'TestSource', guideNumber: '5' },
       { name: 'Unmapped Channel', tvg_id: 'unmapped.2', source: 'TestSource', guideNumber: '' },
     ];
-    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+    replaceChannelSnapshot(testChannels);
 
     const { initChannelsCache, cleanupCache } = await import('../../libs/channels-cache.js');
     cleanupCache();
@@ -546,28 +544,26 @@ describe('GET /channels?mapped_only=true', () => {
 
   after(async () => {
     await stopServer(server);
-    await fs.rm(tmpDir, { recursive: true, force: true });
 
     const { cleanupCache } = await import('../../libs/channels-cache.js');
     cleanupCache();
-
-    const { getDataPath } = await import('../../libs/paths.js');
-    const channelsFile = getDataPath('channels.json');
-    if (hadOriginalChannels) {
-      await fs.writeFile(channelsFile, originalChannels, 'utf8');
-    } else {
-      try {
-        await fs.unlink(channelsFile);
-      } catch (_) {
-        /* ignore */
-      }
-    }
+    closeDatabase();
 
     if (originalConfigPath === undefined) {
       delete process.env.CONFIG_PATH;
     } else {
       process.env.CONFIG_PATH = originalConfigPath;
     }
+    if (originalDataPath === undefined) {
+      delete process.env.DATA_PATH;
+    } else {
+      process.env.DATA_PATH = originalDataPath;
+    }
+
+    const { replaceChannelSnapshot } = await import('../../libs/channel-snapshot-service.js');
+    replaceChannelSnapshot(hadOriginalChannels ? originalChannels : []);
+    closeDatabase();
+    await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
   it('returns all channels when mapped_only is not set', async () => {
@@ -598,11 +594,13 @@ describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
   let server;
   let baseUrl;
   let originalConfigPath;
+  let originalDataPath;
   let originalChannels;
   let hadOriginalChannels;
 
   before(async () => {
     originalConfigPath = process.env.CONFIG_PATH;
+    originalDataPath = process.env.DATA_PATH;
 
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-channels-hdhr-test-'));
 
@@ -614,18 +612,15 @@ describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
     );
 
     process.env.CONFIG_PATH = tmpDir;
+    process.env.DATA_PATH = tmpDir;
+    closeDatabase();
 
-    const { getDataPath } = await import('../../libs/paths.js');
-    const channelsFile = getDataPath('channels.json');
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
+    const { loadChannelSnapshot, replaceChannelSnapshot } = await import(
+      '../../libs/channel-snapshot-service.js'
+    );
 
-    try {
-      originalChannels = await fs.readFile(channelsFile, 'utf8');
-      hadOriginalChannels = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-      hadOriginalChannels = false;
-    }
+    originalChannels = loadChannelSnapshot();
+    hadOriginalChannels = originalChannels.length > 0;
 
     const testChannels = [
       { name: 'Mapped M3U Channel', tvg_id: 'm3u.1', source: 'TestSource', guideNumber: '5' },
@@ -639,7 +634,7 @@ describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
         hdhomerun: { deviceID: '1234', baseURL: 'http://antenna.example', model: 'HDHR3-US' },
       },
     ];
-    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+    replaceChannelSnapshot(testChannels);
 
     const { initChannelsCache, cleanupCache } = await import('../../libs/channels-cache.js');
     cleanupCache();
@@ -658,32 +653,30 @@ describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
 
   after(async () => {
     await stopServer(server);
-    await fs.rm(tmpDir, { recursive: true, force: true });
 
     const { cleanupCache } = await import('../../libs/channels-cache.js');
     cleanupCache();
+    closeDatabase();
 
     // Reset channel-map cache so it doesn't bleed into subsequent suites
     const { invalidateChannelMapCache } = await import('../../server/channels.js');
     invalidateChannelMapCache();
-
-    const { getDataPath } = await import('../../libs/paths.js');
-    const channelsFile = getDataPath('channels.json');
-    if (hadOriginalChannels) {
-      await fs.writeFile(channelsFile, originalChannels, 'utf8');
-    } else {
-      try {
-        await fs.unlink(channelsFile);
-      } catch (_) {
-        /* ignore */
-      }
-    }
 
     if (originalConfigPath === undefined) {
       delete process.env.CONFIG_PATH;
     } else {
       process.env.CONFIG_PATH = originalConfigPath;
     }
+    if (originalDataPath === undefined) {
+      delete process.env.DATA_PATH;
+    } else {
+      process.env.DATA_PATH = originalDataPath;
+    }
+
+    const { replaceChannelSnapshot } = await import('../../libs/channel-snapshot-service.js');
+    replaceChannelSnapshot(hadOriginalChannels ? originalChannels : []);
+    closeDatabase();
+    await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
   it('returns all 3 channels when mapped_only is not set', async () => {

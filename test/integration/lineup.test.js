@@ -10,11 +10,11 @@ import nock from 'nock';
 describe('Lineup Route Integration', () => {
   let configDir = '';
   let dataDir = '';
-  let channelsFile = '';
   let server = null;
   let baseUrl = '';
   let initChannelsCache;
   let cleanupCache;
+  let replaceChannelSnapshot;
   let setupLineupRoutes;
   let errorHandler;
   let databaseModule;
@@ -28,19 +28,17 @@ describe('Lineup Route Integration', () => {
     await fs.writeFile(path.join(configDir, 'app.yaml'), '{}\n', 'utf8');
     await fs.writeFile(path.join(configDir, 'channel-map.yaml'), '{}\n', 'utf8');
 
-    const pathsModule = await import('../../libs/paths.js');
     const channelsCacheModule = await import('../../libs/channels-cache.js');
+    const snapshotModule = await import('../../libs/channel-snapshot-service.js');
     const lineupModule = await import('../../server/lineup.js');
     const errorHandlerModule = await import('../../server/error-handler.js');
     databaseModule = await import('../../libs/database.js');
 
-    channelsFile = pathsModule.getDataPath('channels.json');
     initChannelsCache = channelsCacheModule.initChannelsCache;
     cleanupCache = channelsCacheModule.cleanupCache;
+    replaceChannelSnapshot = snapshotModule.replaceChannelSnapshot;
     setupLineupRoutes = lineupModule.setupLineupRoutes;
     errorHandler = errorHandlerModule.errorHandler;
-
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
 
     const testChannels = [
       {
@@ -87,7 +85,7 @@ describe('Lineup Route Integration', () => {
       },
     ];
 
-    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+    replaceChannelSnapshot(testChannels);
     await initChannelsCache();
 
     const app = express();

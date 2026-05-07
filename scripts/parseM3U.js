@@ -1,7 +1,6 @@
 import fs from 'fs';
 import axios from 'axios';
 import pLimit from 'p-limit';
-import { getDataPath, DATA_DIR } from '../libs/paths.js';
 import { applyMapping as _applyMapping, buildReverseIndex } from '../libs/channel-mapping.js';
 import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
 import { listSources } from '../libs/source-service.js';
@@ -12,8 +11,7 @@ import {
 } from '../libs/source-sync-service.js';
 import { rebuildCanonicalChannels } from '../libs/canonical-channel-service.js';
 import { syncAllOutputProfiles } from '../libs/output-profile-service.js';
-
-const outputPath = getDataPath('channels.json');
+import { replaceChannelSnapshot } from '../libs/channel-snapshot-service.js';
 
 // Limit concurrent source fetches
 const limit = pLimit(3);
@@ -316,13 +314,12 @@ export async function parseAll() {
   // Flatten the array of arrays
   const allChannels = channelArrays.flat();
 
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(outputPath, JSON.stringify(allChannels, null, 2));
+  replaceChannelSnapshot(allChannels);
   rebuildCanonicalChannels();
   syncAllOutputProfiles();
 
   const duration = Date.now() - startTime;
-  console.log(`Parsed ${allChannels.length} channels to ${outputPath} in ${duration}ms`);
+  console.log(`Parsed ${allChannels.length} channels and updated database snapshot in ${duration}ms`);
 
   return allChannels.length;
 }

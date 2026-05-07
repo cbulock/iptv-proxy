@@ -24,7 +24,7 @@ This project merges IPTV sources (M3U and EPG/XMLTV) into a single unified outpu
 
 - `config/` contains YAML files (`m3u.yaml`, `channel-map.yaml`, etc.)
 - `scripts/` contains import and generation logic
-- `data/` contains generated output (e.g., `channels.json`, `xmltv.xml`)
+- `data/` contains generated output and runtime state (e.g., `xmltv.xml`, SQLite data)
 - `server/` or root contains HTTP-serving logic
 
 ✅ Copilot should:

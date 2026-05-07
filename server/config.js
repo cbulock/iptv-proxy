@@ -437,7 +437,7 @@ router.get('/api/mapping/candidates', requireAuth, async (req, res) => {
 
     console.log(`[Mapping] Starting candidates endpoint - found ${m3uSources.length} M3U sources`);
 
-    // Parse M3U files directly to get tvg_ids (not from cached channels.json)
+    // Parse M3U files directly to get tvg_ids instead of relying on cached channel snapshots
     const tvgMap = new Map(); // key: tvg_id, value: { name, sources }
     let totalParsed = 0;
 

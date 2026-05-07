@@ -6,8 +6,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import nock from 'nock';
-import { getDataPath } from '../../libs/paths.js';
 import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
+import { loadChannelSnapshot, replaceChannelSnapshot } from '../../libs/channel-snapshot-service.js';
 import { setupStreamProbeRoutes, parseMpegTsCodecs } from '../../server/stream-probe.js';
 import { errorHandler } from '../../server/error-handler.js';
 import { invalidateAuthCache } from '../../server/auth.js';
@@ -189,9 +189,7 @@ describe('parseMpegTsCodecs', () => {
 // ---------------------------------------------------------------------------
 
 describe('Stream Probe Route Integration', () => {
-  let channelsFile = '';
   let originalChannels = null;
-  let hadOriginalChannelsFile = false;
   let server = null;
   let baseUrl = '';
   // CONFIG_PATH isolation — keeps the real app.yaml untouched and ensures
@@ -231,16 +229,9 @@ describe('Stream Probe Route Integration', () => {
     closeDatabase();
     invalidateAuthCache();
 
-    channelsFile = getDataPath('channels.json');
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
-    try {
-      originalChannels = await fs.readFile(channelsFile, 'utf8');
-      hadOriginalChannelsFile = true;
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-    }
+    originalChannels = loadChannelSnapshot();
 
-    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+    replaceChannelSnapshot(testChannels);
     await initChannelsCache();
 
     const app = express();
@@ -265,16 +256,6 @@ describe('Stream Probe Route Integration', () => {
     cleanupCache();
     closeDatabase();
 
-    if (hadOriginalChannelsFile && originalChannels !== null) {
-      await fs.writeFile(channelsFile, originalChannels, 'utf8');
-    } else {
-      try {
-        await fs.unlink(channelsFile);
-      } catch (err) {
-        if (err.code !== 'ENOENT') throw err;
-      }
-    }
-
     // Restore CONFIG_PATH and auth cache
     if (originalConfigPath === undefined) {
       delete process.env.CONFIG_PATH;
@@ -287,6 +268,8 @@ describe('Stream Probe Route Integration', () => {
       process.env.DATA_PATH = originalDataPath;
     }
     invalidateAuthCache();
+    replaceChannelSnapshot(originalChannels || []);
+    closeDatabase();
 
     if (tmpConfigDir) {
       await fs.rm(tmpConfigDir, { recursive: true, force: true });

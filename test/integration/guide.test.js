@@ -6,8 +6,8 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { pathToFileURL } from 'url';
-import { getDataPath } from '../../libs/paths.js';
 import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
+import { replaceChannelSnapshot } from '../../libs/channel-snapshot-service.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -81,21 +81,17 @@ describe('GET /api/guide', () => {
   let epgFilePath;
   let server;
   let baseUrl;
-  let channelsFile;
-
   before(async () => {
     tmpDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-guide-data-'));
     process.env.DATA_PATH = tmpDataDir;
     process.env.CONFIG_PATH = tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-guide-test-'));
-    channelsFile = getDataPath('channels.json');
 
     // Write test channels
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
     const testChannels = [
       { name: 'Guide Test Channel', tvg_id: TVG_ID, source: 'GuideProvider' },
       { name: 'Other Channel', tvg_id: 'other.channel', source: 'GuideProvider' },
     ];
-    await fs.writeFile(channelsFile, JSON.stringify(testChannels), 'utf8');
+    replaceChannelSnapshot(testChannels);
     await initChannelsCache();
 
     // Create temp config dir with a providers.yaml referencing a local EPG file

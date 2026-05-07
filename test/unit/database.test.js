@@ -67,7 +67,7 @@ describe('database foundation', () => {
     initDatabase({ filename: dbPath });
 
     const row = get('SELECT COUNT(*) AS count FROM schema_migrations');
-    expect(row.count).to.equal(3);
+    expect(row.count).to.equal(4);
   });
 
   it('supports the shared run/get helpers for future repositories', () => {

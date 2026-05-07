@@ -6,8 +6,8 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { pathToFileURL } from 'url';
-import { getDataPath } from '../libs/paths.js';
 import { initChannelsCache, cleanupCache } from '../libs/channels-cache.js';
+import { replaceChannelSnapshot } from '../libs/channel-snapshot-service.js';
 
 async function startServer(app) {
   return new Promise(resolve => {
@@ -45,16 +45,10 @@ describe('GET /api/epg/validate', () => {
     process.env.DATA_PATH = tmpDataDir;
     process.env.CONFIG_PATH = tmpConfigDir;
 
-    const channelsFile = getDataPath('channels.json');
     const validEpgPath = path.join(tmpConfigDir, 'valid-epg.xml');
     const missingEpgPath = path.join(tmpConfigDir, 'missing-epg.xml');
 
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
-    await fs.writeFile(
-      channelsFile,
-      JSON.stringify([{ name: 'Good Channel', tvg_id: 'good.1', source: 'Good Provider' }]),
-      'utf8'
-    );
+    replaceChannelSnapshot([{ name: 'Good Channel', tvg_id: 'good.1', source: 'Good Provider' }]);
     await initChannelsCache();
 
     await fs.writeFile(validEpgPath, buildXmltv('good.1', 'Good Channel'), 'utf8');

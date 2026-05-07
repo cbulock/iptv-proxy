@@ -3,8 +3,8 @@ import axios from 'axios';
 import { loadConfig } from '../libs/config-loader.js';
 import pLimit from 'p-limit';
 import { getDataPath } from '../libs/paths.js';
+import { loadChannelSnapshot } from '../libs/channel-snapshot-service.js';
 
-const CHANNELS_FILE = getDataPath('channels.json');
 const STATUS_FILE = getDataPath('lineup_status.json');
 const LAST_LOG_FILE = getDataPath('lineup_health_last.json');
 
@@ -170,7 +170,7 @@ async function checkHDHomeRunDevice(baseURL) {
 
 export async function runHealthCheck() {
   await loadBaseUrl();
-  const channels = JSON.parse(await fs.readFile(CHANNELS_FILE, 'utf8'));
+  const channels = loadChannelSnapshot();
 
   const runStarted = Date.now();
 

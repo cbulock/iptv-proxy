@@ -1,12 +1,11 @@
 import express from 'express';
-import fs from 'fs/promises';
 import RateLimit from 'express-rate-limit';
 import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { loadProvidersConfigFromStore } from '../libs/source-service.js';
+import { getChannelSnapshotMetadata } from '../libs/channel-snapshot-service.js';
 
 const router = express.Router();
-const CHANNELS_FILE = './data/channels.json';
 
 // Configuration constants
 const MAX_ERROR_HISTORY = 50; // Maximum number of errors to keep in history
@@ -87,16 +86,7 @@ router.get('/status', statusLimiter, async (req, res) => {
     const channels = getChannels();
 
     // Get file stats
-    let channelsFileStats = null;
-    try {
-      const stats = await fs.stat(CHANNELS_FILE);
-      channelsFileStats = {
-        size: stats.size,
-        modified: stats.mtime.toISOString(),
-      };
-    } catch (err) {
-      // File doesn't exist yet
-    }
+    const channelsFileStats = getChannelSnapshotMetadata();
 
     // Count channels by source
     const channelsBySource = {};

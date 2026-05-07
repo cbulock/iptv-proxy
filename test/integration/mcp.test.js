@@ -96,8 +96,8 @@ describe('MCP Route Integration', () => {
     process.env.CONFIG_PATH = tmpConfigDir;
 
     // Dynamic imports after env vars are set so module-level paths resolve correctly
-    const { getDataPath } = await import('../../libs/paths.js');
     const channelsCacheModule = await import('../../libs/channels-cache.js');
+    const { replaceChannelSnapshot } = await import('../../libs/channel-snapshot-service.js');
     const { initChannelsCache } = channelsCacheModule;
     cleanupCache = channelsCacheModule.cleanupCache;
     const { setupMCPRoutes } = await import('../../server/mcp.js');
@@ -107,8 +107,6 @@ describe('MCP Route Integration', () => {
     _resetMergedEPGForTesting();
 
     // Write test channels to the isolated temp data dir
-    const channelsFile = getDataPath('channels.json');
-    await fs.mkdir(path.dirname(channelsFile), { recursive: true });
     const testChannels = [
       { name: 'CNN', tvg_id: 'cnn.us', source: 'TestProvider', group: 'News' },
       { name: 'ESPN', tvg_id: 'espn.us', source: 'TestProvider', group: 'Sports' },
@@ -120,7 +118,7 @@ describe('MCP Route Integration', () => {
         logo: 'http://example.com/fox.png',
       },
     ];
-    await fs.writeFile(channelsFile, JSON.stringify(testChannels));
+    replaceChannelSnapshot(testChannels);
     await initChannelsCache();
 
     // Minimal config directory (no admin_auth so requireAuth passes through)

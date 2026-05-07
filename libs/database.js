@@ -191,6 +191,16 @@ const MIGRATIONS = [
         ON oauth_access_tokens(expires_at);
     `,
   },
+  {
+    id: '004-channel-snapshots',
+    sql: `
+      CREATE TABLE IF NOT EXISTS channel_snapshots (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        channels_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 let database = null;
