@@ -94,6 +94,16 @@ function hydrateGuideBindingRow(row) {
   };
 }
 
+function pickGuideBindingId(canonicalChannel, sourceChannel) {
+  return (
+    canonicalChannel.tvg_id ||
+    sourceChannel.tvg_id ||
+    sourceChannel.name ||
+    canonicalChannel.name ||
+    ''
+  );
+}
+
 export function rebuildCanonicalChannels() {
   ensureDatabaseReady();
 
@@ -159,10 +169,21 @@ export function rebuildCanonicalChannels() {
   const sourceChannels = db
     .prepare(
       `SELECT id, source_id, name, tvg_id, logo, group_name, guide_number, stream_url, raw_json
-         FROM source_channels
-        ORDER BY source_id ASC, name ASC`
+          FROM source_channels
+         ORDER BY source_id ASC, name ASC`
     )
     .all();
+  const epgEnabledSourceIds = new Set(
+    db
+      .prepare(
+        `SELECT id
+           FROM sources
+          WHERE epg_url IS NOT NULL
+            AND TRIM(epg_url) != ''`
+      )
+      .all()
+      .map(row => row.id)
+  );
 
   const canonicalByIdentity = new Map();
   const canonicalRows = [];
@@ -218,7 +239,8 @@ export function rebuildCanonicalChannels() {
         existingBinding?.resolution_state || (resolution.matched ? 'resolved' : 'discovered'),
     });
 
-    if (canonicalChannel.tvg_id) {
+    const defaultGuideBindingId = pickGuideBindingId(canonicalChannel, hydrated);
+    if (epgEnabledSourceIds.has(sourceChannel.source_id) && defaultGuideBindingId) {
       const guideKey = `${canonicalId}|${sourceChannel.source_id}`;
       if (!seenGuideBindings.has(guideKey)) {
         seenGuideBindings.add(guideKey);
@@ -227,7 +249,7 @@ export function rebuildCanonicalChannels() {
           id: preservedGuideBinding?.id || crypto.randomUUID(),
           canonical_channel_id: canonicalId,
           source_id: sourceChannel.source_id,
-          epg_channel_id: preservedGuideBinding?.epg_channel_id || canonicalChannel.tvg_id,
+          epg_channel_id: preservedGuideBinding?.epg_channel_id || defaultGuideBindingId,
           priority: preservedGuideBinding?.priority ?? 1,
         });
       }

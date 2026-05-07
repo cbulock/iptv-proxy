@@ -25,9 +25,11 @@ describe('canonical channel persistence', () => {
         'providers:',
         '  - name: IPTV One',
         '    url: "http://canonical.example/one.m3u"',
+        '    epg: "http://canonical.example/one.xml"',
         '    type: "m3u"',
         '  - name: IPTV Two',
         '    url: "http://canonical.example/two.m3u"',
+        '    epg: "http://canonical.example/two.xml"',
         '    type: "m3u"',
       ].join('\n'),
       'utf8'
@@ -239,5 +241,53 @@ describe('canonical channel persistence', () => {
     const canonicalChannels = canonicalService.listCanonicalChannels();
     expect(canonicalChannels).to.have.lengthOf(2);
     expect(new Set(canonicalChannels.map(channel => channel.slug)).size).to.equal(2);
+  });
+
+  it('creates guide bindings for direct stream channels when the source has EPG configured', async () => {
+    await fs.writeFile(
+      path.join(configDir, 'providers.yaml'),
+      [
+        'providers:',
+        '  - name: NAS Stream',
+        '    url: "http://nas6:8081/hls/stream.m3u8"',
+        '    epg: "http://nas6:8081/epg.xml"',
+        '    type: "m3u"',
+      ].join('\n'),
+      'utf8'
+    );
+    await fs.writeFile(path.join(configDir, 'channel-map.yaml'), '{}\n', 'utf8');
+
+    nock('http://nas6:8081')
+      .get('/hls/stream.m3u8')
+      .reply(
+        200,
+        [
+          '#EXTM3U',
+          '#EXT-X-VERSION:3',
+          '#EXT-X-TARGETDURATION:6',
+          '#EXTINF:6.006,',
+          'segment000.ts',
+          '#EXT-X-ENDLIST',
+        ].join('\n')
+      );
+
+    const count = await parseM3UModule.parseAll();
+    expect(count).to.equal(1);
+
+    const canonicalChannels = canonicalService.listCanonicalChannels();
+    expect(canonicalChannels).to.have.lengthOf(1);
+    expect(canonicalChannels[0]).to.include({
+      name: 'NAS Stream',
+      tvg_id: null,
+    });
+
+    const guideBindings = canonicalService.listGuideBindings();
+    expect(guideBindings).to.have.lengthOf(1);
+    expect(guideBindings[0]).to.include({
+      epgChannelId: 'NAS Stream',
+      selected: true,
+    });
+    expect(guideBindings[0].source.name).to.equal('NAS Stream');
+    expect(guideBindings[0].canonical.id).to.equal(canonicalChannels[0].id);
   });
 });

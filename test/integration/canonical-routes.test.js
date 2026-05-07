@@ -40,9 +40,11 @@ describe('canonical model routes', () => {
         'providers:',
         '  - name: IPTV One',
         '    url: "http://canonical-routes.example/one.m3u"',
+        '    epg: "http://canonical-routes.example/one.xml"',
         '    type: "m3u"',
         '  - name: IPTV Two',
         '    url: "http://canonical-routes.example/two.m3u"',
+        '    epg: "http://canonical-routes.example/two.xml"',
         '    type: "m3u"',
       ].join('\n'),
       'utf8'
