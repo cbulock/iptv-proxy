@@ -130,7 +130,7 @@
         <main class="admin-main">
           <div class="workspace-frame">
             <CindorTabs v-model:value="tab" class="admin-tabs">
-            <CindorTabPanel value="app" label="App">
+            <CindorTabPanel value="app" :label="appTabLabel">
               <app-settings-pane
                 :app-base-url="app.base_url"
                 :oauth-issuer="app.oauth.issuer"
@@ -156,7 +156,7 @@
               />
             </CindorTabPanel>
 
-            <CindorTabPanel value="providers" label="Sources">
+            <CindorTabPanel value="providers" :label="providersTabLabel">
               <sources-pane
                 :providers="providers"
                 :epg-validation="epgValidation"
@@ -171,7 +171,7 @@
               />
             </CindorTabPanel>
 
-            <CindorTabPanel value="channels" label="Channels">
+            <CindorTabPanel value="channels" :label="channelsTabLabel">
               <channels-pane
                 :profiles="outputProfiles"
                 :selected-profile-slug="selectedOutputProfileSlug"
@@ -531,6 +531,16 @@ import AppSettingsPane from './components/AppSettingsPane.vue';
 import ChannelsPane from './components/ChannelsPane.vue';
 import SourcesPane from './components/SourcesPane.vue';
 import {
+  cloneAppDraft,
+  cloneOutputProfileDraftState,
+  cloneProvidersDraft,
+  hasGuideNumberDraftChanges,
+  normalizeAppDraftForComparison,
+  normalizeOutputProfileDraftForComparison,
+  normalizeOutputProfileEntriesForComparison,
+  normalizeProvidersForComparison,
+} from './utils/admin-draft-state.js';
+import {
   CindorButton,
   CindorDataTable,
   CindorDialog,
@@ -551,25 +561,150 @@ import {
 
 const LOGIN_ROUTE = '/admin/login';
 const DEFAULT_ADMIN_ROUTE = '/admin';
+const DRAFT_STORAGE_KEY = 'iptv-proxy.admin.unsaved-drafts';
+const LOGIN_MESSAGE_STORAGE_KEY = 'iptv-proxy.admin.login-message';
+const AUTH_SESSION_POLL_MS = 60 * 1000;
 const isLoginRoute = typeof window !== 'undefined' && window.location?.pathname === LOGIN_ROUTE;
 
 // CSRF token for mutating API requests — fetched after login
 let _csrfToken = '';
+let _authExpiryTimeout = null;
+let _authSessionPollInterval = null;
+let _authRedirectInProgress = false;
+let _draftPersistenceReady = false;
+
+function getSessionStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readSessionStorageJson(key) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const rawValue = storage.getItem(key);
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    storage.removeItem(key);
+    return null;
+  }
+}
+
+function writeSessionStorageJson(key, value) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  storage.setItem(key, JSON.stringify(value));
+}
+
+function removeSessionStorageItem(key) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  storage.removeItem(key);
+}
+
+function consumePendingLoginMessage() {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return '';
+  }
+
+  const messageText = storage.getItem(LOGIN_MESSAGE_STORAGE_KEY) || '';
+  storage.removeItem(LOGIN_MESSAGE_STORAGE_KEY);
+  return messageText;
+}
+
+function setPendingLoginMessage(messageText) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  if (messageText) {
+    storage.setItem(LOGIN_MESSAGE_STORAGE_KEY, messageText);
+  } else {
+    storage.removeItem(LOGIN_MESSAGE_STORAGE_KEY);
+  }
+}
+
+function clearAuthMonitoring() {
+  if (_authExpiryTimeout) {
+    window.clearTimeout(_authExpiryTimeout);
+    _authExpiryTimeout = null;
+  }
+
+  if (_authSessionPollInterval) {
+    window.clearInterval(_authSessionPollInterval);
+    _authSessionPollInterval = null;
+  }
+}
+
+function getCurrentAdminPath() {
+  if (typeof window === 'undefined') {
+    return DEFAULT_ADMIN_ROUTE;
+  }
+
+  const path = `${window.location.pathname || DEFAULT_ADMIN_ROUTE}${window.location.search || ''}${window.location.hash || ''}`;
+  const safePath =
+    path.startsWith('/admin') &&
+    !path.startsWith('//') &&
+    !path.includes('://') &&
+    !path.startsWith(LOGIN_ROUTE)
+      ? path
+      : DEFAULT_ADMIN_ROUTE;
+
+  return safePath;
+}
+
+function getLoginRoute(target = getCurrentAdminPath()) {
+  return `${LOGIN_ROUTE}?redirect=${encodeURIComponent(target)}`;
+}
+
+function buildDirtyTabLabel(label, dirty) {
+  return dirty ? `${label} *` : label;
+}
 
 /**
  * Wrapper around fetch that automatically includes the CSRF token header
  * on mutating requests (POST, PUT, DELETE, PATCH).
  */
-function apiFetch(url, opts = {}) {
-  const method = (opts.method || 'GET').toUpperCase();
+async function apiFetch(url, opts = {}) {
+  const { skipAuthRedirect = false, ...fetchOptions } = opts;
+  const method = (fetchOptions.method || 'GET').toUpperCase();
   const mutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
-  return fetch(url, {
-    ...opts,
+  const response = await fetch(url, {
+    ...fetchOptions,
     headers: {
-      ...(opts.headers || {}),
+      ...(fetchOptions.headers || {}),
       ...(mutating && _csrfToken ? { 'X-CSRF-Token': _csrfToken } : {}),
     },
   });
+
+  if (!skipAuthRedirect && response.status === 401) {
+    handleUnauthorizedSession('Your admin session expired. Sign in again to continue.');
+    return new Promise(() => {});
+  }
+
+  return response;
 }
 
 async function fetchCsrfToken() {
@@ -694,7 +829,6 @@ const state = reactive({
   loadingChannelAuthoring: false,
   loadingOutputProfileEntries: false,
   savingOutputProfile: false,
-  outputProfileDirty: false,
   updatingCanonicalNameChannelId: '',
   updatingPreferredStreamChannelId: '',
   updatingGuideBindingChannelId: '',
@@ -733,6 +867,11 @@ const state = reactive({
   showPlayerDebug: false,
   playerDebug: null,
 });
+
+const savedAppDraft = ref(cloneAppDraft(state.app));
+const savedProvidersDraft = ref(cloneProvidersDraft(state.providers));
+const savedOutputProfileDraft = ref({ name: '', enabled: true });
+const savedOutputProfileEntries = ref([]);
 
 function setStatus(msg, ok = true) {
   state.status = msg;
@@ -867,6 +1006,179 @@ function resetSelectedOutputProfileDraft() {
   };
 }
 
+function persistDraftSnapshot() {
+  if (!_draftPersistenceReady) {
+    return;
+  }
+
+  const snapshot = {
+    version: 1,
+    tab: state.tab,
+    drafts: {
+      app: appDirty.value ? cloneAppDraft(state.app) : null,
+      providers: providersDirty.value ? cloneProvidersDraft(state.providers) : null,
+      channels: profileDirty.value
+        ? cloneOutputProfileDraftState({
+          selectedOutputProfileSlug: state.selectedOutputProfileSlug,
+          outputProfileDraft: state.outputProfileDraft,
+          outputProfileEntries: state.outputProfileEntries,
+        })
+        : null,
+    },
+  };
+
+  if (!snapshot.drafts.app && !snapshot.drafts.providers && !snapshot.drafts.channels) {
+    removeSessionStorageItem(DRAFT_STORAGE_KEY);
+    return;
+  }
+
+  writeSessionStorageJson(DRAFT_STORAGE_KEY, snapshot);
+}
+
+async function restorePersistedDraftSnapshot() {
+  const persisted = readSessionStorageJson(DRAFT_STORAGE_KEY);
+  if (!persisted?.drafts) {
+    return;
+  }
+
+  if (persisted.tab) {
+    state.tab = persisted.tab;
+  }
+
+  if (persisted.drafts.app) {
+    state.app = normalizeAppConfig({
+      ...state.app,
+      ...persisted.drafts.app,
+      oauth: normalizeOAuthConfig(persisted.drafts.app.oauth || {}),
+    });
+  }
+
+  if (persisted.drafts.providers) {
+    state.providers = persisted.drafts.providers.map(normalizeProvider);
+  }
+
+  const storedChannels = persisted.drafts.channels;
+  if (!storedChannels?.selectedOutputProfileSlug) {
+    return;
+  }
+
+  if (!state.outputProfiles.some(profile => profile.slug === storedChannels.selectedOutputProfileSlug)) {
+    return;
+  }
+
+  if (state.selectedOutputProfileSlug !== storedChannels.selectedOutputProfileSlug) {
+    state.selectedOutputProfileSlug = storedChannels.selectedOutputProfileSlug;
+    await loadOutputProfileEntries(storedChannels.selectedOutputProfileSlug);
+  }
+
+  state.outputProfileDraft = {
+    name:
+      typeof storedChannels.outputProfileDraft?.name === 'string'
+        ? storedChannels.outputProfileDraft.name
+        : state.outputProfileDraft.name,
+    enabled:
+      typeof storedChannels.outputProfileDraft?.enabled === 'boolean'
+        ? storedChannels.outputProfileDraft.enabled
+        : state.outputProfileDraft.enabled,
+  };
+
+  const storedEntriesByCanonicalId = new Map(
+    Array.isArray(storedChannels.outputProfileEntries)
+      ? storedChannels.outputProfileEntries.map(entry => [String(entry.canonicalId || ''), entry])
+      : []
+  );
+
+  state.outputProfileEntries = state.outputProfileEntries.map(entry => {
+    const storedEntry = storedEntriesByCanonicalId.get(String(entry.canonical?.id || ''));
+    if (!storedEntry) {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      enabled: storedEntry.enabled,
+      position: storedEntry.position,
+      guideNumberOverride: storedEntry.guideNumberOverride,
+      guideNumberOverrideDraft:
+        typeof storedEntry.guideNumberOverrideDraft === 'string'
+          ? storedEntry.guideNumberOverrideDraft
+          : storedEntry.guideNumberOverride || '',
+    };
+  });
+}
+
+function scheduleAuthExpiry(expiresAt) {
+  if (_authExpiryTimeout) {
+    window.clearTimeout(_authExpiryTimeout);
+    _authExpiryTimeout = null;
+  }
+
+  if (!expiresAt || typeof window === 'undefined') {
+    return;
+  }
+
+  const expiresAtMs = Date.parse(expiresAt);
+  if (Number.isNaN(expiresAtMs)) {
+    return;
+  }
+
+  const delay = expiresAtMs - Date.now();
+  if (delay <= 0) {
+    handleUnauthorizedSession('Your admin session expired. Sign in again to continue.');
+    return;
+  }
+
+  _authExpiryTimeout = window.setTimeout(() => {
+    handleUnauthorizedSession('Your admin session expired. Sign in again to continue.');
+  }, delay + 250);
+}
+
+function syncAuthenticatedSession(expiresAt) {
+  state.sessionAuthenticated = true;
+  scheduleAuthExpiry(expiresAt);
+}
+
+async function checkAuthenticatedSession({ redirectOnFailure = true } = {}) {
+  const response = await apiFetch('/api/auth/session', { skipAuthRedirect: true });
+  const sessionJson = await response.json();
+  if (!response.ok || !sessionJson.authenticated) {
+    state.sessionAuthenticated = false;
+    if (redirectOnFailure) {
+      handleUnauthorizedSession('Your admin session expired. Sign in again to continue.');
+    }
+    return false;
+  }
+
+  syncAuthenticatedSession(sessionJson.expiresAt || null);
+  return true;
+}
+
+function startAuthSessionPolling() {
+  if (_authSessionPollInterval || typeof window === 'undefined') {
+    return;
+  }
+
+  _authSessionPollInterval = window.setInterval(() => {
+    checkAuthenticatedSession({ redirectOnFailure: true }).catch(() => {
+      handleUnauthorizedSession('Your admin session expired. Sign in again to continue.');
+    });
+  }, AUTH_SESSION_POLL_MS);
+}
+
+function handleUnauthorizedSession(messageText) {
+  if (_authRedirectInProgress) {
+    return;
+  }
+
+  _authRedirectInProgress = true;
+  clearAuthMonitoring();
+  state.sessionAuthenticated = false;
+  _csrfToken = '';
+  persistDraftSnapshot();
+  setPendingLoginMessage(messageText);
+  redirectToAdmin(getLoginRoute());
+}
+
 async function loadProviders() {
   try {
     const r = await apiFetch('/api/config/providers');
@@ -874,6 +1186,7 @@ async function loadProviders() {
     state.providers = (cfg.providers && Array.isArray(cfg.providers) ? cfg.providers : []).map(
       normalizeProvider
     );
+    savedProvidersDraft.value = cloneProvidersDraft(state.providers);
     setStatus('Loaded sources');
   } catch (e) {
     setStatus('Failed to load sources: ' + e.message, false);
@@ -960,8 +1273,15 @@ async function loadOutputProfileEntries(slug = state.selectedOutputProfileSlug) 
         guideNumberOverrideDraft: channel?.guideNumberOverride ?? '',
       }))
       : [];
-    state.outputProfileDirty = false;
     resetSelectedOutputProfileDraft();
+    savedOutputProfileDraft.value = {
+      name: state.outputProfileDraft.name,
+      enabled: state.outputProfileDraft.enabled,
+    };
+    savedOutputProfileEntries.value = state.outputProfileEntries.map(entry => ({
+      ...entry,
+      canonical: { ...(entry.canonical || {}) },
+    }));
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
@@ -975,6 +1295,7 @@ async function loadApp() {
     const r = await apiFetch('/api/config/app');
     const cfg = await r.json();
     state.app = normalizeAppConfig(cfg || {});
+    savedAppDraft.value = cloneAppDraft(state.app);
     setStatus('Loaded app settings');
   } catch (e) {
     setStatus('Failed to load app config: ' + e.message, false);
@@ -1004,6 +1325,8 @@ async function saveProviders() {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Save sources failed');
+    state.providers = cleaned.map(normalizeProvider);
+    savedProvidersDraft.value = cloneProvidersDraft(state.providers);
     setStatus('Sources saved. Reloading...');
     message.success('Sources saved');
     // Reload channels and EPG concurrently after save
@@ -1073,6 +1396,7 @@ async function saveApp() {
         }
         : normalizeOAuthConfig(),
     });
+    savedAppDraft.value = cloneAppDraft(state.app);
     setStatus('App settings saved.');
     message.success('App settings saved');
   } catch (e) {
@@ -1250,7 +1574,6 @@ function updateOutputProfileEntry(channelId, patch) {
   if (!entry) return;
 
   Object.assign(entry, patch);
-  state.outputProfileDirty = true;
 }
 
 function parseGuideBindingValue(value) {
@@ -1501,6 +1824,14 @@ function commitGuideNumberOverride(channelId) {
   });
 }
 
+function commitAllGuideNumberOverrides() {
+  state.outputProfileEntries.forEach(entry => {
+    if (entry.canonical?.id) {
+      commitGuideNumberOverride(entry.canonical.id);
+    }
+  });
+}
+
 function updateSelectedOutputProfileName(value) {
   state.outputProfileDraft.name = value;
 }
@@ -1640,6 +1971,8 @@ async function saveOutputProfileChanges() {
       throw new Error('No output profile selected');
     }
 
+    commitAllGuideNumberOverrides();
+
     if (profileMetaDirty.value) {
       const profileResponse = await apiFetch(
         `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}`,
@@ -1658,7 +1991,7 @@ async function saveOutputProfileChanges() {
       }
     }
 
-    if (state.outputProfileDirty) {
+    if (outputProfileEntriesDirty.value) {
       const response = await apiFetch(
         `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}/channels`,
         {
@@ -1720,6 +2053,7 @@ async function initializeAuthState() {
     state.authConfigured = !!statusJson.configured;
     state.sessionAuthenticated = !state.authConfigured || !!sessionJson.authenticated;
     state.showSetupModal = !state.authConfigured;
+    state.loginError = consumePendingLoginMessage();
 
     if (!state.authConfigured && isLoginRoute) {
       redirectToAdmin(DEFAULT_ADMIN_ROUTE);
@@ -1727,6 +2061,8 @@ async function initializeAuthState() {
     }
 
     if (state.authConfigured && state.sessionAuthenticated) {
+      syncAuthenticatedSession(sessionJson.expiresAt || null);
+      startAuthSessionPolling();
       await fetchCsrfToken();
       if (isLoginRoute) {
         redirectToAdmin(getPostLoginRedirect());
@@ -1738,6 +2074,7 @@ async function initializeAuthState() {
   } catch (e) {
     // If status check fails, assume auth may be configured; don't force modal,
     // but surface an error so the user/admin knows something went wrong.
+    clearAuthMonitoring();
     state.authConfigured = true;
     state.sessionAuthenticated = !isLoginRoute;
     state.showSetupModal = false;
@@ -1775,8 +2112,10 @@ async function submitLogin() {
       return;
     }
 
-    state.sessionAuthenticated = true;
     _csrfToken = json.csrfToken || '';
+    syncAuthenticatedSession(json.expiresAt || null);
+    startAuthSessionPolling();
+    _authRedirectInProgress = false;
     state.loginForm.password = '';
     redirectToAdmin(getPostLoginRedirect());
   } catch (e) {
@@ -1793,6 +2132,11 @@ async function logout() {
   } catch (_) {
     /* ignore logout errors */
   }
+  clearAuthMonitoring();
+  _csrfToken = '';
+  _authRedirectInProgress = false;
+  removeSessionStorageItem(DRAFT_STORAGE_KEY);
+  setPendingLoginMessage('');
   redirectToAdmin(LOGIN_ROUTE);
 }
 
@@ -1855,7 +2199,7 @@ async function changePassword() {
       body: JSON.stringify({ currentPassword: current, newPassword: newPass }),
     });
     if (r.status === 401) {
-      window.location.href = '/admin/login';
+      handleUnauthorizedSession('Your admin session expired. Sign in again to continue.');
       return;
     }
     const j = await r.json();
@@ -2587,6 +2931,25 @@ watch(
   }
 );
 
+watch(
+  () => [
+    state.tab,
+    appDirty.value ? cloneAppDraft(state.app) : null,
+    providersDirty.value ? cloneProvidersDraft(state.providers) : null,
+    profileDirty.value
+      ? cloneOutputProfileDraftState({
+        selectedOutputProfileSlug: state.selectedOutputProfileSlug,
+        outputProfileDraft: state.outputProfileDraft,
+        outputProfileEntries: state.outputProfileEntries,
+      })
+      : null,
+  ],
+  () => {
+    persistDraftSnapshot();
+  },
+  { deep: true }
+);
+
 function startUsagePolling() {
   if (_usagePollInterval) {
     return;
@@ -2603,13 +2966,13 @@ async function initializeApp() {
     return;
   }
 
-  loadProviders();
-  loadApp();
-  loadChannelAuthoringData();
+  await Promise.all([loadProviders(), loadApp(), loadChannelAuthoringData(), loadBackups()]);
+  await restorePersistedDraftSnapshot();
+  _draftPersistenceReady = true;
+  persistDraftSnapshot();
   loadHealth();
   loadUsage();
   loadTasks();
-  loadBackups();
   startUsagePolling();
 }
 
@@ -2696,6 +3059,18 @@ const selectedOutputProfile = computed(() => {
   };
 });
 
+const appDirty = computed(
+  () =>
+    JSON.stringify(normalizeAppDraftForComparison(state.app)) !==
+    JSON.stringify(normalizeAppDraftForComparison(savedAppDraft.value))
+);
+
+const providersDirty = computed(
+  () =>
+    JSON.stringify(normalizeProvidersForComparison(state.providers)) !==
+    JSON.stringify(normalizeProvidersForComparison(savedProvidersDraft.value))
+);
+
 const profileMetaDirty = computed(() => {
   const profile = getSelectedOutputProfileRecord();
   if (!profile) {
@@ -2703,12 +3078,26 @@ const profileMetaDirty = computed(() => {
   }
 
   return (
-    state.outputProfileDraft.name.trim() !== String(profile.name || '').trim() ||
-    state.outputProfileDraft.enabled !== Boolean(profile.enabled)
+    JSON.stringify(normalizeOutputProfileDraftForComparison(state.outputProfileDraft)) !==
+    JSON.stringify(normalizeOutputProfileDraftForComparison(savedOutputProfileDraft.value))
   );
 });
 
-const profileDirty = computed(() => state.outputProfileDirty || profileMetaDirty.value);
+const outputProfileEntriesDirty = computed(
+  () =>
+    JSON.stringify(normalizeOutputProfileEntriesForComparison(state.outputProfileEntries)) !==
+    JSON.stringify(normalizeOutputProfileEntriesForComparison(savedOutputProfileEntries.value))
+);
+
+const guideNumberDraftDirty = computed(() => hasGuideNumberDraftChanges(state.outputProfileEntries));
+
+const profileDirty = computed(
+  () => profileMetaDirty.value || outputProfileEntriesDirty.value || guideNumberDraftDirty.value
+);
+
+const appTabLabel = computed(() => buildDirtyTabLabel('App', appDirty.value));
+const providersTabLabel = computed(() => buildDirtyTabLabel('Sources', providersDirty.value));
+const channelsTabLabel = computed(() => buildDirtyTabLabel('Channels', profileDirty.value));
 
 function getPublicBaseUrl() {
   const configuredBaseUrl = String(state.app.base_url || '').trim();

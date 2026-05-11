@@ -32,7 +32,10 @@ function buildApp() {
       secret: 'test-secret-for-auth-routes',
       resave: false,
       saveUninitialized: false,
-      cookie: { secure: SESSION_COOKIE_SECURE }, // can be enabled via env for HTTPS
+      cookie: {
+        secure: SESSION_COOKIE_SECURE, // can be enabled via env for HTTPS
+        maxAge: 8 * 60 * 60 * 1000,
+      },
     })
   );
   // lgtm[js/missing-csrf-middleware] - csrfMiddleware (server/csrf.js) provides CSRF protection
@@ -163,7 +166,7 @@ describe('Auth Routes Integration', () => {
     it('returns authenticated: false when no session exists', async () => {
       const res = await axios.get(`${baseUrl}/api/auth/session`);
       expect(res.status).to.equal(200);
-      expect(res.data).to.deep.equal({ authenticated: false });
+      expect(res.data).to.deep.equal({ authenticated: false, expiresAt: null });
     });
 
     it('returns authenticated: true after a successful login', async () => {
@@ -171,7 +174,9 @@ describe('Auth Routes Integration', () => {
       const cookie = await loginAndGetCookie(baseUrl, 'admin', 'password123');
       const res = await axios.get(`${baseUrl}/api/auth/session`, { headers: cookieHeader(cookie) });
       expect(res.status).to.equal(200);
-      expect(res.data).to.deep.equal({ authenticated: true });
+      expect(res.data.authenticated).to.equal(true);
+      expect(res.data.expiresAt).to.be.a('string');
+      expect(Number.isNaN(Date.parse(res.data.expiresAt))).to.equal(false);
     });
   });
 
@@ -190,6 +195,7 @@ describe('Auth Routes Integration', () => {
       expect(res.status).to.equal(200);
       expect(res.data.status).to.equal('ok');
       expect(res.data).to.have.property('csrfToken').that.is.a('string');
+      expect(res.data).to.have.property('expiresAt').that.is.a('string');
       expect(res.headers['set-cookie']).to.be.an('array').with.length.greaterThan(0);
     });
 
@@ -233,6 +239,7 @@ describe('Auth Routes Integration', () => {
         headers: cookieHeader(cookie),
       });
       expect(before.data.authenticated).to.equal(true);
+      expect(before.data.expiresAt).to.be.a('string');
 
       // Log out
       const logoutRes = await axios.post(
@@ -248,6 +255,7 @@ describe('Auth Routes Integration', () => {
         headers: cookieHeader(cookie),
       });
       expect(after.data.authenticated).to.equal(false);
+      expect(after.data.expiresAt).to.equal(null);
     });
   });
 

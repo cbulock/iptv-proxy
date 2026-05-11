@@ -6,6 +6,31 @@ import { ensureCsrfToken } from './csrf.js';
 
 const router = express.Router();
 
+function getSessionExpiresAt(req) {
+  if (!req.session?.authenticated) {
+    return null;
+  }
+
+  const expires = req.session.cookie?.expires;
+  if (expires) {
+    return new Date(expires).toISOString();
+  }
+
+  const originalMaxAge = Number(req.session.cookie?.originalMaxAge);
+  if (Number.isFinite(originalMaxAge) && originalMaxAge > 0) {
+    return new Date(Date.now() + originalMaxAge).toISOString();
+  }
+
+  return null;
+}
+
+function buildSessionPayload(req) {
+  return {
+    authenticated: !!req.session?.authenticated,
+    expiresAt: getSessionExpiresAt(req),
+  };
+}
+
 /**
  * Returns true if the IP is a loopback or RFC-1918 private address.
  * Used to restrict the unauthenticated /api/auth/setup endpoint so that
@@ -61,7 +86,7 @@ router.get('/api/auth/status', authLimiter, (req, res) => {
  * Public endpoint — returns whether the current request has an authenticated session.
  */
 router.get('/api/auth/session', (req, res) => {
-  res.json({ authenticated: !!req.session?.authenticated });
+  res.json(buildSessionPayload(req));
 });
 
 /**
@@ -107,7 +132,7 @@ router.post('/api/auth/login', authLimiter, (req, res) => {
     req.session.username = username;
     // Generate a CSRF token immediately on login so the client can read it
     const csrfToken = ensureCsrfToken(req);
-    res.json({ status: 'ok', csrfToken });
+    res.json({ status: 'ok', csrfToken, expiresAt: getSessionExpiresAt(req) });
   });
 });
 
