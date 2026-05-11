@@ -171,9 +171,9 @@ function ensureDefaultOutputProfile() {
 function buildCanonicalChannelsForProfiles(db = getDatabase()) {
   return db
     .prepare(
-      `SELECT id, guide_number, name
+      `SELECT id, guide_number, COALESCE(custom_name, name) AS name
          FROM canonical_channels
-        `
+         `
     )
     .all()
     .sort((left, right) => {
@@ -291,13 +291,15 @@ export function listOutputProfileEntries(slug = DEFAULT_PROFILE_SLUG) {
           opc.guide_number_override,
           opc.enabled,
           cc.id AS canonical_id,
-          cc.name AS canonical_name,
+          cc.name AS canonical_base_name,
+          cc.custom_name AS canonical_custom_name,
+          COALESCE(cc.custom_name, cc.name) AS canonical_name,
           cc.tvg_id AS canonical_tvg_id,
           cc.guide_number AS canonical_guide_number
         FROM output_profile_channels opc
         JOIN canonical_channels cc ON cc.id = opc.canonical_channel_id
-      WHERE opc.output_profile_id = ?
-      ORDER BY opc.position ASC, cc.name ASC`
+       WHERE opc.output_profile_id = ?
+       ORDER BY opc.position ASC, COALESCE(cc.custom_name, cc.name) ASC`
     )
     .all(profile.id)
     .map(row => ({
@@ -308,6 +310,8 @@ export function listOutputProfileEntries(slug = DEFAULT_PROFILE_SLUG) {
       canonical: {
         id: row.canonical_id,
         name: row.canonical_name,
+        baseName: row.canonical_base_name,
+        customName: row.canonical_custom_name || null,
         tvg_id: row.canonical_tvg_id,
         guideNumber: row.canonical_guide_number,
       },
@@ -342,11 +346,14 @@ function hydrateOutputChannel(row) {
     ...raw,
     canonicalId: row.canonical_id,
     name: row.canonical_name,
+    baseName: row.canonical_base_name,
+    customName: row.canonical_custom_name || null,
     tvg_id: row.canonical_tvg_id || raw.tvg_id || '',
     guideNumber: row.guide_number || raw.guideNumber || '',
     logo: row.logo || raw.logo || '',
     group: row.group_name || raw.group || '',
     source: row.source_name || raw.source || '',
+    streamName: row.source_channel_name || raw.name || row.canonical_name,
     original_url: row.stream_url || raw.original_url || '',
     position: row.position,
   };
@@ -366,7 +373,9 @@ export function getOutputProfileChannels(slug = DEFAULT_PROFILE_SLUG) {
       `SELECT
           opc.position,
           cc.id AS canonical_id,
-          cc.name AS canonical_name,
+          cc.name AS canonical_base_name,
+          cc.custom_name AS canonical_custom_name,
+          COALESCE(cc.custom_name, cc.name) AS canonical_name,
           cc.tvg_id AS canonical_tvg_id,
           COALESCE(opc.guide_number_override, cc.guide_number) AS guide_number,
           cc.logo,
@@ -374,6 +383,7 @@ export function getOutputProfileChannels(slug = DEFAULT_PROFILE_SLUG) {
           cb.id AS binding_id,
           cb.priority,
           cb.is_preferred_stream,
+          sc.name AS source_channel_name,
           sc.raw_json,
           sc.stream_url,
           s.name AS source_name

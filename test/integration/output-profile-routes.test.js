@@ -331,6 +331,50 @@ describe('output profile routes', () => {
     expect(xmltvResponse.data).not.to.include('Channel One Show');
   });
 
+  it('uses a custom canonical name in published outputs without changing the stream lookup path', async () => {
+    const canonicalChannelsResponse = await axios.get(`${baseUrl}/api/canonical/channels`);
+    const canonicalChannel = canonicalChannelsResponse.data.channels.find(
+      channel => channel.tvg_id === 'output.1'
+    );
+
+    const updateResponse = await axios.patch(`${baseUrl}/api/canonical/channels/${canonicalChannel.id}`, {
+      customName: 'Living Room One',
+    });
+    expect(updateResponse.data.channel).to.include({
+      id: canonicalChannel.id,
+      name: 'Living Room One',
+      baseName: 'Canonical One',
+      customName: 'Living Room One',
+    });
+
+    const outputChannelsResponse = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    const renamedChannel = outputChannelsResponse.data.channels.find(
+      channel => channel.canonicalId === canonicalChannel.id
+    );
+    expect(renamedChannel).to.include({
+      name: 'Living Room One',
+      streamName: 'Source One',
+    });
+
+    const lineupJsonResponse = await axios.get(`${baseUrl}/lineup.json`);
+    const publicBaseUrl = baseUrl.replace('127.0.0.1', 'localhost');
+    expect(lineupJsonResponse.data.find(channel => channel.GuideName === 'Living Room One')).to.include({
+      GuideName: 'Living Room One',
+      URL: `${publicBaseUrl}/stream/IPTV%20One/Source%20One`,
+    });
+
+    const lineupM3uResponse = await axios.get(`${baseUrl}/lineup.m3u`);
+    expect(lineupM3uResponse.data).to.include('Living Room One');
+    expect(lineupM3uResponse.data).to.include(`${publicBaseUrl}/stream/IPTV%20One/Source%20One`);
+    expect(lineupM3uResponse.data).not.to.include(
+      `${publicBaseUrl}/stream/IPTV%20One/Living%20Room%20One`
+    );
+
+    const xmltvResponse = await axios.get(`${baseUrl}/xmltv.xml`);
+    expect(xmltvResponse.data).to.include('<channel id="output.1">');
+    expect(xmltvResponse.data).to.include('Living Room One');
+  });
+
   it('returns 404 for disabled named profile public routes', async () => {
     await axios.post(`${baseUrl}/api/output-profiles`, {
       name: 'Guest Room',

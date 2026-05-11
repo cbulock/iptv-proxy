@@ -184,6 +184,7 @@ describe('MCP Route Integration', () => {
       'delete_output_profile',
       'get_output_profile_channels',
       'list_output_profile_entries',
+      'set_canonical_channel_name',
       'set_canonical_channel_published',
       'set_canonical_channel_preferred_stream',
       'set_canonical_channel_guide_binding',
@@ -288,6 +289,9 @@ describe('MCP Route Integration', () => {
     });
     const channels = expectToolSuccess(msg, 'list_canonical_channels').data;
     expect(channels).to.be.an('array');
+    if (channels[0]) {
+      expect(channels[0]).to.include.keys('name', 'baseName', 'customName');
+    }
   });
 
   it('list_channel_bindings returns binding rows', async () => {
@@ -381,6 +385,18 @@ describe('MCP Route Integration', () => {
       arguments: { id: 'missing-canonical-channel', published: false },
     });
     const payload = expectToolError(msg, 'set_canonical_channel_published');
+    expect(payload.error.message).to.include('Canonical channel not found');
+  });
+
+  it('set_canonical_channel_name returns an error for an unknown channel', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'set_canonical_channel_name',
+      arguments: {
+        canonical_id: 'missing-canonical-channel',
+        custom_name: 'MCP Custom Name',
+      },
+    });
+    const payload = expectToolError(msg, 'set_canonical_channel_name');
     expect(payload.error.message).to.include('Canonical channel not found');
   });
 

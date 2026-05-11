@@ -11,6 +11,7 @@ import {
   listCanonicalChannels,
   listChannelBindings,
   listGuideBindings,
+  setCanonicalChannelCustomName,
   setCanonicalChannelPublished,
   setCanonicalChannelGuideBinding,
   setCanonicalChannelPreferredStream,
@@ -114,6 +115,7 @@ function buildWorkflowOverview() {
         'create_output_profile',
         'update_output_profile',
         'delete_output_profile',
+        'set_canonical_channel_name',
         'set_canonical_channel_published',
         'set_canonical_channel_preferred_stream',
         'set_canonical_channel_guide_binding',
@@ -156,6 +158,7 @@ function buildWorkflowOverview() {
           'Adjust canonical publish state, preferred streams, guide bindings, or per-profile channel settings only after inspecting current state.',
         suggestedTools: [
           'set_canonical_channel_published',
+          'set_canonical_channel_name',
           'set_canonical_channel_preferred_stream',
           'set_canonical_channel_guide_binding',
           'update_output_profile_channels',
@@ -172,6 +175,11 @@ function buildWorkflowOverview() {
       create_output_profile: ['Creates profile state and syncs initial output entries.'],
       update_output_profile: ['Updates profile metadata only.'],
       delete_output_profile: ['Removes profile state for that lineup.'],
+      set_canonical_channel_name: [
+        'Updates the canonical channel display name override.',
+        'Invalidates lineup caches.',
+        'May trigger an EPG refresh when EPG refresh support is available.',
+      ],
       set_canonical_channel_published: [
         'Updates canonical publish state.',
         'Resyncs all output profiles.',
@@ -692,6 +700,59 @@ function createMcpServer() {
         summary: `Returned ${entries.length} editable output profile entr${entries.length === 1 ? 'y' : 'ies'} for ${slug}.`,
         nextSuggestedTools: ['update_output_profile_channels', 'get_output_profile_channels'],
       });
+    }
+  );
+
+  registerJsonTool(
+    server,
+    'set_canonical_channel_name',
+    'Update or clear the custom display name for a canonical channel.',
+    {
+      canonical_id: z.string().min(1).describe('Canonical channel ID'),
+      custom_name: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Custom display name override; null or empty clears it'),
+    },
+    async ({ canonical_id, custom_name = null }) => {
+      try {
+        const channel = setCanonicalChannelCustomName(canonical_id, custom_name);
+        if (!channel) {
+          return createError('set_canonical_channel_name', {
+            code: 'canonical-not-found',
+            message: `Canonical channel not found: ${canonical_id}`,
+            details: { canonical_id, custom_name },
+            nextSuggestedTools: ['list_canonical_channels'],
+          });
+        }
+
+        invalidateLineupCaches();
+        if (hasEPGRefresh()) {
+          await refreshEPG();
+        }
+
+        return createSuccess('set_canonical_channel_name', channel, {
+          summary: `Updated channel name override for canonical channel ${canonical_id}.`,
+          sideEffects: [
+            'Canonical channel display name override was updated.',
+            'Lineup caches were invalidated.',
+            ...epgRefreshSideEffect(),
+          ],
+          nextSuggestedTools: [
+            'list_canonical_channels',
+            'get_output_profile_channels',
+            'diagnose_agent_readiness',
+          ],
+        });
+      } catch (error) {
+        return createError('set_canonical_channel_name', {
+          code: 'canonical-update-failed',
+          message: `Failed to update canonical channel name: ${error.message}`,
+          details: { canonical_id, custom_name },
+          nextSuggestedTools: ['list_canonical_channels'],
+        });
+      }
     }
   );
 

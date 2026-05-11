@@ -258,6 +258,54 @@ describe('canonical model routes', () => {
     expect(reloadedProfileResponse.data.channels).to.have.lengthOf(1);
   });
 
+  it('updates the custom channel name and preserves it across a reload', async () => {
+    const channelsResponse = await axios.get(`${baseUrl}/api/canonical/channels`);
+    const canonicalChannel = channelsResponse.data.channels[0];
+
+    const updateResponse = await axios.patch(`${baseUrl}/api/canonical/channels/${canonicalChannel.id}`, {
+      customName: 'Custom Channel Name',
+    });
+    expect(updateResponse.data).to.include({ status: 'saved' });
+    expect(updateResponse.data.channel).to.include({
+      id: canonicalChannel.id,
+      name: 'Custom Channel Name',
+      baseName: 'Canonical Channel',
+      customName: 'Custom Channel Name',
+    });
+
+    const updatedProfileResponse = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    expect(updatedProfileResponse.data.channels).to.have.lengthOf(1);
+    expect(updatedProfileResponse.data.channels[0].name).to.equal('Custom Channel Name');
+    expect(updatedProfileResponse.data.channels[0].streamName).to.not.equal('Custom Channel Name');
+
+    nock('http://canonical-routes.example')
+      .get('/one.m3u')
+      .reply(
+        200,
+        ['#EXTM3U', '#EXTINF:-1 tvg-id="raw.one",Source One', 'http://streams.example/one'].join(
+          '\n'
+        )
+      );
+    nock('http://canonical-routes.example')
+      .get('/two.m3u')
+      .reply(
+        200,
+        ['#EXTM3U', '#EXTINF:-1 tvg-id="raw.two",Source Two', 'http://streams.example/two'].join(
+          '\n'
+        )
+      );
+
+    await parseM3UModule.parseAll();
+
+    const reloadedChannelsResponse = await axios.get(`${baseUrl}/api/canonical/channels`);
+    expect(reloadedChannelsResponse.data.channels[0]).to.include({
+      id: canonicalChannel.id,
+      name: 'Custom Channel Name',
+      baseName: 'Canonical Channel',
+      customName: 'Custom Channel Name',
+    });
+  });
+
   it('updates the preferred stream and preserves it across a reload', async () => {
     const bindingsResponse = await axios.get(`${baseUrl}/api/canonical/bindings`);
     const canonicalId = bindingsResponse.data.bindings[0].canonical.id;

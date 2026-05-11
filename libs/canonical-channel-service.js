@@ -60,7 +60,9 @@ function hydrateCanonicalChannel(row) {
   return {
     id: row.id,
     slug: row.slug,
-    name: row.name,
+    name: row.custom_name || row.name,
+    baseName: row.name,
+    customName: row.custom_name || null,
     tvg_id: row.tvg_id,
     guideNumber: row.guide_number,
     logo: row.logo,
@@ -113,7 +115,7 @@ export function rebuildCanonicalChannels() {
   const existingCanonicalByIdentity = new Map(
     db
       .prepare(
-        `SELECT id, slug, name, tvg_id, guide_number, published, created_at
+        `SELECT id, slug, name, custom_name, tvg_id, guide_number, published, created_at
            FROM canonical_channels`
       )
       .all()
@@ -215,6 +217,7 @@ export function rebuildCanonicalChannels() {
           canonicalRows.length + 1
         ),
         name: canonicalChannel.name,
+        custom_name: preserved?.custom_name || null,
         tvg_id: canonicalChannel.tvg_id || null,
         guide_number: canonicalChannel.guideNumber || null,
         logo: canonicalChannel.logo || null,
@@ -291,8 +294,8 @@ export function rebuildCanonicalChannels() {
 
     const insertCanonical = db.prepare(`
       INSERT INTO canonical_channels (
-        id, slug, name, tvg_id, guide_number, logo, group_name, published, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, slug, name, custom_name, tvg_id, guide_number, logo, group_name, published, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertBinding = db.prepare(`
       INSERT INTO channel_bindings (
@@ -315,6 +318,7 @@ export function rebuildCanonicalChannels() {
         row.id,
         row.slug,
         row.name,
+        row.custom_name,
         row.tvg_id,
         row.guide_number,
         row.logo,
@@ -380,9 +384,9 @@ export function listCanonicalChannels() {
 
   return getDatabase()
     .prepare(
-      `SELECT id, slug, name, tvg_id, guide_number, logo, group_name, published, created_at, updated_at
+      `SELECT id, slug, name, custom_name, tvg_id, guide_number, logo, group_name, published, created_at, updated_at
          FROM canonical_channels
-         ORDER BY guide_number ASC, name ASC`
+         ORDER BY guide_number ASC, COALESCE(custom_name, name) ASC`
     )
     .all()
     .map(hydrateCanonicalChannel);
@@ -401,7 +405,9 @@ export function listChannelBindings() {
           cb.confidence,
           cb.resolution_state,
           cc.id AS canonical_id,
-          cc.name AS canonical_name,
+          cc.name AS canonical_base_name,
+          cc.custom_name AS canonical_custom_name,
+          COALESCE(cc.custom_name, cc.name) AS canonical_name,
           cc.tvg_id AS canonical_tvg_id,
           sc.id AS source_channel_id,
           sc.name AS source_channel_name,
@@ -410,10 +416,10 @@ export function listChannelBindings() {
           sc.raw_json AS source_channel_raw_json,
           s.name AS source_name
         FROM channel_bindings cb
-       JOIN canonical_channels cc ON cc.id = cb.canonical_channel_id
-       JOIN source_channels sc ON sc.id = cb.source_channel_id
-       JOIN sources s ON s.id = sc.source_id
-       ORDER BY cc.name ASC, s.name ASC, sc.name ASC`
+        JOIN canonical_channels cc ON cc.id = cb.canonical_channel_id
+        JOIN source_channels sc ON sc.id = cb.source_channel_id
+        JOIN sources s ON s.id = sc.source_id
+       ORDER BY COALESCE(cc.custom_name, cc.name) ASC, s.name ASC, sc.name ASC`
     )
     .all()
     .map(row => {
@@ -434,6 +440,8 @@ export function listChannelBindings() {
         canonical: {
           id: row.canonical_id,
           name: row.canonical_name,
+          baseName: row.canonical_base_name,
+          customName: row.canonical_custom_name || null,
           tvg_id: row.canonical_tvg_id,
         },
         sourceChannel: {
@@ -458,14 +466,16 @@ export function listGuideBindings() {
           gb.epg_channel_id,
           gb.priority,
           cc.id AS canonical_id,
-          cc.name AS canonical_name,
+          cc.name AS canonical_base_name,
+          cc.custom_name AS canonical_custom_name,
+          COALESCE(cc.custom_name, cc.name) AS canonical_name,
           cc.tvg_id AS canonical_tvg_id,
           s.id AS source_id,
           s.name AS source_name
        FROM guide_bindings gb
-       JOIN canonical_channels cc ON cc.id = gb.canonical_channel_id
-       JOIN sources s ON s.id = gb.source_id
-       ORDER BY cc.name ASC, gb.priority ASC, s.name ASC`
+        JOIN canonical_channels cc ON cc.id = gb.canonical_channel_id
+        JOIN sources s ON s.id = gb.source_id
+       ORDER BY COALESCE(cc.custom_name, cc.name) ASC, gb.priority ASC, s.name ASC`
     )
     .all()
     .map(row => ({
@@ -476,6 +486,8 @@ export function listGuideBindings() {
       canonical: {
         id: row.canonical_id,
         name: row.canonical_name,
+        baseName: row.canonical_base_name,
+        customName: row.canonical_custom_name || null,
         tvg_id: row.canonical_tvg_id,
       },
       source: {
@@ -503,7 +515,38 @@ export function setCanonicalChannelPublished(canonicalId, published) {
 
   const row = db
     .prepare(
-      `SELECT id, slug, name, tvg_id, guide_number, logo, group_name, published, created_at, updated_at
+      `SELECT id, slug, name, custom_name, tvg_id, guide_number, logo, group_name, published, created_at, updated_at
+         FROM canonical_channels
+        WHERE id = ?`
+    )
+    .get(canonicalId);
+
+  return hydrateCanonicalChannel(row);
+}
+
+export function setCanonicalChannelCustomName(canonicalId, customName) {
+  ensureDatabaseReady();
+
+  const normalizedCustomName =
+    typeof customName === 'string' && customName.trim() ? customName.trim() : null;
+
+  const db = getDatabase();
+  const result = db
+    .prepare(
+      `UPDATE canonical_channels
+          SET custom_name = ?,
+              updated_at = ?
+        WHERE id = ?`
+    )
+    .run(normalizedCustomName, new Date().toISOString(), canonicalId);
+
+  if (result.changes === 0) {
+    return null;
+  }
+
+  const row = db
+    .prepare(
+      `SELECT id, slug, name, custom_name, tvg_id, guide_number, logo, group_name, published, created_at, updated_at
          FROM canonical_channels
         WHERE id = ?`
     )
@@ -592,6 +635,7 @@ export default {
   listChannelBindings,
   listGuideBindings,
   rebuildCanonicalChannels,
+  setCanonicalChannelCustomName,
   setCanonicalChannelPublished,
   setCanonicalChannelPreferredStream,
   setCanonicalChannelGuideBinding,

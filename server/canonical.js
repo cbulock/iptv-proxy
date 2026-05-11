@@ -5,6 +5,7 @@ import {
   listChannelBindings,
   listGuideBindings,
   rebuildCanonicalChannels,
+  setCanonicalChannelCustomName,
   setCanonicalChannelPublished,
   setCanonicalChannelGuideBinding,
   setCanonicalChannelPreferredStream,
@@ -218,16 +219,41 @@ router.get('/api/output-profiles/:slug/entries', requireAuth, async (req, res) =
 router.patch('/api/canonical/channels/:id', requireAuth, async (req, res) => {
   try {
     await ensureCanonicalModelReady();
-    if (typeof req.body?.published !== 'boolean') {
+    const hasPublished = Object.hasOwn(req.body || {}, 'published');
+    const hasCustomName = Object.hasOwn(req.body || {}, 'customName');
+
+    if (!hasPublished && !hasCustomName) {
+      return res.status(400).json({ error: 'Request must include published or customName' });
+    }
+
+    if (hasPublished && typeof req.body?.published !== 'boolean') {
       return res.status(400).json({ error: 'published must be a boolean' });
     }
 
-    const channel = setCanonicalChannelPublished(req.params.id, req.body.published);
-    if (!channel) {
-      return res.status(404).json({ error: 'Canonical channel not found' });
+    if (
+      hasCustomName &&
+      req.body?.customName !== null &&
+      typeof req.body?.customName !== 'string'
+    ) {
+      return res.status(400).json({ error: 'customName must be a string or null' });
     }
 
-    syncAllOutputProfiles();
+    let channel = null;
+    if (hasPublished) {
+      channel = setCanonicalChannelPublished(req.params.id, req.body.published);
+      if (!channel) {
+        return res.status(404).json({ error: 'Canonical channel not found' });
+      }
+      syncAllOutputProfiles();
+    }
+
+    if (hasCustomName) {
+      channel = setCanonicalChannelCustomName(req.params.id, req.body.customName);
+      if (!channel) {
+        return res.status(404).json({ error: 'Canonical channel not found' });
+      }
+    }
+
     invalidateLineupCaches();
     if (hasEPGRefresh()) {
       await refreshEPG();

@@ -261,7 +261,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       .map(channel => ({
         GuideNumber: resolveGuideNumberForLineup(channel),
         GuideName: channel.name,
-        URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.name)}`,
+        URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.streamName || channel.name)}`,
       }));
 
     jsonCache.set(cacheKey, lineup);
@@ -327,7 +327,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
           : '';
         const tvgChno = resolveGuideNumberForM3U(channel);
         const groupTitle = channel.source || '';
-        const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.name)}`;
+        const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.streamName || channel.name)}`;
 
         output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}"`;
         if (tvgChno) {

@@ -251,6 +251,47 @@ function getDisplayNameValues(channel) {
     .filter(Boolean);
 }
 
+function rewriteOutputChannelDisplayNames(xmlString, outputChannels = []) {
+  if (typeof xmlString !== 'string' || !xmlString.trim() || !outputChannels.length) {
+    return xmlString;
+  }
+
+  const outputNamesByChannelId = new Map();
+  for (const channel of outputChannels) {
+    const channelId = channel?.tvg_id || '';
+    const outputName = channel?.name || '';
+    if (channelId && outputName) {
+      outputNamesByChannelId.set(channelId, outputName);
+    }
+  }
+
+  if (!outputNamesByChannelId.size) {
+    return xmlString;
+  }
+
+  const parsed = parser.parse(xmlString);
+  if (!parsed?.tv) {
+    return xmlString;
+  }
+
+  for (const channel of [].concat(parsed.tv.channel || [])) {
+    if (!channel) {
+      continue;
+    }
+
+    const outputName = outputNamesByChannelId.get(channel['@_id']);
+    if (!outputName) {
+      continue;
+    }
+
+    if (!getDisplayNameValues(channel).includes(outputName)) {
+      channel['display-name'] = [outputName].concat([].concat(channel['display-name'] || []));
+    }
+  }
+
+  return builder.build(parsed);
+}
+
 function buildGuideSelection(outputChannels) {
   const outputChannelsByCanonicalId = new Map(
     outputChannels
@@ -548,6 +589,7 @@ export async function setupEPGRoutes(app) {
     const profileSlug = req.params.slug ? String(req.params.slug).trim() : '';
     const filterSource = req.query.source ? String(req.query.source) : null;
     const filterChannels = req.query.channels ? String(req.query.channels).split(',') : null;
+    let displayNameChannels = loadOutputChannels(profileSlug);
 
     if (!mergedEPG) {
       throw new AppError('EPG not loaded yet', 503);
@@ -562,7 +604,7 @@ export async function setupEPGRoutes(app) {
           throw new Error('Invalid EPG structure');
         }
 
-        const allChannels = loadOutputChannels(profileSlug);
+        const allChannels = displayNameChannels;
         const allowedTvgIds = new Set();
 
         if (profileSlug) {
@@ -575,15 +617,17 @@ export async function setupEPGRoutes(app) {
 
         if (filterSource) {
           allowedTvgIds.clear();
-          const sourceChannels = allChannels.filter(c => c && c.source === filterSource);
-          sourceChannels.forEach(c => {
+          displayNameChannels = allChannels.filter(c => c && c.source === filterSource);
+          displayNameChannels.forEach(c => {
             if (c.tvg_id) {
               allowedTvgIds.add(c.tvg_id);
             }
           });
         } else if (filterChannels) {
           allowedTvgIds.clear();
+          const allowedChannelIds = new Set(filterChannels.map(id => id.trim()));
           filterChannels.forEach(id => allowedTvgIds.add(id.trim()));
+          displayNameChannels = allChannels.filter(c => c?.tvg_id && allowedChannelIds.has(c.tvg_id));
         }
 
         if (allowedTvgIds.size > 0 && parsed.tv) {
@@ -598,6 +642,8 @@ export async function setupEPGRoutes(app) {
         console.error('[EPG] Error filtering XMLTV:', filterErr.message);
       }
     }
+
+    xmlToSend = rewriteOutputChannelDisplayNames(xmlToSend, displayNameChannels);
 
     const rewritten = rewriteImageUrls(xmlToSend, req);
     res.set('Content-Type', 'application/xml');

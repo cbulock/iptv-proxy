@@ -181,6 +181,7 @@
                 :saving-profile="savingOutputProfile"
                 :reloading-channels="reloadingChannels"
                 :reloading-e-p-g="reloadingEPG"
+                :updating-canonical-name-id="updatingCanonicalNameChannelId"
                 :updating-preferred-stream-id="updatingPreferredStreamChannelId"
                 :updating-guide-binding-id="updatingGuideBindingChannelId"
                 :profile-dirty="profileDirty"
@@ -196,6 +197,8 @@
                 :delete-profile="deleteSelectedOutputProfile"
                 :update-profile-name="updateSelectedOutputProfileName"
                 :update-profile-enabled="updateSelectedOutputProfileEnabled"
+                :update-canonical-name-draft="updateCanonicalChannelNameDraft"
+                :save-canonical-name="saveCanonicalChannelName"
                 :update-preferred-stream="updatePreferredStream"
                 :update-guide-binding="updateGuideBinding"
                 :update-output-enabled="updateOutputEnabled"
@@ -692,6 +695,7 @@ const state = reactive({
   loadingOutputProfileEntries: false,
   savingOutputProfile: false,
   outputProfileDirty: false,
+  updatingCanonicalNameChannelId: '',
   updatingPreferredStreamChannelId: '',
   updatingGuideBindingChannelId: '',
   epgValidation: null,
@@ -906,7 +910,12 @@ async function loadChannelAuthoringData() {
       throw new Error(profilesJson.error || 'Failed to load output profiles');
     }
 
-    state.canonicalChannels = Array.isArray(channelsJson?.channels) ? channelsJson.channels : [];
+    state.canonicalChannels = Array.isArray(channelsJson?.channels)
+      ? channelsJson.channels.map(channel => ({
+        ...channel,
+        customNameDraft: channel?.customName || '',
+      }))
+      : [];
     state.channelBindings = Array.isArray(bindingsJson?.bindings) ? bindingsJson.bindings : [];
     state.guideBindings = Array.isArray(guideBindingsJson?.bindings)
       ? guideBindingsJson.bindings
@@ -1057,11 +1066,11 @@ async function saveApp() {
       ...state.app,
       base_url: body.base_url,
       oauth: body.oauth
-          ? {
-              ...state.app.oauth,
-              ...body.oauth,
-              clients: state.app.oauth.clients,
-            }
+        ? {
+          ...state.app.oauth,
+          ...body.oauth,
+          clients: state.app.oauth.clients,
+        }
         : normalizeOAuthConfig(),
     });
     setStatus('App settings saved.');
@@ -1313,6 +1322,102 @@ async function updatePreferredStream(channelId, sourceChannelId) {
     message.error(e.message);
   } finally {
     state.updatingPreferredStreamChannelId = '';
+  }
+}
+
+function updateCanonicalChannelNameDraft(channelId, value) {
+  const channel = state.canonicalChannels.find(item => item.id === channelId);
+  if (!channel) {
+    return;
+  }
+
+  channel.customNameDraft = typeof value === 'string' ? value : '';
+}
+
+async function saveCanonicalChannelName(channelId) {
+  const channel = state.canonicalChannels.find(item => item.id === channelId);
+  if (!channel) {
+    return;
+  }
+
+  const normalizedCustomName =
+    typeof channel.customNameDraft === 'string' && channel.customNameDraft.trim()
+      ? channel.customNameDraft.trim()
+      : null;
+  const currentCustomName = channel.customName || null;
+  channel.customNameDraft = normalizedCustomName || '';
+
+  if (currentCustomName === normalizedCustomName) {
+    return;
+  }
+
+  try {
+    state.updatingCanonicalNameChannelId = channelId;
+    const response = await apiFetch(`/api/canonical/channels/${encodeURIComponent(channelId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customName: normalizedCustomName }),
+    });
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.error || 'Failed to update channel name');
+    }
+
+    const updatedChannel = {
+      ...json.channel,
+      customNameDraft: json.channel?.customName || '',
+    };
+    state.canonicalChannels = state.canonicalChannels.map(entry =>
+      entry.id === channelId ? updatedChannel : entry
+    );
+    state.channelBindings = state.channelBindings.map(binding =>
+      binding.canonical?.id === channelId
+        ? {
+          ...binding,
+          canonical: {
+            ...binding.canonical,
+            name: updatedChannel.name,
+            baseName: updatedChannel.baseName,
+            customName: updatedChannel.customName,
+          },
+        }
+        : binding
+    );
+    state.guideBindings = state.guideBindings.map(binding =>
+      binding.canonical?.id === channelId
+        ? {
+          ...binding,
+          canonical: {
+            ...binding.canonical,
+            name: updatedChannel.name,
+            baseName: updatedChannel.baseName,
+            customName: updatedChannel.customName,
+          },
+        }
+        : binding
+    );
+    state.outputProfileEntries = state.outputProfileEntries.map(entry =>
+      entry.canonical?.id === channelId
+        ? {
+          ...entry,
+          canonical: {
+            ...entry.canonical,
+            name: updatedChannel.name,
+            baseName: updatedChannel.baseName,
+            customName: updatedChannel.customName,
+          },
+        }
+        : entry
+    );
+    if (state.previewChannels.length) {
+      await loadPreviewChannels();
+    }
+    message.success('Channel name saved');
+  } catch (e) {
+    setStatus(e.message, false);
+    message.error(e.message);
+  } finally {
+    state.updatingCanonicalNameChannelId = '';
   }
 }
 
@@ -2541,6 +2646,7 @@ const {
   savingApp,
   loadingChannelAuthoring,
   savingOutputProfile,
+  updatingCanonicalNameChannelId,
   updatingPreferredStreamChannelId,
   updatingGuideBindingChannelId,
   activeUsage,
@@ -2812,6 +2918,9 @@ const channelWorkflowRows = computed(() => {
       return {
         id: channel.id,
         name: channel.name,
+        baseName: channel.baseName || channel.name,
+        customName: channel.customName || null,
+        customNameDraft: channel.customNameDraft ?? channel.customName ?? '',
         tvg_id: channel.tvg_id,
         guideNumber: channel.guideNumber,
         sourceBindings,

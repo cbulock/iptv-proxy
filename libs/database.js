@@ -201,6 +201,12 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    id: '005-canonical-custom-names',
+    sql: `
+      ALTER TABLE canonical_channels ADD COLUMN custom_name TEXT;
+    `,
+  },
 ];
 
 let database = null;

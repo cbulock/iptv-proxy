@@ -130,7 +130,24 @@
               />
             </td>
             <td data-label="Channel">
-              <div class="channel-name">{{ row.name }}</div>
+              <div class="channel-name-row">
+                <CindorInput
+                  class="channel-name-input"
+                  :model-value="row.customNameDraft"
+                  :placeholder="row.baseName || 'Channel name'"
+                  :disabled="loading || updatingCanonicalNameId === row.id"
+                  @update:model-value="value => updateCanonicalNameDraft(row.id, value)"
+                  @blur="() => saveCanonicalName(row.id)"
+                  @keydown.enter.prevent="() => saveCanonicalName(row.id)"
+                />
+                <CindorTag v-if="row.customName" tone="accent">Custom</CindorTag>
+              </div>
+              <div
+                v-if="row.customName && row.baseName && row.baseName !== row.name"
+                class="channel-original-name"
+              >
+                Original: {{ row.baseName }}
+              </div>
               <div v-if="row.tvg_id || row.guideNumber || row.sourceBindings.length" class="channel-meta">
                 <span v-if="row.tvg_id">TVG ID: {{ row.tvg_id }}</span>
                 <span v-if="row.guideNumber">Guide: {{ row.guideNumber }}</span>
@@ -225,6 +242,7 @@ const props = defineProps({
   savingProfile: { type: Boolean, required: true },
   reloadingChannels: { type: Boolean, required: true },
   reloadingEPG: { type: Boolean, required: true },
+  updatingCanonicalNameId: { type: String, default: '' },
   updatingPreferredStreamId: { type: String, default: '' },
   updatingGuideBindingId: { type: String, default: '' },
   profileDirty: { type: Boolean, required: true },
@@ -243,6 +261,8 @@ const props = defineProps({
   deleteProfile: { type: Function, required: true },
   updateProfileName: { type: Function, required: true },
   updateProfileEnabled: { type: Function, required: true },
+  updateCanonicalNameDraft: { type: Function, required: true },
+  saveCanonicalName: { type: Function, required: true },
   updatePreferredStream: { type: Function, required: true },
   updateGuideBinding: { type: Function, required: true },
   updateOutputEnabled: { type: Function, required: true },
@@ -389,9 +409,21 @@ const profileOptions = computed(() =>
   background: rgba(255, 255, 255, 0.03);
 }
 
-.channel-name {
-  font-weight: 600;
+.channel-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-bottom: 0.35rem;
+}
+
+.channel-name-input {
+  min-width: 14rem;
+}
+
+.channel-original-name {
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  opacity: 0.72;
 }
 
 .source-list {
