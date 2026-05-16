@@ -59,6 +59,19 @@ export function normalizeOutputProfileEntriesForComparison(entries = []) {
     : [];
 }
 
+export function normalizeChannelWorkflowDraftsForComparison(channelDrafts = []) {
+  return Array.isArray(channelDrafts)
+    ? channelDrafts
+      .map(draft => ({
+        canonicalId: normalizeString(draft?.canonicalId),
+        customNameDraft: normalizeString(draft?.customNameDraft),
+        preferredSourceChannelId: normalizeString(draft?.preferredSourceChannelId),
+        selectedGuideBindingValue: normalizeString(draft?.selectedGuideBindingValue),
+      }))
+      .sort((left, right) => left.canonicalId.localeCompare(right.canonicalId))
+    : [];
+}
+
 export function hasGuideNumberDraftChanges(entries = []) {
   return Array.isArray(entries)
     ? entries.some(
@@ -103,6 +116,7 @@ export function cloneOutputProfileDraftState({
   selectedOutputProfileSlug = '',
   outputProfileDraft = {},
   outputProfileEntries = [],
+  channelDrafts = [],
 } = {}) {
   return {
     selectedOutputProfileSlug: normalizeString(selectedOutputProfileSlug),
@@ -119,6 +133,14 @@ export function cloneOutputProfileDraftState({
         guideNumberOverrideDraft: normalizeString(
           entry?.guideNumberOverrideDraft ?? entry?.guideNumberOverride ?? ''
         ),
+      }))
+      : [],
+    channelDrafts: Array.isArray(channelDrafts)
+      ? channelDrafts.map(draft => ({
+        canonicalId: normalizeString(draft?.canonicalId),
+        customNameDraft: normalizeString(draft?.customNameDraft),
+        preferredSourceChannelId: normalizeString(draft?.preferredSourceChannelId),
+        selectedGuideBindingValue: normalizeString(draft?.selectedGuideBindingValue),
       }))
       : [],
   };

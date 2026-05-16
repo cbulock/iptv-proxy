@@ -1,13 +1,30 @@
 <template>
-  <CindorProvider theme="dark" color-scheme="dark">
+  <CindorProvider theme="dark">
     <div v-if="showSetupModal" class="setup-overlay">
-      <div class="setup-card">
+      <div
+        class="setup-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="setup-modal-title"
+        aria-describedby="setup-modal-copy setup-modal-note"
+      >
         <h2 id="setup-modal-title" class="setup-title">Set Up Admin Authentication</h2>
-        <p class="setup-copy">
+        <p id="setup-modal-copy" class="setup-copy">
           No administrator credentials are configured. Set a username and password to secure the
           admin interface.
         </p>
-        <CindorForm>
+        <p id="setup-modal-note" class="setup-note">
+          First-run setup must be completed from this server or another device on your local/private
+          network.
+        </p>
+        <p id="setup-password-help" class="setup-helper-copy">
+          Choose a password between 8 and 128 characters. You will use these credentials for future
+          admin sign-in.
+        </p>
+        <CindorForm
+          :aria-busy="savingSetup ? 'true' : undefined"
+          :aria-describedby="setupError ? 'setup-modal-copy setup-modal-note setup-password-help setup-error' : 'setup-modal-copy setup-modal-note setup-password-help'"
+        >
           <CindorFormField label="Username">
             <CindorInput
               v-model="setupForm.username"
@@ -24,20 +41,22 @@
               autocomplete="new-password"
               placeholder="Min. 8 characters"
               :disabled="savingSetup"
+              aria-describedby="setup-password-help"
             />
           </CindorFormField>
           <CindorFormField label="Confirm Password">
-            <CindorPasswordInput
-              v-model="setupForm.confirm"
+          <CindorPasswordInput
+            v-model="setupForm.confirm"
               name="confirm-password"
               autocomplete="new-password"
               placeholder="Repeat password"
               :disabled="savingSetup"
+              aria-describedby="setup-password-help"
             />
           </CindorFormField>
         </CindorForm>
-        <div v-if="setupError" class="setup-error">{{ setupError }}</div>
-        <CindorButton :disabled="savingSetup" @click="submitSetup">
+        <div v-if="setupError" id="setup-error" class="setup-error" role="alert">{{ setupError }}</div>
+        <CindorButton :disabled="savingSetup" :aria-busy="savingSetup ? 'true' : undefined" @click="submitSetup">
           {{ savingSetup ? 'Saving...' : 'Save Credentials' }}
         </CindorButton>
       </div>
@@ -47,7 +66,7 @@
       <CindorLayoutHeader class="admin-header">
         <div class="admin-header-row">
           <div class="brand-lockup">
-            <div class="brand-mark">IP</div>
+            <div class="brand-mark" aria-hidden="true">IP</div>
             <div class="brand-title">IPTV Proxy Admin</div>
           </div>
         </div>
@@ -56,7 +75,7 @@
         <main class="admin-main login-main">
           <div class="workspace-frame login-frame">
             <div class="login-card">
-              <div class="login-title">Loading admin…</div>
+              <div class="login-title" role="status" aria-live="polite">Loading admin…</div>
             </div>
           </div>
         </main>
@@ -67,7 +86,7 @@
       <CindorLayoutHeader class="admin-header">
         <div class="admin-header-row">
           <div class="brand-lockup">
-            <div class="brand-mark">IP</div>
+            <div class="brand-mark" aria-hidden="true">IP</div>
             <div class="brand-title">IPTV Proxy Admin</div>
           </div>
         </div>
@@ -77,8 +96,19 @@
           <div class="workspace-frame login-frame">
             <div class="login-card">
               <h1 class="login-title">Sign In</h1>
-              <p class="login-copy">Sign in to manage sources, mappings, backups, and live channel health.</p>
-              <form class="login-form" @submit.prevent="submitLogin">
+              <p id="login-copy" class="login-copy">
+                Sign in to manage sources, mappings, backups, and live channel health.
+              </p>
+              <p id="login-helper-copy" class="login-helper-copy">
+                Use the administrator credentials created during setup. Session access stays on this
+                device until you sign out.
+              </p>
+              <form
+                class="login-form"
+                :aria-describedby="loginError ? 'login-copy login-helper-copy login-error' : 'login-copy login-helper-copy'"
+                :aria-busy="loggingIn ? 'true' : undefined"
+                @submit.prevent="submitLogin"
+              >
                 <CindorForm>
                   <CindorFormField label="Username">
                     <CindorInput
@@ -94,11 +124,12 @@
                       name="password"
                       autocomplete="current-password"
                       :disabled="loggingIn"
+                      aria-describedby="login-helper-copy"
                     />
                   </CindorFormField>
                 </CindorForm>
-                <div v-if="loginError" class="setup-error">{{ loginError }}</div>
-                <CindorButton type="submit" :disabled="loggingIn">
+                <div v-if="loginError" id="login-error" class="setup-error" role="alert">{{ loginError }}</div>
+                <CindorButton type="submit" :disabled="loggingIn" :aria-busy="loggingIn ? 'true' : undefined">
                   {{ loggingIn ? 'Signing In...' : 'Sign In' }}
                 </CindorButton>
               </form>
@@ -112,7 +143,7 @@
       <CindorLayoutHeader class="admin-header">
         <div class="admin-header-row">
           <div class="brand-lockup">
-            <div class="brand-mark">IP</div>
+            <div class="brand-mark" aria-hidden="true">IP</div>
             <div class="brand-title">IPTV Proxy Admin</div>
           </div>
           <CindorButton
@@ -120,15 +151,26 @@
             class="compact-button signout-button"
             variant="ghost"
             :disabled="loggingOut"
+            :aria-busy="loggingOut ? 'true' : undefined"
             @click="logout"
           >
-            Sign Out
+            {{ loggingOut ? 'Signing Out...' : 'Sign Out' }}
           </CindorButton>
         </div>
       </CindorLayoutHeader>
       <CindorLayoutContent class="admin-content">
         <main class="admin-main">
           <div class="workspace-frame">
+            <div
+              v-if="status"
+              class="status-banner"
+              :class="{ error: !statusOk }"
+              :role="statusOk ? 'status' : 'alert'"
+              :aria-live="statusOk ? 'polite' : 'assertive'"
+            >
+              <span class="status-banner-label">{{ statusOk ? 'Status' : 'Error' }}</span>
+              <span class="status-banner-message">{{ status }}</span>
+            </div>
             <CindorTabs v-model:value="tab" class="admin-tabs">
             <CindorTabPanel value="app" :label="appTabLabel">
               <app-settings-pane
@@ -143,6 +185,7 @@
                 :password-confirm="passwordForm.confirm"
                 :saving-app="savingApp"
                 :saving-password="savingPassword"
+                :confirm-remove-client="confirmRemoveOAuthClient"
                 :save-app="saveApp"
                 :change-password="changePassword"
                 @update:app-base-url="app.base_url = $event"
@@ -160,7 +203,9 @@
               <sources-pane
                 :providers="providers"
                 :epg-validation="epgValidation"
+                :provider-validation="providerValidation"
                 :provider-columns="providerColumns"
+                :providers-can-save="providersCanSave"
                 :saving-providers="savingProviders"
                 :loading-e-p-g-validation="loadingEPGValidation"
                 :add-provider="addProvider"
@@ -208,11 +253,21 @@
             </CindorTabPanel>
 
             <CindorTabPanel value="preview" label="Preview">
-              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
+              <CindorStack
+                class="preview-toolbar"
+                direction="horizontal"
+                align="center"
+                wrap
+                gap="sm"
+                role="group"
+                aria-label="Preview actions"
+              >
                 <CindorSelect
                   v-model="previewProfileSlug"
-                  style="min-width: 220px"
+                  class="preview-profile-select"
                   :disabled="!outputProfiles.length"
+                  aria-label="Preview output profile"
+                  :aria-describedby="previewChannels.length ? 'preview-toolbar-summary preview-table-summary' : 'preview-toolbar-summary'"
                   @update:model-value="changePreviewProfile"
                 >
                   <option value="" disabled>Select preview profile</option>
@@ -222,76 +277,174 @@
                 </CindorSelect>
                 <CindorInput
                   v-model="previewSearch"
+                  class="preview-search-input"
                   placeholder="Search channels by name, group, or tvg-id…"
-                  style="min-width: 260px"
+                  aria-label="Search preview channels"
+                  :aria-describedby="previewChannels.length ? 'preview-toolbar-summary preview-table-summary' : 'preview-toolbar-summary'"
                 />
-                <CindorButton variant="ghost" :disabled="loadingPreviewChannels" @click="loadPreviewChannels">
+                <CindorButton
+                  variant="ghost"
+                  :disabled="loadingPreviewChannels"
+                  :aria-busy="loadingPreviewChannels ? 'true' : undefined"
+                  :aria-describedby="previewChannels.length ? 'preview-toolbar-summary preview-table-summary' : 'preview-toolbar-summary'"
+                  @click="loadPreviewChannels"
+                >
                   {{ loadingPreviewChannels ? 'Loading…' : 'Refresh' }}
                 </CindorButton>
-                <span class="toolbar-count">
+                <span class="toolbar-count" role="status" aria-live="polite" aria-atomic="true">
                   {{ filteredPreviewChannels.length }} channel{{
                     filteredPreviewChannels.length !== 1 ? 's' : ''
                   }}
                 </span>
               </CindorStack>
+              <div id="preview-toolbar-summary" class="tab-meta-copy" role="status" aria-live="polite">
+                Choose an output profile, filter the lineup, then refresh to inspect playable preview channels.
+              </div>
               <div
                 v-if="loadingPreviewChannels && !previewChannels.length"
-                style="opacity: 0.6; padding: 2rem 0; text-align: center"
+                class="tab-empty-state"
+                role="status"
+                aria-live="polite"
               >
                 Loading channels…
               </div>
-              <div
-                v-else-if="!previewChannels.length"
-                style="opacity: 0.6; padding: 2rem 0; text-align: center"
-              >
-                No channels loaded. Check your source configuration.
+              <div v-else-if="!previewChannels.length" class="tab-empty-state" role="status" aria-live="polite">
+                No channels loaded for this profile yet. Save sources, reload channels, then refresh
+                this preview.
               </div>
-              <CindorDataTable
+              <div
                 v-else
-                row-id-key="previewKey"
-                :columns="previewColumns"
-                :rows="previewTableRows"
-                @row-action="handlePreviewRowAction"
-              />
+                class="table-scroll-shell"
+                role="region"
+                aria-labelledby="preview-table-title"
+                aria-describedby="preview-table-summary"
+              >
+                <div id="preview-table-title" class="sr-only">Preview channels table</div>
+                <div id="preview-table-summary" class="tab-meta-copy" role="status" aria-live="polite">
+                  Showing {{ filteredPreviewChannels.length }} of {{ previewChannels.length }} preview channel{{
+                    previewChannels.length === 1 ? '' : 's'
+                  }}.
+                </div>
+                <CindorDataTable
+                  row-id-key="previewKey"
+                  :columns="previewColumns"
+                  :rows="previewTableRows"
+                  @row-action="handlePreviewRowAction"
+                />
+              </div>
             </CindorTabPanel>
 
             <CindorTabPanel value="health" label="Health">
-              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
-                <CindorButton :disabled="loadingHealth" @click="loadHealth">
+              <CindorStack
+                class="pane-toolbar"
+                direction="horizontal"
+                align="center"
+                wrap
+                gap="sm"
+                role="group"
+                aria-label="Health actions"
+              >
+                <CindorButton
+                  :disabled="loadingHealth"
+                  :aria-busy="loadingHealth ? 'true' : undefined"
+                  :aria-describedby="
+                    healthDetails.length
+                      ? formattedHealthUpdated
+                        ? 'health-updated-summary health-count-summary'
+                        : 'health-count-summary'
+                      : 'health-empty-summary'
+                  "
+                  @click="loadHealth"
+                >
                   {{ loadingHealth ? 'Loading...' : 'Refresh Status' }}
                 </CindorButton>
-                <CindorButton variant="ghost" :disabled="runningHealth" @click="runHealth">
+                <CindorButton
+                  variant="ghost"
+                  :disabled="runningHealth"
+                  :aria-busy="runningHealth ? 'true' : undefined"
+                  :aria-describedby="
+                    healthDetails.length
+                      ? formattedHealthUpdated
+                        ? 'health-updated-summary health-count-summary'
+                        : 'health-count-summary'
+                      : 'health-empty-summary'
+                  "
+                  @click="runHealth"
+                >
                   {{ runningHealth ? 'Running...' : 'Run Health Check' }}
                 </CindorButton>
               </CindorStack>
-              <div v-if="formattedHealthUpdated" style="opacity: 0.75; margin-bottom: 0.5rem">
+              <div id="health-updated-summary" v-if="formattedHealthUpdated" class="tab-meta-copy" role="status" aria-live="polite">
                 Last updated: {{ formattedHealthUpdated }}
               </div>
-              <div v-if="healthDetails.length">
+              <div id="health-count-summary" v-if="healthDetails.length" class="tab-meta-copy" role="status" aria-live="polite">
+                Showing {{ healthDetails.length }} health result{{ healthDetails.length === 1 ? '' : 's' }}.
+              </div>
+              <div
+                v-if="healthDetails.length"
+                class="table-scroll-shell"
+                role="region"
+                aria-label="Health results table"
+                :aria-describedby="formattedHealthUpdated ? 'health-updated-summary health-count-summary' : 'health-count-summary'"
+              >
                 <CindorDataTable row-id-key="id" :columns="healthColumns" :rows="healthDetails" />
               </div>
-              <div v-else style="opacity: 0.6">No health data yet. Run a health check.</div>
+              <div id="health-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
+                No health data yet. Run a health check after your sources and channels are configured.
+              </div>
             </CindorTabPanel>
 
             <CindorTabPanel value="usage" :label="usageTabLabel">
-              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
-                <CindorButton :disabled="loadingUsage" @click="loadUsage">
+              <CindorStack
+                class="pane-toolbar"
+                direction="horizontal"
+                align="center"
+                wrap
+                gap="sm"
+                role="group"
+                aria-label="Usage actions"
+              >
+                <CindorButton
+                  :disabled="loadingUsage"
+                  :aria-busy="loadingUsage ? 'true' : undefined"
+                  :aria-describedby="activeUsage.length ? 'usage-count-summary' : 'usage-empty-summary'"
+                  @click="loadUsage"
+                >
                   {{ loadingUsage ? 'Loading...' : 'Refresh' }}
                 </CindorButton>
               </CindorStack>
-              <div v-if="activeUsage.length">
+              <div v-if="activeUsage.length" class="table-scroll-shell" role="region" aria-label="Active usage table" aria-describedby="usage-count-summary">
+                <div id="usage-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
+                  Showing {{ activeUsage.length }} active viewer{{ activeUsage.length === 1 ? '' : 's' }}.
+                </div>
                 <CindorDataTable row-id-key="key" :columns="usageColumns" :rows="activeUsage" />
               </div>
-              <div v-else style="opacity: 0.6">No active viewers detected.</div>
+              <div id="usage-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">No active viewers detected.</div>
             </CindorTabPanel>
 
             <CindorTabPanel value="tasks" label="Tasks">
-              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
-                <CindorButton :disabled="loadingTasks" @click="loadTasks">
+              <CindorStack
+                class="pane-toolbar"
+                direction="horizontal"
+                align="center"
+                wrap
+                gap="sm"
+                role="group"
+                aria-label="Task actions"
+              >
+                <CindorButton
+                  :disabled="loadingTasks"
+                  :aria-busy="loadingTasks ? 'true' : undefined"
+                  :aria-describedby="tasks.length ? 'tasks-count-summary' : 'tasks-empty-summary'"
+                  @click="loadTasks"
+                >
                   {{ loadingTasks ? 'Loading...' : 'Refresh' }}
                 </CindorButton>
               </CindorStack>
-              <div v-if="tasks.length">
+              <div v-if="tasks.length" class="table-scroll-shell" role="region" aria-label="Scheduled tasks table" aria-describedby="tasks-count-summary">
+                <div id="tasks-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
+                  Showing {{ tasks.length }} scheduled task{{ tasks.length === 1 ? '' : 's' }}.
+                </div>
                 <CindorDataTable
                   row-id-key="name"
                   :columns="taskColumns"
@@ -299,19 +452,44 @@
                   @row-action="handleTaskRowAction"
                 />
               </div>
-              <div v-else style="opacity: 0.6">No scheduled tasks found.</div>
+              <div id="tasks-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
+                No scheduled tasks found. Configure background refresh jobs in app settings if you
+                want automatic channel or EPG updates.
+              </div>
             </CindorTabPanel>
 
             <CindorTabPanel value="backups" label="Backups">
-              <CindorStack direction="horizontal" align="center" wrap gap="sm" style="margin-bottom: 0.75rem">
-                <CindorButton :disabled="creatingBackup" @click="createBackup">
+              <CindorStack
+                class="pane-toolbar"
+                direction="horizontal"
+                align="center"
+                wrap
+                gap="sm"
+                role="group"
+                aria-label="Backup actions"
+              >
+                <CindorButton
+                  :disabled="creatingBackup"
+                  :aria-busy="creatingBackup ? 'true' : undefined"
+                  :aria-describedby="backups.length ? 'backups-count-summary' : 'backups-empty-summary'"
+                  @click="createBackup"
+                >
                   {{ creatingBackup ? 'Creating...' : 'Create Backup' }}
                 </CindorButton>
-                <CindorButton variant="ghost" :disabled="loadingBackups" @click="loadBackups">
+                <CindorButton
+                  variant="ghost"
+                  :disabled="loadingBackups"
+                  :aria-busy="loadingBackups ? 'true' : undefined"
+                  :aria-describedby="backups.length ? 'backups-count-summary' : 'backups-empty-summary'"
+                  @click="loadBackups"
+                >
                   {{ loadingBackups ? 'Loading...' : 'Refresh' }}
                 </CindorButton>
               </CindorStack>
-              <div v-if="backups.length">
+              <div v-if="backups.length" class="table-scroll-shell" role="region" aria-label="Backups table" aria-describedby="backups-count-summary">
+                <div id="backups-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
+                  Showing {{ backups.length }} backup{{ backups.length === 1 ? '' : 's' }}.
+                </div>
                 <CindorDataTable
                   row-id-key="name"
                   :columns="backupColumns"
@@ -319,7 +497,7 @@
                   @row-action="handleBackupRowAction"
                 />
               </div>
-              <div v-else style="opacity: 0.6">
+              <div id="backups-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
                 No backups yet. Click "Create Backup" to save the current config.
               </div>
             </CindorTabPanel>
@@ -334,66 +512,68 @@
         <div id="preview-dialog-title" class="dialog-title">
           {{ previewWatchingChannel ? previewWatchingChannel.name : 'Watch Channel' }}
         </div>
-        <div
-          style="
-            background: #000;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 1rem;
-            position: relative;
-          "
-        >
+        <div class="preview-player-shell">
           <video
             ref="videoPlayerEl"
+            class="preview-player-video"
             controls
             autoplay
-            style="width: 100%; max-height: 360px; display: block"
             preload="auto"
+            :aria-label="`Live preview for ${previewWatchingChannel?.name || 'selected channel'}`"
           />
           <div
             v-if="state.playerError"
+            class="preview-player-overlay"
             role="alert"
             aria-live="assertive"
-            style="
-              position: absolute;
-              inset: 0;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              background: rgba(0, 0, 0, 0.85);
-              color: #fff;
-              padding: 1.5rem;
-              text-align: center;
-              gap: 0.5rem;
-            "
+            aria-describedby="preview-player-error-help"
           >
-            <div aria-hidden="true" style="font-size: 1.5rem">⚠️</div>
-            <div style="font-weight: 600">{{ state.playerError }}</div>
-            <CindorButton
-              v-if="showTranscodeButton"
-              class="compact-button"
-              style="margin-top: 0.25rem"
-              @click="setupTranscodePlayer"
-            >
-              Try Server Transcoding
-            </CindorButton>
-            <div style="font-size: 0.8em; opacity: 0.7">
+            <div aria-hidden="true" class="preview-player-error-icon">⚠️</div>
+            <div class="preview-player-error-text">{{ state.playerError }}</div>
+            <div class="preview-player-error-actions" role="group" aria-label="Preview recovery actions">
+              <CindorButton
+                v-if="showTranscodeButton"
+                class="compact-button preview-player-error-action"
+                :aria-label="`Try server transcoding for ${previewWatchingChannel?.name || 'this channel'}`"
+                @click="setupTranscodePlayer"
+              >
+                Try Server Transcoding
+              </CindorButton>
+            </div>
+            <div id="preview-player-error-help" class="preview-player-help">
               Try opening the stream URL directly in VLC or another IPTV player.
             </div>
           </div>
         </div>
 
-        <div class="dialog-toolbar">
-          <span style="opacity: 0.7; font-size: 0.85em; flex-shrink: 0">Stream URL:</span>
-          <code class="dialog-code">{{ previewStreamUrl }}</code>
-          <CindorButton class="compact-button" variant="ghost" @click="copyStreamUrl">Copy</CindorButton>
+        <div
+          class="dialog-toolbar"
+          role="group"
+          aria-label="Stream URL actions"
+          aria-describedby="preview-stream-url-value preview-stream-url-summary"
+        >
+          <span class="dialog-toolbar-label">Stream URL:</span>
+          <code id="preview-stream-url-value" class="dialog-code">{{ previewStreamUrl }}</code>
+          <CindorButton
+            class="compact-button"
+            variant="ghost"
+            :aria-label="`Copy stream URL for ${previewWatchingChannel?.name || 'this channel'}`"
+            aria-describedby="preview-stream-url-value preview-stream-url-summary"
+            @click="copyStreamUrl"
+          >
+            Copy
+          </CindorButton>
           <a
             :href="previewStreamUrl"
             target="_blank"
-            rel="noopener"
-            style="font-size: 0.8em; opacity: 0.7"
+            rel="noopener noreferrer"
+            aria-label="Open stream URL in a new tab"
+            aria-describedby="preview-stream-url-value preview-stream-url-summary"
+            class="dialog-link"
             >Open ↗</a>
+        </div>
+        <div id="preview-stream-url-summary" class="sr-only">
+          Copy this stream URL or open it directly in another player for the selected preview channel.
         </div>
 
         <div v-if="state.playerDebug" class="debug-panel">
@@ -401,93 +581,113 @@
             type="button"
             class="debug-toggle"
             :aria-expanded="state.showPlayerDebug"
+            aria-controls="preview-stream-debug-panel"
+            :aria-describedby="state.showPlayerDebug ? 'preview-stream-debug-summary' : 'preview-debug-toggle-summary'"
             @click="state.showPlayerDebug = !state.showPlayerDebug"
           >
-            <span style="font-size: 0.8em; opacity: 0.75">
+            <span class="debug-toggle-label">
               🔍 Stream Debug
-              <span
-                v-if="state.playerDebug.playerMode"
-                style="margin-left: 0.5em; opacity: 0.6"
-              >
+              <span v-if="state.playerDebug.playerMode" class="debug-toggle-meta">
                 — player: {{ state.playerDebug.playerMode }}
               </span>
             </span>
-            <span style="font-size: 0.75em; opacity: 0.5">{{
+            <span class="debug-toggle-state">{{
               state.showPlayerDebug ? '▲ hide' : '▼ show'
             }}</span>
           </button>
-          <div v-if="state.showPlayerDebug" style="padding: 0.5rem 0.6rem; font-size: 0.75em; opacity: 0.85">
-            <div class="debug-grid">
-              <span style="opacity: 0.6">HDHomeRun</span>
-              <span>{{ state.playerDebug.hdhomerun }}</span>
-              <span style="opacity: 0.6">Player mode</span>
-              <span>{{ state.playerDebug.playerMode ?? '(pending)' }}</span>
-              <span style="opacity: 0.6">Probe URL</span>
-              <code style="word-break: break-all; font-size: 0.9em">{{ state.playerDebug.probeUrl }}</code>
-              <span style="opacity: 0.6">Probe result</span>
-              <code style="word-break: break-all; font-size: 0.9em">{{
-                state.playerDebug.probeResult ? JSON.stringify(state.playerDebug.probeResult) : '(pending)'
-              }}</code>
-              <template v-if="state.playerDebug.hlsError">
-                <span style="opacity: 0.6">HLS.js error</span>
-                <code style="word-break: break-all; font-size: 0.9em">{{
-                  JSON.stringify(state.playerDebug.hlsError)
+          <div id="preview-debug-toggle-summary" class="guide-state-copy" role="status" aria-live="polite">
+            Show player diagnostics, probe results, and recent playback events for the current stream.
+          </div>
+          <div
+            v-if="state.showPlayerDebug"
+            id="preview-stream-debug-panel"
+            class="debug-panel-body"
+            role="region"
+            aria-labelledby="preview-stream-debug-title"
+            aria-describedby="preview-stream-debug-summary"
+          >
+            <div id="preview-stream-debug-title" class="sr-only">Stream debug details</div>
+            <div id="preview-stream-debug-summary" class="guide-state-copy" role="status" aria-live="polite">
+              Showing {{ previewDebugFieldCount }} debug field{{ previewDebugFieldCount === 1 ? '' : 's' }}
+              and {{ previewDebugEventCount }} event{{ previewDebugEventCount === 1 ? '' : 's' }}.
+            </div>
+            <div class="debug-grid" role="list" aria-label="Stream debug fields">
+              <div class="debug-grid-item" role="listitem">
+                <span class="debug-grid-label">HDHomeRun</span>
+                <span>{{ state.playerDebug.hdhomerun }}</span>
+              </div>
+              <div class="debug-grid-item" role="listitem">
+                <span class="debug-grid-label">Player mode</span>
+                <span>{{ state.playerDebug.playerMode ?? '(pending)' }}</span>
+              </div>
+              <div class="debug-grid-item" role="listitem">
+                <span class="debug-grid-label">Probe URL</span>
+                <code class="debug-code">{{ state.playerDebug.probeUrl }}</code>
+              </div>
+              <div class="debug-grid-item" role="listitem">
+                <span class="debug-grid-label">Probe result</span>
+                <code class="debug-code">{{
+                  state.playerDebug.probeResult ? JSON.stringify(state.playerDebug.probeResult) : '(pending)'
                 }}</code>
+              </div>
+              <template v-if="state.playerDebug.hlsError">
+                <div class="debug-grid-item" role="listitem">
+                  <span class="debug-grid-label">HLS.js error</span>
+                  <code class="debug-code">{{
+                    JSON.stringify(state.playerDebug.hlsError)
+                  }}</code>
+                </div>
               </template>
             </div>
-            <div style="margin-bottom: 0.4rem; opacity: 0.6; font-size: 0.9em">Events:</div>
-            <pre class="debug-pre">{{ state.playerDebug.events.join('\n') }}</pre>
-            <div style="margin-top: 0.5rem">
-              <CindorButton class="compact-button" variant="ghost" @click="copyPlayerDebug">
+            <div id="preview-debug-events-label" class="debug-events-label">Events:</div>
+            <pre class="debug-pre" role="log" aria-labelledby="preview-debug-events-label">{{ state.playerDebug.events.join('\n') }}</pre>
+            <div class="debug-actions">
+              <CindorButton
+                class="compact-button"
+                variant="ghost"
+                :aria-label="`Copy stream debug info for ${previewWatchingChannel?.name || 'this channel'}`"
+                @click="copyPlayerDebug"
+              >
                 Copy debug info
               </CindorButton>
             </div>
           </div>
         </div>
 
-        <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 0.75rem">
-          <div style="font-weight: 600; margin-bottom: 0.5rem">Guide</div>
-          <div v-if="loadingGuide" style="opacity: 0.6; font-size: 0.9em">Loading guide data…</div>
-          <div v-else-if="!previewGuide.length" style="opacity: 0.5; font-size: 0.9em">
+        <div
+          class="guide-section"
+          role="region"
+          aria-labelledby="preview-guide-title"
+          :aria-describedby="
+            loadingGuide
+              ? 'preview-guide-loading-summary'
+              : !previewGuide.length
+                ? 'preview-guide-empty-summary'
+                : 'preview-guide-count-summary'
+          "
+          :aria-busy="loadingGuide ? 'true' : undefined"
+        >
+          <div id="preview-guide-title" class="guide-title-text">Guide</div>
+          <div id="preview-guide-loading-summary" v-if="loadingGuide" class="guide-state-copy" role="status" aria-live="polite">Loading guide data…</div>
+          <div id="preview-guide-empty-summary" v-else-if="!previewGuide.length" class="guide-state-copy empty" role="status" aria-live="polite">
             No guide data available for this channel.
           </div>
-          <div v-else style="max-height: 220px; overflow-y: auto">
-            <div
-              v-for="(prog, idx) in previewGuide"
-              :key="idx"
-              style="
-                display: flex;
-                gap: 0.75rem;
-                padding: 0.35rem 0;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-              "
-            >
-              <span
-                style="
-                  opacity: 0.6;
-                  font-size: 0.85em;
-                  white-space: nowrap;
-                  min-width: 85px;
-                "
-              >
+          <div v-else class="guide-list-wrapper">
+            <div id="preview-guide-count-summary" class="guide-state-copy" role="status" aria-live="polite">
+              Showing {{ previewGuide.length }} upcoming programme{{ previewGuide.length === 1 ? '' : 's' }}.
+            </div>
+            <div class="guide-list" role="list" aria-label="Guide programmes">
+            <div v-for="(prog, idx) in previewGuide" :key="idx" class="guide-row" role="listitem">
+              <span class="guide-time">
                 {{ formatXMLTVTime(prog.start) }}
               </span>
-              <div style="flex: 1; min-width: 0">
-                <div style="font-size: 0.9em; font-weight: 500">{{ prog.title }}</div>
-                <div
-                  v-if="prog.desc"
-                  style="
-                    font-size: 0.8em;
-                    opacity: 0.55;
-                    margin-top: 0.1rem;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                  "
-                >
+              <div class="guide-entry">
+                <div class="guide-program-title">{{ prog.title }}</div>
+                <div v-if="prog.desc" class="guide-description">
                   {{ prog.desc }}
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -498,13 +698,14 @@
       v-model:open="confirmDialog.open"
       modal
       aria-labelledby="confirm-dialog-title"
+      aria-describedby="confirm-dialog-copy"
       @cancel="resolveConfirmDialog(false)"
       @close="resolveConfirmDialog(false)"
     >
       <div class="dialog-body">
         <div id="confirm-dialog-title" class="dialog-title">{{ confirmDialog.title }}</div>
-        <div class="dialog-copy">{{ confirmDialog.content }}</div>
-        <CindorStack direction="horizontal" justify="end" gap="sm" wrap>
+        <div id="confirm-dialog-copy" class="dialog-copy">{{ confirmDialog.content }}</div>
+        <CindorStack direction="horizontal" justify="end" gap="sm" wrap role="group" aria-label="Confirmation actions">
           <CindorButton variant="ghost" @click="resolveConfirmDialog(false)">
             {{ confirmDialog.negativeText }}
           </CindorButton>
@@ -519,6 +720,82 @@
           </CindorButton>
         </CindorStack>
       </div>
+    </CindorDialog>
+
+    <CindorDialog
+      v-model:open="textPromptDialog.open"
+      modal
+      aria-labelledby="text-prompt-dialog-title"
+      :aria-describedby="
+        textPromptDialog.description && textPromptDialog.error
+          ? 'text-prompt-dialog-description text-prompt-dialog-error'
+          : textPromptDialog.error
+            ? 'text-prompt-dialog-error'
+            : textPromptDialog.description
+              ? 'text-prompt-dialog-description'
+              : undefined
+      "
+      @cancel="resolveTextPromptDialog(null)"
+      @close="resolveTextPromptDialog(null)"
+    >
+      <form
+        class="dialog-body"
+        :aria-busy="savingOutputProfile ? 'true' : undefined"
+        :aria-describedby="
+          textPromptDialog.description && textPromptDialog.error
+            ? 'text-prompt-dialog-description text-prompt-dialog-error'
+            : textPromptDialog.error
+              ? 'text-prompt-dialog-error'
+              : textPromptDialog.description
+                ? 'text-prompt-dialog-description'
+                : undefined
+        "
+        @submit.prevent="submitTextPromptDialog"
+      >
+        <div id="text-prompt-dialog-title" class="dialog-title">{{ textPromptDialog.title }}</div>
+        <div
+          v-if="textPromptDialog.description"
+          id="text-prompt-dialog-description"
+          class="dialog-copy"
+        >
+          {{ textPromptDialog.description }}
+        </div>
+        <CindorForm>
+          <CindorFormField :label="textPromptDialog.label">
+            <CindorInput
+              v-model="textPromptDialog.value"
+              :placeholder="textPromptDialog.placeholder"
+              :disabled="savingOutputProfile"
+              :aria-describedby="
+                textPromptDialog.description && textPromptDialog.error
+                  ? 'text-prompt-dialog-description text-prompt-dialog-error'
+                  : textPromptDialog.error
+                    ? 'text-prompt-dialog-error'
+                    : textPromptDialog.description
+                      ? 'text-prompt-dialog-description'
+                      : undefined
+              "
+              :aria-invalid="textPromptDialog.error ? 'true' : undefined"
+            />
+          </CindorFormField>
+        </CindorForm>
+        <div
+          v-if="textPromptDialog.error"
+          id="text-prompt-dialog-error"
+          class="setup-error"
+          role="alert"
+        >
+          {{ textPromptDialog.error }}
+        </div>
+        <CindorStack direction="horizontal" justify="end" gap="sm" wrap role="group" aria-label="Prompt actions">
+          <CindorButton type="button" variant="ghost" @click="resolveTextPromptDialog(null)">
+            {{ textPromptDialog.negativeText }}
+          </CindorButton>
+          <CindorButton type="submit" :disabled="savingOutputProfile">
+            {{ textPromptDialog.positiveText }}
+          </CindorButton>
+        </CindorStack>
+      </form>
     </CindorDialog>
   </CindorProvider>
 </template>
@@ -536,6 +813,7 @@ import {
   cloneProvidersDraft,
   hasGuideNumberDraftChanges,
   normalizeAppDraftForComparison,
+  normalizeChannelWorkflowDraftsForComparison,
   normalizeOutputProfileDraftForComparison,
   normalizeOutputProfileEntriesForComparison,
   normalizeProvidersForComparison,
@@ -762,6 +1040,24 @@ const message = {
   },
 };
 
+function buildApiErrorMessage(payload, fallback = 'Request failed') {
+  if (!payload || typeof payload !== 'object') {
+    return fallback;
+  }
+
+  const parts = [payload.error || fallback];
+  if (payload.detail) {
+    parts.push(payload.detail);
+  } else if (payload.details && typeof payload.details === 'string') {
+    parts.push(payload.details);
+  }
+  if (payload.fix) {
+    parts.push(`Fix: ${payload.fix}`);
+  }
+
+  return parts.filter(Boolean).join(' ');
+}
+
 const confirmDialog = reactive({
   open: false,
   tone: 'warning',
@@ -769,6 +1065,20 @@ const confirmDialog = reactive({
   content: '',
   positiveText: 'Confirm',
   negativeText: 'Cancel',
+  resolve: null,
+});
+
+const textPromptDialog = reactive({
+  open: false,
+  title: '',
+  description: '',
+  label: 'Name',
+  placeholder: '',
+  value: '',
+  error: '',
+  positiveText: 'Save',
+  negativeText: 'Cancel',
+  validate: null,
   resolve: null,
 });
 
@@ -799,6 +1109,74 @@ function resolveConfirmDialog(confirmed) {
   }
 }
 
+function openTextPromptDialog({
+  title,
+  description = '',
+  label = 'Name',
+  placeholder = '',
+  initialValue = '',
+  positiveText = 'Save',
+  negativeText = 'Cancel',
+  validate = value => (String(value || '').trim() ? '' : `${label} is required.`),
+}) {
+  return new Promise(resolve => {
+    textPromptDialog.open = true;
+    textPromptDialog.title = title;
+    textPromptDialog.description = description;
+    textPromptDialog.label = label;
+    textPromptDialog.placeholder = placeholder;
+    textPromptDialog.value = initialValue;
+    textPromptDialog.error = '';
+    textPromptDialog.positiveText = positiveText;
+    textPromptDialog.negativeText = negativeText;
+    textPromptDialog.validate = validate;
+    textPromptDialog.resolve = resolve;
+  });
+}
+
+function resolveTextPromptDialog(value) {
+  const resolver = textPromptDialog.resolve;
+  textPromptDialog.open = false;
+  textPromptDialog.resolve = null;
+  textPromptDialog.validate = null;
+  textPromptDialog.error = '';
+  if (typeof resolver === 'function') {
+    resolver(value);
+  }
+}
+
+function submitTextPromptDialog() {
+  const validationMessage =
+    typeof textPromptDialog.validate === 'function' ? textPromptDialog.validate(textPromptDialog.value) : '';
+  if (validationMessage) {
+    textPromptDialog.error = validationMessage;
+    return;
+  }
+
+  resolveTextPromptDialog(textPromptDialog.value);
+}
+
+function getProviderValidationIssues(provider, index) {
+  const issues = [];
+  if (!String(provider?.name || '').trim()) {
+    issues.push({
+      rowId: provider?._id || `provider-${index}`,
+      rowLabel: `Source ${index + 1}`,
+      field: 'name',
+      message: 'Name is required.',
+    });
+  }
+  if (!String(provider?.url || '').trim()) {
+    issues.push({
+      rowId: provider?._id || `provider-${index}`,
+      rowLabel: `Source ${index + 1}`,
+      field: 'url',
+      message: 'Source URL is required.',
+    });
+  }
+  return issues;
+}
+
 const state = reactive({
   tab: 'app',
   app: normalizeAppConfig(),
@@ -826,6 +1204,9 @@ const state = reactive({
     enabled: true,
   },
   outputProfileEntries: [],
+  preferredStreamDrafts: {},
+  guideBindingDrafts: {},
+  channelRowFeedback: {},
   loadingChannelAuthoring: false,
   loadingOutputProfileEntries: false,
   savingOutputProfile: false,
@@ -1006,6 +1387,80 @@ function resetSelectedOutputProfileDraft() {
   };
 }
 
+function getCommittedPreferredStreamSourceChannelId(channelId) {
+  const preferredBinding = state.channelBindings.find(
+    binding => binding.canonical?.id === channelId && binding.isPreferredStream
+  );
+
+  return preferredBinding?.sourceChannel?.id || '';
+}
+
+function getDraftPreferredStreamSourceChannelId(channelId) {
+  return typeof state.preferredStreamDrafts[channelId] === 'string'
+    ? state.preferredStreamDrafts[channelId]
+    : getCommittedPreferredStreamSourceChannelId(channelId);
+}
+
+function getCommittedGuideBindingValue(channelId) {
+  const selectedBinding = state.guideBindings.find(
+    binding => binding.canonical?.id === channelId && binding.selected
+  );
+
+  return selectedBinding
+    ? JSON.stringify({
+      sourceId: selectedBinding.source?.id || '',
+      epgChannelId: selectedBinding.epgChannelId || '',
+    })
+    : '';
+}
+
+function getDraftGuideBindingValue(channelId) {
+  return typeof state.guideBindingDrafts[channelId] === 'string'
+    ? state.guideBindingDrafts[channelId]
+    : getCommittedGuideBindingValue(channelId);
+}
+
+function clearChannelRowFeedback(channelId) {
+  if (!channelId) {
+    return;
+  }
+
+  delete state.channelRowFeedback[channelId];
+}
+
+function setChannelRowFeedback(channelId, tone, label) {
+  if (!channelId) {
+    return;
+  }
+
+  state.channelRowFeedback[channelId] = {
+    tone,
+    label,
+  };
+}
+
+function buildCurrentChannelWorkflowDrafts() {
+  return state.canonicalChannels.map(channel => ({
+    canonicalId: channel.id,
+    customNameDraft: channel.customNameDraft ?? channel.customName ?? '',
+    preferredSourceChannelId: getDraftPreferredStreamSourceChannelId(channel.id),
+    selectedGuideBindingValue: getDraftGuideBindingValue(channel.id),
+  }));
+}
+
+function resetChannelWorkflowDraftState() {
+  state.preferredStreamDrafts = Object.fromEntries(
+    state.canonicalChannels.map(channel => [
+      channel.id,
+      getCommittedPreferredStreamSourceChannelId(channel.id),
+    ])
+  );
+  state.guideBindingDrafts = Object.fromEntries(
+    state.canonicalChannels.map(channel => [channel.id, getCommittedGuideBindingValue(channel.id)])
+  );
+  state.channelRowFeedback = {};
+}
+
 function persistDraftSnapshot() {
   if (!_draftPersistenceReady) {
     return;
@@ -1022,6 +1477,7 @@ function persistDraftSnapshot() {
           selectedOutputProfileSlug: state.selectedOutputProfileSlug,
           outputProfileDraft: state.outputProfileDraft,
           outputProfileEntries: state.outputProfileEntries,
+          channelDrafts: buildCurrentChannelWorkflowDrafts(),
         })
         : null,
     },
@@ -1105,6 +1561,51 @@ async function restorePersistedDraftSnapshot() {
           : storedEntry.guideNumberOverride || '',
     };
   });
+
+  const storedChannelDraftsByCanonicalId = new Map(
+    Array.isArray(storedChannels.channelDrafts)
+      ? storedChannels.channelDrafts.map(draft => [String(draft.canonicalId || ''), draft])
+      : []
+  );
+
+  state.canonicalChannels = state.canonicalChannels.map(channel => {
+    const storedDraft = storedChannelDraftsByCanonicalId.get(String(channel.id || ''));
+    if (!storedDraft) {
+      return channel;
+    }
+
+    return {
+      ...channel,
+      customNameDraft:
+        typeof storedDraft.customNameDraft === 'string'
+          ? storedDraft.customNameDraft
+          : channel.customNameDraft ?? channel.customName ?? '',
+    };
+  });
+
+  state.preferredStreamDrafts = {
+    ...state.preferredStreamDrafts,
+    ...Object.fromEntries(
+      Array.from(storedChannelDraftsByCanonicalId.entries()).map(([canonicalId, draft]) => [
+        canonicalId,
+        typeof draft?.preferredSourceChannelId === 'string'
+          ? draft.preferredSourceChannelId
+          : getCommittedPreferredStreamSourceChannelId(canonicalId),
+      ])
+    ),
+  };
+
+  state.guideBindingDrafts = {
+    ...state.guideBindingDrafts,
+    ...Object.fromEntries(
+      Array.from(storedChannelDraftsByCanonicalId.entries()).map(([canonicalId, draft]) => [
+        canonicalId,
+        typeof draft?.selectedGuideBindingValue === 'string'
+          ? draft.selectedGuideBindingValue
+          : getCommittedGuideBindingValue(canonicalId),
+      ])
+    ),
+  };
 }
 
 function scheduleAuthExpiry(expiresAt) {
@@ -1183,6 +1684,9 @@ async function loadProviders() {
   try {
     const r = await apiFetch('/api/config/providers');
     const cfg = await r.json();
+    if (!r.ok) {
+      throw new Error(buildApiErrorMessage(cfg, 'Failed to load sources'));
+    }
     state.providers = (cfg.providers && Array.isArray(cfg.providers) ? cfg.providers : []).map(
       normalizeProvider
     );
@@ -1211,16 +1715,16 @@ async function loadChannelAuthoringData() {
     ]);
 
     if (!channelsRes.ok) {
-      throw new Error(channelsJson.error || 'Failed to load canonical channels');
+      throw new Error(buildApiErrorMessage(channelsJson, 'Failed to load canonical channels'));
     }
     if (!bindingsRes.ok) {
-      throw new Error(bindingsJson.error || 'Failed to load channel bindings');
+      throw new Error(buildApiErrorMessage(bindingsJson, 'Failed to load channel bindings'));
     }
     if (!guideBindingsRes.ok) {
-      throw new Error(guideBindingsJson.error || 'Failed to load guide bindings');
+      throw new Error(buildApiErrorMessage(guideBindingsJson, 'Failed to load guide bindings'));
     }
     if (!profilesRes.ok) {
-      throw new Error(profilesJson.error || 'Failed to load output profiles');
+      throw new Error(buildApiErrorMessage(profilesJson, 'Failed to load output profiles'));
     }
 
     state.canonicalChannels = Array.isArray(channelsJson?.channels)
@@ -1234,6 +1738,7 @@ async function loadChannelAuthoringData() {
       ? guideBindingsJson.bindings
       : [];
     state.outputProfiles = Array.isArray(profilesJson?.profiles) ? profilesJson.profiles : [];
+    resetChannelWorkflowDraftState();
 
     const hasSelectedProfile = state.outputProfiles.some(
       profile => profile.slug === state.selectedOutputProfileSlug
@@ -1263,7 +1768,7 @@ async function loadOutputProfileEntries(slug = state.selectedOutputProfileSlug) 
     const response = await apiFetch(`/api/output-profiles/${encodeURIComponent(slug)}/entries`);
     const json = await response.json();
     if (!response.ok) {
-      throw new Error(json.error || 'Failed to load output profile entries');
+      throw new Error(buildApiErrorMessage(json, 'Failed to load output profile entries'));
     }
 
     state.outputProfileEntries = Array.isArray(json?.channels)
@@ -1282,6 +1787,7 @@ async function loadOutputProfileEntries(slug = state.selectedOutputProfileSlug) 
       ...entry,
       canonical: { ...(entry.canonical || {}) },
     }));
+    state.channelRowFeedback = {};
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
@@ -1304,19 +1810,28 @@ async function loadApp() {
 }
 
 async function saveProviders() {
+  if (providerValidation.value.issues.length) {
+    const summary =
+      providerValidation.value.issues.length === 1
+        ? providerValidation.value.issues[0].message
+        : `Fix ${providerValidation.value.issues.length} source issues before saving.`;
+    setStatus(summary, false);
+    message.error(summary);
+    return;
+  }
+
   try {
     state.savingProviders = true;
-    const cleaned = state.providers
-      .filter(p => p.name && p.url)
-      .map(p => {
-        const entry = {
-          name: p.name,
-          url: p.url,
-          type: p.type ? String(p.type).toLowerCase() : 'm3u',
-        };
-        if (p.epg) entry.epg = p.epg;
-        return entry;
-      });
+    const cleaned = state.providers.map(p => {
+      const entry = {
+        name: String(p.name || '').trim(),
+        url: String(p.url || '').trim(),
+        type: p.type ? String(p.type).toLowerCase() : 'm3u',
+      };
+      const epg = String(p.epg || '').trim();
+      if (epg) entry.epg = epg;
+      return entry;
+    });
     const body = { providers: cleaned };
     const r = await apiFetch('/api/config/providers', {
       method: 'PUT',
@@ -1324,7 +1839,7 @@ async function saveProviders() {
       body: JSON.stringify(body),
     });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Save sources failed');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Save sources failed'));
     state.providers = cleaned.map(normalizeProvider);
     savedProvidersDraft.value = cloneProvidersDraft(state.providers);
     setStatus('Sources saved. Reloading...');
@@ -1345,7 +1860,7 @@ async function reloadChannels() {
     setStatus('Reloading channels...');
     const r = await apiFetch('/api/reload/channels', { method: 'POST' });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Reload failed');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Reload failed'));
     setStatus(`Reloaded ${j.channels} channels.`);
     await loadChannelAuthoringData();
     if (state.previewChannels.length) {
@@ -1354,6 +1869,7 @@ async function reloadChannels() {
     message.success('Channel workflows refreshed');
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.reloadingChannels = false;
   }
@@ -1364,11 +1880,12 @@ async function reloadEPG() {
     state.reloadingEPG = true;
     const r = await apiFetch('/api/reload/epg', { method: 'POST' });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Reload EPG failed');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Reload EPG failed'));
     setStatus('EPG reloaded.');
     message.success('EPG reloaded');
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.reloadingEPG = false;
   }
@@ -1384,7 +1901,7 @@ async function saveApp() {
       body: JSON.stringify(body),
     });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Save app failed');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Save app failed'));
     state.app = normalizeAppConfig({
       ...state.app,
       base_url: body.base_url,
@@ -1430,15 +1947,34 @@ function handleProviderCellEdit(event) {
   );
 }
 
-function handleProviderRowAction(event) {
+async function handleProviderRowAction(event) {
   if (event?.detail?.actionKey !== 'remove') {
     return;
   }
 
   const index = state.providers.findIndex(entry => String(entry?._id) === String(event.detail.rowId));
-  if (index >= 0) {
-    removeProvider(index);
+  if (index < 0) {
+    return;
   }
+
+  const provider = state.providers[index];
+  const hasContent = Boolean(
+    String(provider?.name || '').trim() || String(provider?.url || '').trim() || String(provider?.epg || '').trim()
+  );
+  if (hasContent) {
+    const confirmed = await openConfirmDialog({
+      tone: 'warning',
+      title: 'Remove source?',
+      content: `Remove "${provider.name || `Source ${index + 1}`}" from the draft source list? Unsaved changes in this row will be lost.`,
+      positiveText: 'Remove',
+      negativeText: 'Cancel',
+    });
+    if (!confirmed) {
+      return;
+    }
+  }
+
+  removeProvider(index);
 }
 
 async function loadHealth() {
@@ -1446,10 +1982,11 @@ async function loadHealth() {
     state.loadingHealth = true;
     const r = await apiFetch('/api/channel-health');
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to load health');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to load health'));
     state.health = { summary: j.summary || {}, details: j.details || [], meta: j.meta || null };
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.loadingHealth = false;
   }
@@ -1461,11 +1998,12 @@ async function runHealth() {
     setStatus('Running health check...');
     const r = await apiFetch('/api/channel-health/run', { method: 'POST' });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Health run failed');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Health run failed'));
     state.health = { summary: j.summary || {}, details: j.details || [], meta: j.meta || null };
     setStatus('Health check completed');
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.runningHealth = false;
   }
@@ -1476,7 +2014,7 @@ async function loadUsage() {
     state.loadingUsage = true;
     const r = await apiFetch('/api/usage/active');
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to load usage');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to load usage'));
     const list = Array.isArray(j?.active) ? j.active : [];
     // Normalize and sort by startedAt desc
     state.activeUsage = list
@@ -1500,6 +2038,7 @@ async function loadUsage() {
       });
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.loadingUsage = false;
   }
@@ -1510,10 +2049,11 @@ async function loadTasks() {
     state.loadingTasks = true;
     const r = await apiFetch('/api/scheduler/jobs');
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to load tasks');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to load tasks'));
     state.tasks = Array.isArray(j?.jobs) ? j.jobs : [];
   } catch (e) {
     setStatus(e.message, false);
+    message.error(e.message);
   } finally {
     state.loadingTasks = false;
   }
@@ -1527,7 +2067,7 @@ async function runTask(taskName) {
       method: 'POST',
     });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to start task');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to start task'));
     setStatus(`Task "${taskName}" started`);
     message.success(`Task "${taskName}" started`);
     // Poll until task completes
@@ -1609,43 +2149,16 @@ async function changeSelectedOutputProfile(slug) {
   await loadOutputProfileEntries(slug);
 }
 
-async function updatePreferredStream(channelId, sourceChannelId) {
-  if (!sourceChannelId) {
+function updatePreferredStream(channelId, sourceChannelId) {
+  if (typeof sourceChannelId !== 'string' || !sourceChannelId) {
     return;
   }
 
-  try {
-    state.updatingPreferredStreamChannelId = channelId;
-    const response = await apiFetch(
-      `/api/canonical/channels/${encodeURIComponent(channelId)}/preferred-stream`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceChannelId }),
-      }
-    );
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.error || 'Failed to update preferred stream');
-    }
-
-    state.channelBindings = state.channelBindings.map(binding => ({
-      ...binding,
-      isPreferredStream:
-        binding.canonical?.id === channelId
-          ? binding.id === json.binding.id
-          : binding.isPreferredStream,
-    }));
-    if (state.previewChannels.length) {
-      await loadPreviewChannels();
-    }
-    message.success('Preferred stream saved');
-  } catch (e) {
-    setStatus(e.message, false);
-    message.error(e.message);
-  } finally {
-    state.updatingPreferredStreamChannelId = '';
-  }
+  state.preferredStreamDrafts = {
+    ...state.preferredStreamDrafts,
+    [channelId]: sourceChannelId,
+  };
+  clearChannelRowFeedback(channelId);
 }
 
 function updateCanonicalChannelNameDraft(channelId, value) {
@@ -1657,7 +2170,7 @@ function updateCanonicalChannelNameDraft(channelId, value) {
   channel.customNameDraft = typeof value === 'string' ? value : '';
 }
 
-async function saveCanonicalChannelName(channelId) {
+function saveCanonicalChannelName(channelId) {
   const channel = state.canonicalChannels.find(item => item.id === channelId);
   if (!channel) {
     return;
@@ -1674,128 +2187,25 @@ async function saveCanonicalChannelName(channelId) {
     return;
   }
 
-  try {
-    state.updatingCanonicalNameChannelId = channelId;
-    const response = await apiFetch(`/api/canonical/channels/${encodeURIComponent(channelId)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customName: normalizedCustomName }),
-    });
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.error || 'Failed to update channel name');
-    }
-
-    const updatedChannel = {
-      ...json.channel,
-      customNameDraft: json.channel?.customName || '',
-    };
-    state.canonicalChannels = state.canonicalChannels.map(entry =>
-      entry.id === channelId ? updatedChannel : entry
-    );
-    state.channelBindings = state.channelBindings.map(binding =>
-      binding.canonical?.id === channelId
-        ? {
-          ...binding,
-          canonical: {
-            ...binding.canonical,
-            name: updatedChannel.name,
-            baseName: updatedChannel.baseName,
-            customName: updatedChannel.customName,
-          },
-        }
-        : binding
-    );
-    state.guideBindings = state.guideBindings.map(binding =>
-      binding.canonical?.id === channelId
-        ? {
-          ...binding,
-          canonical: {
-            ...binding.canonical,
-            name: updatedChannel.name,
-            baseName: updatedChannel.baseName,
-            customName: updatedChannel.customName,
-          },
-        }
-        : binding
-    );
-    state.outputProfileEntries = state.outputProfileEntries.map(entry =>
-      entry.canonical?.id === channelId
-        ? {
-          ...entry,
-          canonical: {
-            ...entry.canonical,
-            name: updatedChannel.name,
-            baseName: updatedChannel.baseName,
-            customName: updatedChannel.customName,
-          },
-        }
-        : entry
-    );
-    if (state.previewChannels.length) {
-      await loadPreviewChannels();
-    }
-    message.success('Channel name saved');
-  } catch (e) {
-    setStatus(e.message, false);
-    message.error(e.message);
-  } finally {
-    state.updatingCanonicalNameChannelId = '';
-  }
+  clearChannelRowFeedback(channelId);
 }
 
-async function updateGuideBinding(channelId, value) {
+function updateGuideBinding(channelId, value) {
   const binding = parseGuideBindingValue(value);
   if (!binding) {
     return;
   }
 
-  try {
-    state.updatingGuideBindingChannelId = channelId;
-    const response = await apiFetch(
-      `/api/canonical/channels/${encodeURIComponent(channelId)}/guide-binding`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(binding),
-      }
-    );
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.error || 'Failed to update guide binding');
-    }
-
-    state.guideBindings = state.guideBindings.map(entry => {
-      if (entry.canonical?.id !== channelId) {
-        return entry;
-      }
-
-      if (entry.source?.id === json.binding.source.id) {
-        return {
-          ...entry,
-          epgChannelId: json.binding.epgChannelId,
-          priority: json.binding.priority,
-          selected: true,
-        };
-      }
-
-      return {
-        ...entry,
-        selected: false,
-        priority: entry.priority === 0 ? 1 : entry.priority,
-      };
-    });
-    message.success('Guide source saved');
-  } catch (e) {
-    setStatus(e.message, false);
-    message.error(e.message);
-  } finally {
-    state.updatingGuideBindingChannelId = '';
-  }
+  state.guideBindingDrafts = {
+    ...state.guideBindingDrafts,
+    [channelId]: JSON.stringify(binding),
+  };
+  clearChannelRowFeedback(channelId);
 }
 
 function updateOutputEnabled(channelId, enabled) {
   updateOutputProfileEntry(channelId, { enabled });
+  clearChannelRowFeedback(channelId);
 }
 
 function updateGuideNumberOverrideDraft(channelId, value) {
@@ -1822,6 +2232,7 @@ function commitGuideNumberOverride(channelId) {
   updateOutputProfileEntry(channelId, {
     guideNumberOverride: normalized,
   });
+  clearChannelRowFeedback(channelId);
 }
 
 function commitAllGuideNumberOverrides() {
@@ -1846,8 +2257,15 @@ async function createOutputProfile() {
     return;
   }
 
-  const name = window.prompt('Name for the new output profile', 'New Output');
-  if (!name || !name.trim()) {
+  const name = await openTextPromptDialog({
+    title: 'Create output profile',
+    description: 'Choose a name for the new output profile.',
+    label: 'Profile name',
+    placeholder: 'New Output',
+    initialValue: 'New Output',
+    positiveText: 'Create',
+  });
+  if (!name) {
     return;
   }
 
@@ -1860,7 +2278,7 @@ async function createOutputProfile() {
     });
     const json = await response.json();
     if (!response.ok) {
-      throw new Error(json.error || 'Failed to create output profile');
+      throw new Error(buildApiErrorMessage(json, 'Failed to create output profile'));
     }
 
     state.selectedOutputProfileSlug = json.profile.slug;
@@ -1885,11 +2303,15 @@ async function duplicateOutputProfile() {
     return;
   }
 
-  const name = window.prompt(
-    'Name for the duplicated output profile',
-    `${sourceProfile.name} Copy`
-  );
-  if (!name || !name.trim()) {
+  const name = await openTextPromptDialog({
+    title: 'Duplicate output profile',
+    description: `Create a copy of "${sourceProfile.name}" with a new name.`,
+    label: 'Copied profile name',
+    placeholder: `${sourceProfile.name} Copy`,
+    initialValue: `${sourceProfile.name} Copy`,
+    positiveText: 'Duplicate',
+  });
+  if (!name) {
     return;
   }
 
@@ -1906,7 +2328,7 @@ async function duplicateOutputProfile() {
     });
     const json = await response.json();
     if (!response.ok) {
-      throw new Error(json.error || 'Failed to duplicate output profile');
+      throw new Error(buildApiErrorMessage(json, 'Failed to duplicate output profile'));
     }
 
     state.selectedOutputProfileSlug = json.profile.slug;
@@ -1948,7 +2370,7 @@ function deleteSelectedOutputProfile() {
       });
       const json = await response.json();
       if (!response.ok) {
-        throw new Error(json.error || 'Failed to delete output profile');
+        throw new Error(buildApiErrorMessage(json, 'Failed to delete output profile'));
       }
 
       state.selectedOutputProfileSlug = 'default';
@@ -1972,6 +2394,25 @@ async function saveOutputProfileChanges() {
     }
 
     commitAllGuideNumberOverrides();
+    state.canonicalChannels.forEach(channel => {
+      if (channel.id) {
+        saveCanonicalChannelName(channel.id);
+      }
+    });
+
+    const canonicalRowsToSave = channelWorkflowRows.value.filter(
+      row => row.customNameDirty || row.preferredStreamDirty || row.guideBindingDirty
+    );
+    const outputRowsToSave = channelWorkflowRows.value.filter(
+      row => row.outputEntryDirty || row.guideNumberDraftDirty
+    );
+    const dirtyRowIds = Array.from(
+      new Set([...canonicalRowsToSave, ...outputRowsToSave].map(row => row.id))
+    );
+
+    dirtyRowIds.forEach(channelId => {
+      setChannelRowFeedback(channelId, 'accent', 'Saving changes…');
+    });
 
     if (profileMetaDirty.value) {
       const profileResponse = await apiFetch(
@@ -1987,7 +2428,141 @@ async function saveOutputProfileChanges() {
       );
       const profileJson = await profileResponse.json();
       if (!profileResponse.ok) {
-        throw new Error(profileJson.error || 'Failed to save output profile details');
+        throw new Error(buildApiErrorMessage(profileJson, 'Failed to save output profile details'));
+      }
+    }
+
+    for (const row of canonicalRowsToSave) {
+      if (row.customNameDirty) {
+        state.updatingCanonicalNameChannelId = row.id;
+        const response = await apiFetch(`/api/canonical/channels/${encodeURIComponent(row.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customName:
+              typeof row.customNameDraft === 'string' && row.customNameDraft.trim()
+                ? row.customNameDraft.trim()
+                : null,
+          }),
+        });
+        const json = await response.json();
+        if (!response.ok) {
+          throw Object.assign(new Error(buildApiErrorMessage(json, 'Failed to update channel name')), {
+            channelId: row.id,
+          });
+        }
+
+        const updatedChannel = {
+          ...json.channel,
+          customNameDraft: json.channel?.customName || '',
+        };
+        state.canonicalChannels = state.canonicalChannels.map(entry =>
+          entry.id === row.id ? updatedChannel : entry
+        );
+        state.channelBindings = state.channelBindings.map(binding =>
+          binding.canonical?.id === row.id
+            ? {
+              ...binding,
+              canonical: {
+                ...binding.canonical,
+                name: updatedChannel.name,
+                baseName: updatedChannel.baseName,
+                customName: updatedChannel.customName,
+              },
+            }
+            : binding
+        );
+        state.guideBindings = state.guideBindings.map(binding =>
+          binding.canonical?.id === row.id
+            ? {
+              ...binding,
+              canonical: {
+                ...binding.canonical,
+                name: updatedChannel.name,
+                baseName: updatedChannel.baseName,
+                customName: updatedChannel.customName,
+              },
+            }
+            : binding
+        );
+        state.outputProfileEntries = state.outputProfileEntries.map(entry =>
+          entry.canonical?.id === row.id
+            ? {
+              ...entry,
+              canonical: {
+                ...entry.canonical,
+                name: updatedChannel.name,
+                baseName: updatedChannel.baseName,
+                customName: updatedChannel.customName,
+              },
+            }
+            : entry
+        );
+      }
+
+      if (row.preferredStreamDirty) {
+        state.updatingPreferredStreamChannelId = row.id;
+        const response = await apiFetch(
+          `/api/canonical/channels/${encodeURIComponent(row.id)}/preferred-stream`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sourceChannelId: row.preferredSourceChannelId }),
+          }
+        );
+        const json = await response.json();
+        if (!response.ok) {
+          throw Object.assign(
+            new Error(buildApiErrorMessage(json, 'Failed to update preferred stream')),
+            { channelId: row.id }
+          );
+        }
+
+        state.channelBindings = state.channelBindings.map(binding => ({
+          ...binding,
+          isPreferredStream:
+            binding.canonical?.id === row.id ? binding.id === json.binding.id : binding.isPreferredStream,
+        }));
+      }
+
+      if (row.guideBindingDirty) {
+        state.updatingGuideBindingChannelId = row.id;
+        const response = await apiFetch(
+          `/api/canonical/channels/${encodeURIComponent(row.id)}/guide-binding`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parseGuideBindingValue(row.selectedGuideBindingValue)),
+          }
+        );
+        const json = await response.json();
+        if (!response.ok) {
+          throw Object.assign(
+            new Error(buildApiErrorMessage(json, 'Failed to update guide binding')),
+            { channelId: row.id }
+          );
+        }
+
+        state.guideBindings = state.guideBindings.map(entry => {
+          if (entry.canonical?.id !== row.id) {
+            return entry;
+          }
+
+          if (entry.source?.id === json.binding.source.id) {
+            return {
+              ...entry,
+              epgChannelId: json.binding.epgChannelId,
+              priority: json.binding.priority,
+              selected: true,
+            };
+          }
+
+          return {
+            ...entry,
+            selected: false,
+            priority: entry.priority === 0 ? 1 : entry.priority,
+          };
+        });
       }
     }
 
@@ -2009,7 +2584,7 @@ async function saveOutputProfileChanges() {
       );
       const json = await response.json();
       if (!response.ok) {
-        throw new Error(json.error || 'Failed to save output profile channels');
+        throw new Error(buildApiErrorMessage(json, 'Failed to save output profile channels'));
       }
     }
 
@@ -2017,12 +2592,21 @@ async function saveOutputProfileChanges() {
     if (state.previewChannels.length) {
       await loadPreviewChannels();
     }
+    dirtyRowIds.forEach(channelId => {
+      setChannelRowFeedback(channelId, 'success', 'Saved');
+    });
     message.success('Output profile saved');
   } catch (e) {
+    if (e?.channelId) {
+      setChannelRowFeedback(e.channelId, 'danger', e.message);
+    }
     setStatus(e.message, false);
     message.error(e.message);
   } finally {
     state.savingOutputProfile = false;
+    state.updatingCanonicalNameChannelId = '';
+    state.updatingPreferredStreamChannelId = '';
+    state.updatingGuideBindingChannelId = '';
   }
 }
 
@@ -2031,7 +2615,7 @@ async function loadEPGValidation() {
     state.loadingEPGValidation = true;
     const r = await apiFetch('/api/epg/validate');
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to validate EPG');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to validate EPG'));
     state.epgValidation = j;
   } catch (e) {
     setStatus(e.message, false);
@@ -2108,7 +2692,7 @@ async function submitLogin() {
     });
     const json = await response.json();
     if (!response.ok) {
-      state.loginError = json.error || 'Login failed.';
+      state.loginError = buildApiErrorMessage(json, 'Login failed.');
       return;
     }
 
@@ -2164,7 +2748,7 @@ async function submitSetup() {
     });
     const j = await r.json();
     if (!r.ok) {
-      state.setupError = j.error || 'Setup failed.';
+      state.setupError = buildApiErrorMessage(j, 'Setup failed.');
       return;
     }
     state.setupForm = { username: 'admin', password: '', confirm: '' };
@@ -2204,7 +2788,7 @@ async function changePassword() {
     }
     const j = await r.json();
     if (!r.ok) {
-      message.error(j.error || 'Password update failed.');
+      message.error(buildApiErrorMessage(j, 'Password update failed.'));
       return;
     }
     state.passwordForm = { current: '', newPass: '', confirm: '' };
@@ -2221,7 +2805,7 @@ async function loadBackups() {
     state.loadingBackups = true;
     const r = await apiFetch('/api/config/backups');
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to load backups');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to load backups'));
     state.backups = Array.isArray(j?.backups) ? j.backups : [];
   } catch (e) {
     setStatus(e.message, false);
@@ -2236,7 +2820,7 @@ async function createBackup() {
     state.creatingBackup = true;
     const r = await apiFetch('/api/config/backup', { method: 'POST' });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to create backup');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to create backup'));
     message.success(`Backup created: ${j.name}`);
     await loadBackups();
   } catch (e) {
@@ -2262,7 +2846,7 @@ async function restoreBackup(name) {
       method: 'POST',
     });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to restore backup');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to restore backup'));
     message.success(`Restored backup: ${name}`);
     await Promise.all([loadProviders(), loadApp(), loadChannelAuthoringData(), loadBackups()]);
     if (state.previewChannels.length) {
@@ -2283,8 +2867,8 @@ async function downloadBackup(name) {
       let errorMessage = 'Failed to download backup';
       try {
         const j = await r.json();
-        if (j && typeof j === 'object' && j.error) {
-          errorMessage = j.error;
+        if (j && typeof j === 'object') {
+          errorMessage = buildApiErrorMessage(j, errorMessage);
         }
       } catch {
         // Ignore JSON parse errors and fall back to generic message
@@ -2324,7 +2908,7 @@ async function deleteBackup(name) {
       method: 'DELETE',
     });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Failed to delete backup');
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to delete backup'));
     message.success(`Deleted backup: ${name}`);
     await loadBackups();
   } catch (e) {
@@ -2359,7 +2943,7 @@ async function loadPreviewChannels() {
     const r = await apiFetch(`/api/output-profiles/${encodeURIComponent(slug)}/channels`);
     const j = await r.json();
     if (!r.ok) {
-      throw new Error(j.error || 'Failed to load preview channels');
+      throw new Error(buildApiErrorMessage(j, 'Failed to load preview channels'));
     }
     state.previewChannels = Array.isArray(j?.channels) ? j.channels : [];
   } catch (e) {
@@ -2931,25 +3515,6 @@ watch(
   }
 );
 
-watch(
-  () => [
-    state.tab,
-    appDirty.value ? cloneAppDraft(state.app) : null,
-    providersDirty.value ? cloneProvidersDraft(state.providers) : null,
-    profileDirty.value
-      ? cloneOutputProfileDraftState({
-        selectedOutputProfileSlug: state.selectedOutputProfileSlug,
-        outputProfileDraft: state.outputProfileDraft,
-        outputProfileEntries: state.outputProfileEntries,
-      })
-      : null,
-  ],
-  () => {
-    persistDraftSnapshot();
-  },
-  { deep: true }
-);
-
 function startUsagePolling() {
   if (_usagePollInterval) {
     return;
@@ -3004,6 +3569,8 @@ const {
   loadingHealth,
   runningHealth,
   savingProviders,
+  status,
+  statusOk,
   reloadingChannels,
   reloadingEPG,
   savingApp,
@@ -3090,14 +3657,56 @@ const outputProfileEntriesDirty = computed(
 );
 
 const guideNumberDraftDirty = computed(() => hasGuideNumberDraftChanges(state.outputProfileEntries));
+const channelWorkflowDraftDirty = computed(
+  () =>
+    JSON.stringify(normalizeChannelWorkflowDraftsForComparison(buildCurrentChannelWorkflowDrafts())) !==
+    JSON.stringify(
+      normalizeChannelWorkflowDraftsForComparison(
+        state.canonicalChannels.map(channel => ({
+          canonicalId: channel.id,
+          customNameDraft: channel.customName || '',
+          preferredSourceChannelId: getCommittedPreferredStreamSourceChannelId(channel.id),
+          selectedGuideBindingValue: getCommittedGuideBindingValue(channel.id),
+        }))
+      )
+    )
+);
 
 const profileDirty = computed(
-  () => profileMetaDirty.value || outputProfileEntriesDirty.value || guideNumberDraftDirty.value
+  () =>
+    profileMetaDirty.value ||
+    outputProfileEntriesDirty.value ||
+    guideNumberDraftDirty.value ||
+    channelWorkflowDraftDirty.value
 );
 
 const appTabLabel = computed(() => buildDirtyTabLabel('App', appDirty.value));
 const providersTabLabel = computed(() => buildDirtyTabLabel('Sources', providersDirty.value));
 const channelsTabLabel = computed(() => buildDirtyTabLabel('Channels', profileDirty.value));
+const providerValidation = computed(() => ({
+  issues: state.providers.flatMap((provider, index) => getProviderValidationIssues(provider, index)),
+}));
+const providersCanSave = computed(() => providerValidation.value.issues.length === 0);
+
+watch(
+  () => [
+    state.tab,
+    appDirty.value ? cloneAppDraft(state.app) : null,
+    providersDirty.value ? cloneProvidersDraft(state.providers) : null,
+    profileDirty.value
+      ? cloneOutputProfileDraftState({
+        selectedOutputProfileSlug: state.selectedOutputProfileSlug,
+        outputProfileDraft: state.outputProfileDraft,
+        outputProfileEntries: state.outputProfileEntries,
+        channelDrafts: buildCurrentChannelWorkflowDrafts(),
+      })
+      : null,
+  ],
+  () => {
+    persistDraftSnapshot();
+  },
+  { deep: true }
+);
 
 function getPublicBaseUrl() {
   const configuredBaseUrl = String(state.app.base_url || '').trim();
@@ -3239,6 +3848,16 @@ function hasAssignedGuideNumber(outputEntry, channel) {
   );
 }
 
+function isOutputProfileEntryDirty(channelId, outputEntry) {
+  const savedEntry = savedOutputProfileEntries.value.find(entry => entry.canonical?.id === channelId);
+
+  return (
+    Boolean(outputEntry?.enabled) !== Boolean(savedEntry?.enabled) ||
+    (outputEntry?.position ?? 0) !== (savedEntry?.position ?? 0) ||
+    String(outputEntry?.guideNumberOverride || '') !== String(savedEntry?.guideNumberOverride || '')
+  );
+}
+
 const channelWorkflowRows = computed(() => {
   const bindingsByCanonicalId = new Map();
   const guideBindingsByCanonicalId = new Map();
@@ -3304,6 +3923,32 @@ const channelWorkflowRows = computed(() => {
         })
         .filter(Boolean);
 
+      const customNameDirty =
+        (channel.customNameDraft ?? '').trim() !== String(channel.customName || '').trim();
+      const preferredStreamDirty =
+        (getDraftPreferredStreamSourceChannelId(channel.id) || '') !==
+        (preferredBinding?.sourceChannel?.id || '');
+      const guideBindingDirty =
+        (getDraftGuideBindingValue(channel.id) || '') !==
+        (selectedGuideBinding
+          ? JSON.stringify({
+            sourceId: selectedGuideBinding.source?.id || '',
+            epgChannelId: selectedGuideBinding.epgChannelId || '',
+          })
+          : '');
+      const outputEntryDirty = isOutputProfileEntryDirty(channel.id, outputEntry);
+      const guideNumberDraftDirty =
+        String(outputEntry?.guideNumberOverrideDraft ?? '') !==
+        String(outputEntry?.guideNumberOverride ?? '');
+      const hasDraftChanges =
+        customNameDirty ||
+        preferredStreamDirty ||
+        guideBindingDirty ||
+        outputEntryDirty ||
+        guideNumberDraftDirty;
+      const rowFeedbackTone = state.channelRowFeedback[channel.id]?.tone || '';
+      const rowFeedbackLabel = state.channelRowFeedback[channel.id]?.label || '';
+
       return {
         id: channel.id,
         name: channel.name,
@@ -3320,7 +3965,8 @@ const channelWorkflowRows = computed(() => {
           )
           .join(', '),
         sourceGuideReferencesSummary: sourceGuideReferences.join(', '),
-        preferredSourceChannelId: preferredBinding?.sourceChannel?.id || null,
+        preferredSourceChannelId: getDraftPreferredStreamSourceChannelId(channel.id) || null,
+        committedPreferredSourceChannelId: preferredBinding?.sourceChannel?.id || null,
         preferredStreamOptions: sortedBindings.map(binding => ({
           label: `${binding.sourceChannel?.source || 'Unknown'} - ${binding.sourceChannel?.name || 'Unnamed channel'}${
             binding.sourceChannel?.sourceGuideNumber || binding.sourceChannel?.guideNumber
@@ -3330,7 +3976,8 @@ const channelWorkflowRows = computed(() => {
           value: binding.sourceChannel?.id || '',
         })),
         guideBindingOptions,
-        selectedGuideBindingValue: selectedGuideBinding
+        selectedGuideBindingValue: getDraftGuideBindingValue(channel.id) || null,
+        committedGuideBindingValue: selectedGuideBinding
           ? JSON.stringify({
             sourceId: selectedGuideBinding.source?.id || '',
             epgChannelId: selectedGuideBinding.epgChannelId || '',
@@ -3347,6 +3994,16 @@ const channelWorkflowRows = computed(() => {
         guideDisplaySource: guideDisplay.source,
         guideDisplayWarning: guideDisplay.warning,
         guideHelpText: guideDisplay.helpText,
+        customNameDirty,
+        preferredStreamDirty,
+        guideBindingDirty,
+        outputEntryDirty,
+        guideNumberDraftDirty,
+        hasDraftChanges,
+        rowFeedbackTone,
+        rowFeedbackLabel,
+        rowStatusTone: rowFeedbackTone || (hasDraftChanges ? 'warning' : 'neutral'),
+        rowStatusLabel: rowFeedbackLabel || (hasDraftChanges ? 'Unsaved changes' : 'Saved'),
       };
     })
     .sort((left, right) => {
@@ -3503,6 +4160,16 @@ const providerColumns = [
     actions: [{ key: 'remove', label: 'Remove', variant: 'ghost' }],
   },
 ];
+
+async function confirmRemoveOAuthClient(client) {
+  return openConfirmDialog({
+    tone: 'warning',
+    title: 'Remove OAuth client?',
+    content: `Remove "${client?.client_name || client?.client_id || 'this OAuth client'}" from the draft app settings? Unsaved changes in this client will be lost.`,
+    positiveText: 'Remove',
+    negativeText: 'Cancel',
+  });
+}
 
 /**
  * Format a backup name (e.g. "backup-2024-01-15T14-30-00") into a human-readable
@@ -3706,6 +4373,17 @@ const previewColumns = [
     actions: [{ key: 'watch', label: 'Watch', icon: 'play', variant: 'ghost' }],
   },
 ];
+
+const previewDebugFieldCount = computed(() => {
+  const debug = state.playerDebug;
+  if (!debug) {
+    return 0;
+  }
+
+  return 4 + (debug.hlsError ? 1 : 0);
+});
+
+const previewDebugEventCount = computed(() => state.playerDebug?.events?.length || 0);
 </script>
 
 <style>
@@ -3798,6 +4476,18 @@ body {
   place-items: center;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .workspace-frame {
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -3824,6 +4514,14 @@ body {
   margin: 0 0 1rem;
   opacity: 0.8;
   line-height: 1.5;
+}
+
+.login-helper-copy,
+.setup-helper-copy {
+  margin: 0 0 1rem;
+  opacity: 0.72;
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 
 .login-form {
@@ -3897,6 +4595,33 @@ body {
   color: var(--danger);
 }
 
+.status-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--success) 40%, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+
+.status-banner.error {
+  border-color: color-mix(in srgb, var(--danger) 55%, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.status-banner-label {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+.status-banner-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .compact-button {
   --cindor-button-min-height: 30px;
   --cindor-button-padding-inline: var(--space-3);
@@ -3922,8 +4647,44 @@ body {
 }
 
 .toolbar-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
   opacity: 0.6;
   font-size: 0.9em;
+}
+
+.pane-toolbar,
+.preview-toolbar {
+  margin-bottom: 0.75rem;
+}
+
+.tab-empty-state {
+  opacity: 0.6;
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.tab-empty-copy {
+  opacity: 0.6;
+}
+
+.tab-meta-copy {
+  opacity: 0.75;
+  margin-bottom: 0.5rem;
+}
+
+.preview-profile-select {
+  min-width: 220px;
+}
+
+.preview-search-input {
+  min-width: 260px;
+}
+
+.table-scroll-shell {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .dialog-body {
@@ -3949,11 +4710,71 @@ body {
   flex-wrap: wrap;
 }
 
+.dialog-toolbar-label {
+  opacity: 0.7;
+  font-size: 0.85em;
+  flex-shrink: 0;
+}
+
 .dialog-code {
   flex: 1;
   font-size: 0.78em;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   opacity: 0.85;
+}
+
+.dialog-link {
+  font-size: 0.8em;
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.preview-player-shell {
+  position: relative;
+  margin-bottom: 1rem;
+  background: #000;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.preview-player-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  text-align: center;
+  overflow-y: auto;
+}
+
+.preview-player-video {
+  width: 100%;
+  max-height: 360px;
+  display: block;
+}
+
+.preview-player-help {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.preview-player-error-icon {
+  font-size: 1.5rem;
+}
+
+.preview-player-error-text {
+  font-weight: 600;
+}
+
+.preview-player-error-action {
+  margin-top: 0.25rem;
 }
 
 .debug-panel {
@@ -3978,11 +4799,56 @@ body {
   text-align: left;
 }
 
+.debug-toggle-label {
+  font-size: 0.8em;
+  opacity: 0.75;
+}
+
+.debug-toggle-meta {
+  margin-left: 0.5em;
+  opacity: 0.6;
+}
+
+.debug-toggle-state {
+  font-size: 0.75em;
+  opacity: 0.5;
+}
+
 .debug-grid {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 0.2rem 0.6rem;
   margin-bottom: 0.5rem;
+}
+
+.debug-grid-item {
+  display: contents;
+}
+
+.debug-grid-label {
+  opacity: 0.6;
+}
+
+.debug-panel-body {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.75em;
+  opacity: 0.85;
+}
+
+.debug-code {
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.debug-events-label {
+  margin-bottom: 0.4rem;
+  opacity: 0.6;
+  font-size: 0.9em;
+}
+
+.debug-actions {
+  margin-top: 0.5rem;
 }
 
 .debug-pre {
@@ -3991,11 +4857,91 @@ body {
   max-height: 140px;
   overflow-y: auto;
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   background: rgba(0, 0, 0, 0.3);
   padding: 0.4rem;
   border-radius: 3px;
   margin: 0;
+}
+
+.guide-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.75rem;
+}
+
+.guide-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.guide-row {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.guide-time {
+  opacity: 0.6;
+  font-size: 0.85em;
+  white-space: nowrap;
+  min-width: 85px;
+}
+
+.guide-entry {
+  flex: 1;
+  min-width: 0;
+}
+
+.guide-description {
+  font-size: 0.8em;
+  opacity: 0.55;
+  margin-top: 0.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide-state-copy {
+  opacity: 0.6;
+  font-size: 0.9em;
+}
+
+.guide-state-copy.empty {
+  opacity: 0.5;
+}
+
+.guide-title-text {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.guide-program-title {
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+@media (max-width: 1100px) {
+  .admin-content {
+    padding: 18px;
+  }
+
+  .admin-tabs {
+    padding: 18px;
+  }
+
+  .preview-toolbar :deep(cindor-select) {
+    flex: 1 1 220px;
+  }
+
+  .preview-toolbar :deep(cindor-input) {
+    flex: 1 1 260px;
+  }
+
+  .dialog-body {
+    min-width: min(680px, 92vw);
+  }
 }
 
 @media (max-width: 900px) {
@@ -4012,6 +4958,11 @@ body {
     padding: 16px;
   }
 
+  .status-banner {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
   .admin-tabs::part(list) {
     flex-wrap: wrap;
   }
@@ -4022,8 +4973,109 @@ body {
     text-align: center;
   }
 
+  .preview-toolbar > * {
+    width: 100%;
+  }
+
+  .preview-toolbar :deep(cindor-select),
+  .preview-toolbar :deep(cindor-input),
+  .preview-toolbar :deep(cindor-button) {
+    width: 100%;
+  }
+
+  .pane-toolbar > * {
+    width: 100%;
+  }
+
+  .pane-toolbar :deep(cindor-button) {
+    width: 100%;
+  }
+
+  .toolbar-count {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .compact-button {
+    --cindor-button-min-height: 40px;
+  }
+
+  .debug-toggle {
+    padding: 0.55rem 0.75rem;
+  }
+
+  .debug-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-toolbar {
+    align-items: stretch;
+  }
+
+  .dialog-toolbar-label,
+  .dialog-link {
+    width: 100%;
+  }
+
+  .guide-row {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .guide-time {
+    min-width: 0;
+  }
+
+  .guide-description {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
   .dialog-body {
     min-width: min(100%, 90vw);
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-content {
+    padding: 10px;
+  }
+
+  .admin-tabs {
+    padding: 12px;
+  }
+
+  .admin-tabs::part(tab) {
+    flex-basis: 100%;
+  }
+
+  .dialog-body {
+    gap: 0.75rem;
+  }
+
+  .preview-player-video {
+    max-height: 240px;
+  }
+
+  .preview-player-overlay {
+    padding: 1rem !important;
+  }
+
+  .dialog-link,
+  .dialog-toolbar-label {
+    font-size: 0.78em;
+  }
+
+  .dialog-code {
+    width: 100%;
+    min-width: 0;
+    font-size: 0.74em;
+  }
+
+  .guide-list {
+    max-height: 260px;
   }
 }
 </style>

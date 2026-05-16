@@ -4,6 +4,7 @@ import {
   cloneOutputProfileDraftState,
   hasGuideNumberDraftChanges,
   normalizeAppDraftForComparison,
+  normalizeChannelWorkflowDraftsForComparison,
   normalizeOutputProfileEntriesForComparison,
   normalizeProvidersForComparison,
 } from '../../admin/src/utils/admin-draft-state.js';
@@ -110,6 +111,38 @@ describe('admin draft state helpers', () => {
     ]);
   });
 
+  it('normalizes channel workflow drafts without trimming custom channel names', () => {
+    const result = normalizeChannelWorkflowDraftsForComparison([
+      {
+        canonicalId: '23.1',
+        customNameDraft: '  My Channel  ',
+        preferredSourceChannelId: 'source-a',
+        selectedGuideBindingValue: 'guide-a',
+      },
+      {
+        canonicalId: '10.1',
+        customNameDraft: null,
+        preferredSourceChannelId: '',
+        selectedGuideBindingValue: '',
+      },
+    ]);
+
+    expect(result).to.deep.equal([
+      {
+        canonicalId: '10.1',
+        customNameDraft: '',
+        preferredSourceChannelId: '',
+        selectedGuideBindingValue: '',
+      },
+      {
+        canonicalId: '23.1',
+        customNameDraft: '  My Channel  ',
+        preferredSourceChannelId: 'source-a',
+        selectedGuideBindingValue: 'guide-a',
+      },
+    ]);
+  });
+
   it('clones output profile draft state for storage', () => {
     const result = cloneOutputProfileDraftState({
       selectedOutputProfileSlug: 'sports',
@@ -137,6 +170,7 @@ describe('admin draft state helpers', () => {
           guideNumberOverrideDraft: '500',
         },
       ],
+      channelDrafts: [],
     });
   });
 });
