@@ -327,6 +327,7 @@
                 </div>
                 <CindorDataTable
                   row-id-key="previewKey"
+                  density="compact"
                   :columns="previewColumns"
                   :rows="previewTableRows"
                   @row-action="handlePreviewRowAction"
@@ -387,7 +388,12 @@
                 aria-label="Health results table"
                 :aria-describedby="formattedHealthUpdated ? 'health-updated-summary health-count-summary' : 'health-count-summary'"
               >
-                <CindorDataTable row-id-key="id" :columns="healthColumns" :rows="healthDetails" />
+                <CindorDataTable
+                  row-id-key="id"
+                  density="compact"
+                  :columns="healthColumns"
+                  :rows="healthDetails"
+                />
               </div>
               <div id="health-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
                 No health data yet. Run a health check after your sources and channels are configured.
@@ -413,11 +419,22 @@
                   {{ loadingUsage ? 'Loading...' : 'Refresh' }}
                 </CindorButton>
               </CindorStack>
-              <div v-if="activeUsage.length" class="table-scroll-shell" role="region" aria-label="Active usage table" aria-describedby="usage-count-summary">
+              <div
+                v-if="activeUsage.length"
+                class="table-scroll-shell"
+                role="region"
+                aria-label="Active usage table"
+                aria-describedby="usage-count-summary"
+              >
                 <div id="usage-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
                   Showing {{ activeUsage.length }} active viewer{{ activeUsage.length === 1 ? '' : 's' }}.
                 </div>
-                <CindorDataTable row-id-key="key" :columns="usageColumns" :rows="activeUsage" />
+                <CindorDataTable
+                  row-id-key="key"
+                  density="compact"
+                  :columns="usageColumns"
+                  :rows="activeUsage"
+                />
               </div>
               <div id="usage-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">No active viewers detected.</div>
             </CindorTabPanel>
@@ -441,12 +458,19 @@
                   {{ loadingTasks ? 'Loading...' : 'Refresh' }}
                 </CindorButton>
               </CindorStack>
-              <div v-if="tasks.length" class="table-scroll-shell" role="region" aria-label="Scheduled tasks table" aria-describedby="tasks-count-summary">
+              <div
+                v-if="tasks.length"
+                class="table-scroll-shell"
+                role="region"
+                aria-label="Scheduled tasks table"
+                aria-describedby="tasks-count-summary"
+              >
                 <div id="tasks-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
                   Showing {{ tasks.length }} scheduled task{{ tasks.length === 1 ? '' : 's' }}.
                 </div>
                 <CindorDataTable
                   row-id-key="name"
+                  density="compact"
                   :columns="taskColumns"
                   :rows="tasks"
                   @row-action="handleTaskRowAction"
@@ -486,12 +510,19 @@
                   {{ loadingBackups ? 'Loading...' : 'Refresh' }}
                 </CindorButton>
               </CindorStack>
-              <div v-if="backups.length" class="table-scroll-shell" role="region" aria-label="Backups table" aria-describedby="backups-count-summary">
+              <div
+                v-if="backups.length"
+                class="table-scroll-shell"
+                role="region"
+                aria-label="Backups table"
+                aria-describedby="backups-count-summary"
+              >
                 <div id="backups-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
                   Showing {{ backups.length }} backup{{ backups.length === 1 ? '' : 's' }}.
                 </div>
                 <CindorDataTable
                   row-id-key="name"
+                  density="compact"
                   :columns="backupColumns"
                   :rows="backups"
                   @row-action="handleBackupRowAction"
@@ -4963,16 +4994,6 @@ body {
     gap: 0.35rem;
   }
 
-  .admin-tabs::part(list) {
-    flex-wrap: wrap;
-  }
-
-  .admin-tabs::part(tab) {
-    flex: 1 1 140px;
-    min-width: 0;
-    text-align: center;
-  }
-
   .preview-toolbar > * {
     width: 100%;
   }
@@ -5036,6 +5057,7 @@ body {
   .dialog-body {
     min-width: min(100%, 90vw);
   }
+
 }
 
 @media (max-width: 700px) {
@@ -5045,10 +5067,6 @@ body {
 
   .admin-tabs {
     padding: 12px;
-  }
-
-  .admin-tabs::part(tab) {
-    flex-basis: 100%;
   }
 
   .dialog-body {
@@ -5077,5 +5095,6 @@ body {
   .guide-list {
     max-height: 260px;
   }
+
 }
 </style>

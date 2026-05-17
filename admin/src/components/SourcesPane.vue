@@ -272,6 +272,7 @@
       </div>
       <CindorDataTable
         row-id-key="_id"
+        density="compact"
         :columns="providerColumns"
         :rows="providers"
         @cell-edit="$emit('cell-edit', $event)"
@@ -576,8 +577,7 @@ const epgWarningsSummary = computed(
     padding: 20px 20px 20px;
   }
 
-  .sources-toolbar :deep(cindor-button),
-  .tab-panel :deep(cindor-data-table) {
+  .sources-toolbar :deep(cindor-button) {
     width: 100%;
   }
 
@@ -590,9 +590,5 @@ const epgWarningsSummary = computed(
     grid-template-columns: 1fr;
   }
 
-  .tab-panel :deep(cindor-data-table) {
-    display: block;
-    overflow-x: auto;
-  }
 }
 </style>
