@@ -27,8 +27,8 @@
     "format:check": "prettier --check .",
     "serve": "node index.js",
     "serve:dev": "node --watch --watch-preserve-output scripts/serve-dev.js",
-    "admin:dev": "npm run dev --prefix admin",
-    "admin:build": "npm run build --prefix admin",
+    "admin:dev": "npm --prefix admin run dev --",
+    "admin:build": "npm --prefix admin run build",
     "dev": "concurrently \"npm:serve:dev\" \"npm:admin:dev\""
   },
   "dependencies": {
