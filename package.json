@@ -32,9 +32,9 @@
     "dev": "concurrently \"npm:serve:dev\" \"npm:admin:dev\""
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "archiver": "^7.0.1",
-    "axios": "^1.15.0",
+    "axios": "^1.16.1",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.9.0",
     "chalk": "^5.4.1",
@@ -42,7 +42,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.1",
     "express-session": "^1.19.0",
-    "fast-xml-parser": "^5.7.0",
+    "fast-xml-parser": "^5.8.0",
     "joi": "^18.0.2",
     "node-cron": "^4.2.1",
     "node-ssdp": "^1.0.0",
