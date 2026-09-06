@@ -87,6 +87,22 @@ describe('parseAll SQLite persistence', () => {
       },
     ]);
 
+    // The snapshot feeds playback consumers (including MCP), so it must carry
+    // the durable source_channels id rather than requiring callers to rebuild
+    // a route from editable source/name strings.
+    const snapshot = JSON.parse(
+      databaseModule.get('SELECT channels_json FROM channel_snapshots WHERE id = 1').channels_json
+    );
+    const sourceIdsByName = new Map(
+      databaseModule
+        .all('SELECT id, name FROM source_channels WHERE source_id = ?', [source.id])
+        .map(row => [row.name, row.id])
+    );
+    expect(snapshot).to.have.lengthOf(2);
+    for (const channel of snapshot) {
+      expect(channel.sourceChannelId).to.equal(sourceIdsByName.get(channel.name));
+    }
+
     const syncRun = databaseModule.get(
       'SELECT kind, status, error FROM source_sync_runs WHERE source_id = ? ORDER BY started_at DESC LIMIT 1',
       [source.id]

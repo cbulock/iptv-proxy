@@ -17,9 +17,15 @@ const transcodeLimiter = RateLimit({
 
 // A request rate is not a bound on the amount of work currently running. Keep
 // this intentionally small: every worker encodes video and can consume a core.
-const MAX_ACTIVE_WORKERS = Number.parseInt(process.env.TRANSCODE_MAX_WORKERS || '3', 10);
-const STARTUP_TIMEOUT_MS = Number.parseInt(process.env.TRANSCODE_STARTUP_TIMEOUT_MS || '15000', 10);
-const IDLE_TIMEOUT_MS = Number.parseInt(process.env.TRANSCODE_IDLE_TIMEOUT_MS || '30000', 10);
+function positiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const MAX_ACTIVE_WORKERS = positiveInteger(process.env.TRANSCODE_MAX_WORKERS, 3);
+const STARTUP_TIMEOUT_MS = positiveInteger(process.env.TRANSCODE_STARTUP_TIMEOUT_MS, 15000);
+const IDLE_TIMEOUT_MS = positiveInteger(process.env.TRANSCODE_IDLE_TIMEOUT_MS, 30000);
+const KILL_GRACE_MS = 5000;
 const MAX_STDERR_BYTES = 16 * 1024;
 const activeWorkers = new Set();
 
@@ -101,10 +107,23 @@ export function setupTranscodeRoutes(app) {
       'pipe:1',
     ];
 
-    const ffmpegProcess = spawn(ffmpegCommand(), ffmpegArgs, {
-      shell: false,
-      windowsHide: true,
-    });
+    let ffmpegProcess;
+    try {
+      ffmpegProcess = spawn(ffmpegCommand(), ffmpegArgs, {
+        shell: false,
+        windowsHide: true,
+      });
+    } catch (err) {
+      // child_process.spawn normally reports failures through its error event,
+      // but can throw synchronously for OS policy failures and invalid commands.
+      console.warn('[transcode] spawn error %s/%s: %s', source, name, err.message);
+      if (err.code === 'ENOENT') {
+        return res.status(503).json({
+          error: 'ffmpeg is not installed on this server. Install ffmpeg to enable server-side transcoding.',
+        });
+      }
+      return res.status(502).json({ error: 'Transcoding failed' });
+    }
     activeWorkers.add(ffmpegProcess);
 
     res.setHeader('Content-Type', 'video/MP2T');
@@ -118,18 +137,27 @@ export function setupTranscodeRoutes(app) {
     let stderrText = '';
     let cleanedUp = false;
     let idleTimer;
+    let forceKillTimer;
 
     const stopWorker = signal => {
-      if (ffmpegProcess.exitCode === null && !ffmpegProcess.killed) ffmpegProcess.kill(signal);
+      if (ffmpegProcess.exitCode !== null || ffmpegProcess.killed) return;
+      ffmpegProcess.kill(signal);
+      // SIGTERM is advisory on Windows. Escalate so a stalled upstream cannot
+      // retain an expensive encoder worker indefinitely.
+      forceKillTimer = setTimeout(() => {
+        if (ffmpegProcess.exitCode === null && !ffmpegProcess.killed) ffmpegProcess.kill('SIGKILL');
+      }, KILL_GRACE_MS);
     };
     const clearTimers = () => {
       clearTimeout(startupTimer);
       clearTimeout(idleTimer);
+      clearTimeout(forceKillTimer);
     };
     const resetIdleTimer = () => {
       clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         console.warn('[transcode] ffmpeg idle timeout for %s/%s', source, name);
+        if (!res.writableEnded) res.end();
         stopWorker('SIGTERM');
       }, IDLE_TIMEOUT_MS);
     };
@@ -143,6 +171,7 @@ export function setupTranscodeRoutes(app) {
     const startupTimer = setTimeout(() => {
       if (!responseStarted) {
         console.warn('[transcode] ffmpeg startup timeout for %s/%s', source, name);
+        if (!res.headersSent) res.status(504).json({ error: 'Transcoding startup timed out' });
         stopWorker('SIGTERM');
       }
     }, STARTUP_TIMEOUT_MS);

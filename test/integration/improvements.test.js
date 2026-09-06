@@ -7,6 +7,7 @@ import os from 'os';
 import path from 'path';
 import sinon from 'sinon';
 import { closeDatabase } from '../../libs/database.js';
+import getBaseUrl from '../../libs/getBaseUrl.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -560,7 +561,58 @@ describe('Rate limiting', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 6. GET /channels?mapped_only=true
+// 6. Reverse proxy trust
+// ──────────────────────────────────────────────────────────────────────────────
+describe('Reverse proxy trust', () => {
+  async function requestIdentity(trustedProxies) {
+    const app = express();
+    app.set('trust proxy', trustedProxies);
+    app.get('/identity', (req, res) => {
+      res.json({
+        ip: req.ip,
+        protocol: req.protocol,
+        host: req.host,
+        baseUrl: getBaseUrl(req),
+      });
+    });
+
+    const { server, baseUrl } = await startServer(app);
+    try {
+      return await axios.get(`${baseUrl}/identity`, {
+        headers: {
+          'X-Forwarded-For': '203.0.113.50',
+          'X-Forwarded-Host': 'forged.example.test',
+          'X-Forwarded-Proto': 'https',
+        },
+      });
+    } finally {
+      await stopServer(server);
+    }
+  }
+
+  it('ignores forged forwarded identity, host, and protocol headers by default', async () => {
+    const response = await requestIdentity(false);
+
+    expect(response.data.ip).to.equal('127.0.0.1');
+    expect(response.data.protocol).to.equal('http');
+    expect(response.data.host).to.match(/^127\.0\.0\.1:\d+$/);
+    expect(response.data.baseUrl).to.match(/^http:\/\/localhost:\d+$/);
+  });
+
+  it('honors forwarded headers when the direct peer is an explicitly trusted proxy', async () => {
+    const response = await requestIdentity(['127.0.0.1']);
+
+    expect(response.data).to.deep.equal({
+      ip: '203.0.113.50',
+      protocol: 'https',
+      host: 'forged.example.test',
+      baseUrl: 'https://forged.example.test',
+    });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 7. GET /channels?mapped_only=true
 // ──────────────────────────────────────────────────────────────────────────────
 describe('GET /channels?mapped_only=true', () => {
   let tmpDir;
@@ -657,7 +709,7 @@ describe('GET /channels?mapped_only=true', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 7. GET /channels?mapped_only=true — HDHomeRun channel filtering
+// 8. GET /channels?mapped_only=true — HDHomeRun channel filtering
 // ──────────────────────────────────────────────────────────────────────────────
 describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
   let tmpDir;

@@ -3115,7 +3115,7 @@ async function setupVideoPlayer() {
     source: ch.source,
     hdhomerun: Boolean(ch.hdhomerun),
     streamUrl,
-    transcodeUrl: `/transcode/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`,
+    transcodeUrl: getPreviewChannelRoute('/transcode', ch),
     probeUrl: null,
     probeResult: null,
     playerMode: null,
@@ -3163,7 +3163,7 @@ async function setupVideoPlayer() {
   // The probe runs in parallel with HLS.js so it does not add latency when the
   // codecs are already browser-compatible.
   const probeChannel = state.previewWatchingChannel;
-  const probeBase = `/api/stream-probe/${encodeURIComponent(probeChannel?.source || '')}/${encodeURIComponent(probeChannel?.name || '')}`;
+  const probeBase = getPreviewChannelRoute('/api/stream-probe', probeChannel);
   // Do NOT append ?streamMode=hls for HDHomeRun — see comment above.
   const probeUrl = probeBase;
   dbg.probeUrl = probeUrl;
@@ -4271,7 +4271,7 @@ const previewTableRows = computed(() =>
 const previewStreamUrl = computed(() => {
   const ch = state.previewWatchingChannel;
   if (!ch) return '';
-  const base = `/stream/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+  const base = getPreviewChannelRoute('/stream', ch);
   // HDHomeRun OTA broadcasts use MPEG-2 video and AC-3 audio — codecs not supported
   // by browser MSE.  Append ?streamMode=hls so the server requests the HLS variant
   // from the HDHomeRun device.  Note: HLS mode wraps the MPEG-TS in an HLS playlist
@@ -4285,8 +4285,23 @@ const previewTranscodeUrl = computed(() => {
   if (!ch) return '';
   // Server-side transcoding endpoint — converts MPEG-2/AC-3 MPEG-TS to H.264/AAC
   // using ffmpeg so the browser can play the stream natively via mpegts.js.
-  return `/transcode/${encodeURIComponent(ch.source || '')}/${encodeURIComponent(ch.name || '')}`;
+  return getPreviewChannelRoute('/transcode', ch);
 });
+
+/**
+ * Build a playback route for a persisted source channel.  Source and display
+ * names are editable, while sourceChannelId is the database identity exposed
+ * by output profiles, so prefer it whenever it is available.  The name route
+ * remains the compatibility fallback for preview data created from a temporary
+ * (not-yet-persisted) configuration.
+ */
+function getPreviewChannelRoute(prefix, channel) {
+  const sourceChannelId = String(channel?.sourceChannelId || '').trim();
+  if (sourceChannelId) {
+    return `${prefix}/channel/${encodeURIComponent(sourceChannelId)}`;
+  }
+  return `${prefix}/${encodeURIComponent(channel?.source || '')}/${encodeURIComponent(channel?.name || '')}`;
+}
 
 // Show the transcoding button only when the unsupported-codec error is active
 // (i.e. the stream is live but uses codecs the browser cannot decode).

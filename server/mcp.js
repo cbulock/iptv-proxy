@@ -449,6 +449,10 @@ function createMcpServer() {
       }
 
       const channels = result.slice(0, limit).map(channel => ({
+        // Stable identity for agent-created playback URLs.  Channel names and
+        // provider display names can change after a refresh, so consumers
+        // should prefer /stream/channel/:sourceChannelId when this is present.
+        sourceChannelId: channel.sourceChannelId || null,
         name: channel.name,
         source: channel.source,
         tvg_id: channel.tvg_id || null,
