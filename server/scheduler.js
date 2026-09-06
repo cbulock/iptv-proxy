@@ -177,7 +177,13 @@ export function initDefaultJobs() {
   registerJob(
     'EPG Refresh',
     '0 */6 * * *',
-    refreshEPG,
+    async () => {
+      const outcome = await refreshEPG();
+      if (outcome.status === 'failed') {
+        throw new Error(outcome.message);
+      }
+      return outcome;
+    },
     false // EPG is already loaded during setupEPGRoutes
   );
 

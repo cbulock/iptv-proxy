@@ -29,12 +29,31 @@ const epgLimiter = RateLimit({
 
 // Module-level refresher that will be set when routes are initialized
 let refreshImpl = null;
+let refreshPromise = null;
+let requestedRefreshRevision = 0;
+let completedRefreshRevision = 0;
 export async function refreshEPG() {
-  if (typeof refreshImpl === 'function') {
-    await refreshImpl();
-  } else {
+  if (typeof refreshImpl !== 'function') {
     throw new Error('EPG refresher not initialized');
   }
+
+  requestedRefreshRevision += 1;
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      let outcome;
+      // Calls made while a refresh is in progress request one follow-up pass,
+      // ensuring an old channel/guide selection never becomes the final state.
+      while (completedRefreshRevision < requestedRefreshRevision) {
+        const revision = requestedRefreshRevision;
+        outcome = await refreshImpl(revision);
+        completedRefreshRevision = revision;
+      }
+      return outcome;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 }
 
 export function hasEPGRefresh() {
@@ -56,6 +75,8 @@ let epgCache = null;
 // Module-level merged EPG XML string (set by setupEPGRoutes)
 let mergedEPG = null;
 let lastEPGSourceResults = [];
+let lastEPGRefreshOutcome = null;
+const lastGoodSourceXml = new Map();
 
 // Maximum number of programmes returned per guide query (matches /api/guide behaviour)
 const MAX_GUIDE_PROGRAMMES = 20;
@@ -203,6 +224,15 @@ export function getGuideData(tvgId, hours = 24) {
 export function _resetMergedEPGForTesting() {
   mergedEPG = null;
   lastEPGSourceResults = [];
+  lastEPGRefreshOutcome = null;
+  lastGoodSourceXml.clear();
+  refreshPromise = null;
+  requestedRefreshRevision = 0;
+  completedRefreshRevision = 0;
+}
+
+export function getEPGRefreshOutcome() {
+  return lastEPGRefreshOutcome;
 }
 
 function loadOutputChannels(slug = '') {
@@ -341,7 +371,7 @@ export async function setupEPGRoutes(app) {
   epgCache = cacheManager.createCache('epg', epgTTL);
   console.log(`EPG cache initialized with TTL: ${epgTTL / 1000}s`);
 
-  async function fetchAndMergeEPGs() {
+  async function fetchAndMergeEPGs(revision) {
     const startTime = Date.now();
     const allChannels = loadChannelsForGuideMerge();
     const { bindingsBySource: guideBindingsBySource, selectedCanonicalIds } =
@@ -364,6 +394,8 @@ export async function setupEPGRoutes(app) {
 
       const fallbackTvgIds = new Set(fallbackChannels.map(ch => ch.tvg_id).filter(Boolean));
       const fallbackNames = new Set(fallbackChannels.map(ch => ch.name).filter(Boolean));
+      let usedStaleSource = false;
+      let sourceFetchError = null;
 
       try {
         console.log(`Loading EPG: ${sourceName} (${sourceUrl})`);
@@ -375,7 +407,13 @@ export async function setupEPGRoutes(app) {
           try {
             xmlData = fs.readFileSync(path, 'utf-8');
           } catch (fileErr) {
-            throw new Error(`Failed to read file: ${fileErr.message}`);
+            sourceFetchError = new Error(`Failed to read file: ${fileErr.message}`);
+            const lastGood = lastGoodSourceXml.get(sourceName);
+            if (!lastGood || lastGood.url !== sourceUrl) {
+              throw sourceFetchError;
+            }
+            usedStaleSource = true;
+            xmlData = lastGood.xmlData;
           }
         } else {
           try {
@@ -385,7 +423,13 @@ export async function setupEPGRoutes(app) {
             });
             xmlData = response.data;
           } catch (httpErr) {
-            throw new Error(`Failed to fetch EPG: ${httpErr.message}`);
+            sourceFetchError = new Error(`Failed to fetch EPG: ${httpErr.message}`);
+            const lastGood = lastGoodSourceXml.get(sourceName);
+            if (!lastGood || lastGood.url !== sourceUrl) {
+              throw sourceFetchError;
+            }
+            usedStaleSource = true;
+            xmlData = lastGood.xmlData;
           }
         }
 
@@ -410,6 +454,10 @@ export async function setupEPGRoutes(app) {
         // Validate parsed structure
         if (!parsed || !parsed.tv) {
           throw new Error('Invalid XMLTV structure - missing <tv> root element');
+        }
+
+        if (!usedStaleSource) {
+          lastGoodSourceXml.set(sourceName, { url: sourceUrl, xmlData });
         }
 
         if (parsed.tv?.channel) {
@@ -448,7 +496,8 @@ export async function setupEPGRoutes(app) {
           sourceResults.push({
             source: sourceName,
             url: sourceUrl,
-            status: 'ok',
+            status: usedStaleSource ? 'stale' : 'ok',
+            ...(sourceFetchError ? { error: sourceFetchError.message } : {}),
             channelCount: channels.length,
             programmeCount: 0,
           });
@@ -491,7 +540,8 @@ export async function setupEPGRoutes(app) {
           sourceResults.push({
             source: sourceName,
             url: sourceUrl,
-            status: 'ok',
+            status: usedStaleSource ? 'stale' : 'ok',
+            ...(sourceFetchError ? { error: sourceFetchError.message } : {}),
             channelCount: 0,
             programmeCount: sourceProgrammeCount,
           });
@@ -556,6 +606,24 @@ export async function setupEPGRoutes(app) {
     }
 
     lastEPGSourceResults = sourceResults;
+    const usableSources = sourceResults.filter(result => result.status !== 'error');
+    const staleSources = sourceResults.filter(result => result.status === 'stale');
+    const errors = sourceResults.filter(result => result.status === 'error');
+
+    if (usableSources.length === 0) {
+      const message = epgSources.length
+        ? 'All configured EPG sources failed; retained the previous guide.'
+        : 'No EPG sources are configured.';
+      lastEPGRefreshOutcome = {
+        status: 'failed',
+        revision,
+        message,
+        sourceResults,
+        refreshedAt: new Date().toISOString(),
+      };
+      console.error(`[EPG] ${message}`);
+      return lastEPGRefreshOutcome;
+    }
 
     try {
       mergedEPG = builder.build(merged);
@@ -573,17 +641,26 @@ export async function setupEPGRoutes(app) {
     }
 
     const duration = Date.now() - startTime;
+    lastEPGRefreshOutcome = {
+      status: errors.length || staleSources.length ? 'degraded' : 'ok',
+      revision,
+      message:
+        errors.length || staleSources.length
+          ? 'Guide refreshed with stale or unavailable source data.'
+          : 'Guide refreshed successfully.',
+      sourceResults,
+      refreshedAt: new Date().toISOString(),
+    };
     console.log(
       `EPG merge completed in ${duration}ms (${merged.tv.channel.length} channels, ${merged.tv.programme.length} programmes)`
     );
+    return lastEPGRefreshOutcome;
   }
 
   // Expose refresher
   refreshImpl = fetchAndMergeEPGs;
 
-  await fetchAndMergeEPGs();
-  // unref() so the interval does not prevent the process from exiting cleanly
-  setInterval(fetchAndMergeEPGs, 6 * 60 * 60 * 1000).unref();
+  await refreshEPG();
 
   const handleXmltvRequest = asyncHandler(async (req, res) => {
     const profileSlug = req.params.slug ? String(req.params.slug).trim() : '';
@@ -669,6 +746,7 @@ export async function setupEPGRoutes(app) {
       const sources = {
         total: lastEPGSourceResults.length,
         valid: lastEPGSourceResults.filter(source => source.status === 'ok').length,
+        stale: lastEPGSourceResults.filter(source => source.status === 'stale').length,
         failed: lastEPGSourceResults.filter(source => source.status === 'error').length,
         results: lastEPGSourceResults,
       };

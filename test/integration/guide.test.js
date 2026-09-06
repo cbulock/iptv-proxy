@@ -81,6 +81,8 @@ describe('GET /api/guide', () => {
   let epgFilePath;
   let server;
   let baseUrl;
+  let refreshEPG;
+  let resetMergedEPG;
   before(async () => {
     tmpDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-guide-data-'));
     process.env.DATA_PATH = tmpDataDir;
@@ -109,7 +111,10 @@ describe('GET /api/guide', () => {
     const app = express();
     app.use(express.json());
 
-    const { setupEPGRoutes } = await import('../../server/epg.js');
+    const epgModule = await import('../../server/epg.js');
+    const { setupEPGRoutes } = epgModule;
+    refreshEPG = epgModule.refreshEPG;
+    resetMergedEPG = epgModule._resetMergedEPGForTesting;
     const { errorHandler } = await import('../../server/error-handler.js');
 
     await setupEPGRoutes(app);
@@ -172,5 +177,32 @@ describe('GET /api/guide', () => {
     expect(res.status).to.equal(200);
     expect(res.data.programmes).to.be.an('array').with.lengthOf(0);
     expect(res.data.total).to.equal(0);
+  });
+
+  it('retains last-known-good guide data on source failure and reports recovery', async () => {
+    await fs.unlink(epgFilePath);
+
+    const degraded = await refreshEPG();
+    expect(degraded.status).to.equal('degraded');
+    const staleSource = degraded.sourceResults.find(source => source.source === 'GuideProvider');
+    expect(staleSource).to.include({
+      url: pathToFileURL(epgFilePath).href,
+      status: 'stale',
+      channelCount: 2,
+      programmeCount: 3,
+    });
+    expect(staleSource.error).to.be.a('string');
+
+    const retained = await axios.get(`${baseUrl}/api/guide?tvgId=${TVG_ID}`);
+    expect(retained.data.programmes.map(programme => programme.title)).to.include('Current Show');
+
+    await fs.writeFile(epgFilePath, buildFutureXMLTV(TVG_ID), 'utf8');
+    const recovered = await refreshEPG();
+    expect(recovered.status).to.equal('ok');
+
+    resetMergedEPG();
+    await fs.unlink(epgFilePath);
+    const failed = await refreshEPG();
+    expect(failed.status).to.equal('failed');
   });
 });

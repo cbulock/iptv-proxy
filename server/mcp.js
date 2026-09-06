@@ -1041,13 +1041,27 @@ function createMcpServer() {
     {},
     async () => {
       try {
-        await refreshEPG();
+        const outcome = await refreshEPG();
+        if (outcome.status === 'failed') {
+          return createError('reload_epg', {
+            code: 'epg-reload-failed',
+            message: outcome.message,
+            nextSuggestedTools: ['get_status', 'list_guide_bindings'],
+          });
+        }
         return createSuccess(
           'reload_epg',
-          { triggered: true },
+          { triggered: true, status: outcome.status, sources: outcome.sourceResults },
           {
-            summary: 'EPG reload triggered successfully.',
-            sideEffects: ['Guide data was reloaded from configured XMLTV sources.'],
+            summary:
+              outcome.status === 'degraded'
+                ? 'EPG reload completed with stale source data retained.'
+                : 'EPG reload completed successfully.',
+            sideEffects: [
+              outcome.status === 'degraded'
+                ? 'Guide data was rebuilt while retaining last-known-good data for failed sources.'
+                : 'Guide data was reloaded from configured XMLTV sources.',
+            ],
             nextSuggestedTools: ['get_status', 'get_guide', 'diagnose_agent_readiness'],
           }
         );
