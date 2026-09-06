@@ -276,11 +276,21 @@ router.post('/api/reload/channels', requireAuth, async (req, res) => {
 
 router.post('/api/reload/epg', requireAuth, async (req, res) => {
   try {
-    await refreshEPG();
-    notifyWebhooks('epg.refreshed', {}).catch(err =>
+    const outcome = await refreshEPG();
+    if (outcome.status === 'failed') {
+      return res.status(503).json({
+        error: outcome.message,
+        status: outcome.status,
+        sources: outcome.sourceResults,
+      });
+    }
+    notifyWebhooks('epg.refreshed', { status: outcome.status }).catch(err =>
       console.warn('[Config] Webhook notification failed:', err.message)
     );
-    res.json({ status: 'reloaded' });
+    res.status(outcome.status === 'degraded' ? 207 : 200).json({
+      status: outcome.status,
+      sources: outcome.sourceResults,
+    });
   } catch (e) {
     res.status(500).json({
       error: 'Failed to reload EPG',
