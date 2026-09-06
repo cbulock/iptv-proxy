@@ -36,9 +36,11 @@ describe('parseAll SQLite persistence', () => {
 
   afterEach(async () => {
     nock.cleanAll();
+    parseM3UModule.setStatusCallback(null);
     databaseModule.closeDatabase();
     delete process.env.CONFIG_PATH;
     delete process.env.DATA_PATH;
+    delete process.env.SOURCE_FETCH_TIMEOUT_MS;
     await fs.rm(configDir, { recursive: true, force: true });
     await fs.rm(dataDir, { recursive: true, force: true });
   });
@@ -140,6 +142,76 @@ describe('parseAll SQLite persistence', () => {
       sourceGuideNumber: '6.1',
     });
   });
+
+  for (const stalledEndpoint of ['discover.json', 'lineup.json']) {
+    it(`keeps cached tuner channels available when HDHomeRun ${stalledEndpoint} stalls`, async () => {
+      await fs.writeFile(
+        path.join(configDir, 'providers.yaml'),
+        [
+          'providers:',
+          '  - name: Healthy IPTV',
+          '    url: "http://healthy.example/playlist.m3u"',
+          '    type: "m3u"',
+          '  - name: Stalled OTA',
+          '    url: "http://stalled-hdhr.example"',
+          '    type: "hdhomerun"',
+        ].join('\n'),
+        'utf8'
+      );
+      const snapshotModule = await import('../../libs/channel-snapshot-service.js');
+      snapshotModule.replaceChannelSnapshot([
+        {
+          name: 'Cached OTA',
+          source: 'Stalled OTA',
+          original_url: 'http://stalled-hdhr.example/auto/v7.1',
+          url: '/stream/Stalled%20OTA/Cached%20OTA',
+        },
+      ]);
+
+      const statuses = [];
+      parseM3UModule.setStatusCallback((source, status) => statuses.push({ source, status }));
+      process.env.SOURCE_FETCH_TIMEOUT_MS = '50';
+
+      nock('http://healthy.example')
+        .get('/playlist.m3u')
+        .reply(200, '#EXTM3U\n#EXTINF:-1,Healthy\nhttp://streams.example/healthy.m3u8');
+      const discoveryMock = nock('http://stalled-hdhr.example').get('/discover.json');
+      if (stalledEndpoint === 'discover.json') {
+        discoveryMock.delayConnection(1000);
+      }
+      discoveryMock.reply(200, {
+        DeviceID: '12345678',
+        BaseURL: 'http://stalled-hdhr.example',
+        ModelNumber: 'HDHR5',
+      });
+
+      if (stalledEndpoint === 'lineup.json') {
+        nock('http://stalled-hdhr.example')
+          .get('/lineup.json')
+          .delayConnection(1000)
+          .reply(200, []);
+      }
+
+      const startedAt = Date.now();
+      const count = await parseM3UModule.parseAll();
+
+      expect(Date.now() - startedAt).to.be.lessThan(700);
+      expect(count).to.equal(2);
+      expect(snapshotModule.loadChannelSnapshot().map(channel => channel.name)).to.have.members([
+        'Healthy',
+        'Cached OTA',
+      ]);
+      expect(statuses).to.deep.include({ source: 'Healthy IPTV', status: 'success' });
+      expect(statuses).to.deep.include({ source: 'Stalled OTA', status: 'error' });
+
+      const stalledSource = databaseModule.get('SELECT id FROM sources WHERE name = ?', ['Stalled OTA']);
+      const syncRun = databaseModule.get(
+        'SELECT status FROM source_sync_runs WHERE source_id = ? ORDER BY started_at DESC LIMIT 1',
+        [stalledSource.id]
+      );
+      expect(syncRun).to.deep.equal({ status: 'failed' });
+    });
+  }
 
   it('treats a direct HLS manifest as a single discovered channel', async () => {
     await fs.writeFile(

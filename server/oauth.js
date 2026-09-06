@@ -110,14 +110,21 @@ export function requireMcpBearerAuth(req, res, next) {
     return next();
   }
 
+  const authorization = req.get('authorization') || '';
+  const [scheme, token] = authorization.split(/\s+/, 2);
+
   if (!isOAuthEnabled()) {
+    // A once-valid bearer token must be rejected as invalid when its final
+    // client is disabled or removed, rather than presenting a configuration
+    // error to an authenticated caller.
+    if (scheme === 'Bearer' && token) {
+      res.setHeader('WWW-Authenticate', `${bearerChallenge(req)}, error="invalid_token"`);
+      return res.status(401).json({ error: 'Invalid or expired bearer token' });
+    }
     return res.status(503).json({
       error: 'OAuth is not configured for MCP access. Add oauth.clients to app.yaml or the app settings store.',
     });
   }
-
-  const authorization = req.get('authorization') || '';
-  const [scheme, token] = authorization.split(/\s+/, 2);
 
   if (scheme !== 'Bearer' || !token) {
     res.setHeader('WWW-Authenticate', bearerChallenge(req));

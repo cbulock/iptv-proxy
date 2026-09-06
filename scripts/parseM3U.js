@@ -11,7 +11,8 @@ import {
 } from '../libs/source-sync-service.js';
 import { rebuildCanonicalChannels } from '../libs/canonical-channel-service.js';
 import { syncAllOutputProfiles } from '../libs/output-profile-service.js';
-import { replaceChannelSnapshot } from '../libs/channel-snapshot-service.js';
+import { loadChannelSnapshot, replaceChannelSnapshot } from '../libs/channel-snapshot-service.js';
+import { fetchSourceMetadata } from '../libs/source-fetch-policy.js';
 
 // Limit concurrent source fetches
 const limit = pLimit(3);
@@ -86,6 +87,7 @@ function buildDirectStreamChannel(source) {
 async function processSource(source, map) {
   const channels = [];
   const discoveredChannels = [];
+  let succeeded = false;
   // Build the reverse index once per source so per-channel lookups are O(1).
   const reverseIndex = buildReverseIndex(map);
   const syncRunId = source.id ? startSourceSyncRun(source.id, 'channels') : null;
@@ -103,10 +105,10 @@ async function processSource(source, map) {
         throw new Error(errorMsg);
       }
 
-      const discovery = await axios.get(`${source.url}/discover.json`);
+      const discovery = await fetchSourceMetadata(`${source.url}/discover.json`);
       const deviceInfo = discovery.data;
 
-      const lineup = (await axios.get(`${deviceInfo.BaseURL}/lineup.json`)).data;
+      const lineup = (await fetchSourceMetadata(`${deviceInfo.BaseURL}/lineup.json`)).data;
 
       for (const chan of lineup) {
         const discoveredChannel = {
@@ -243,6 +245,7 @@ async function processSource(source, map) {
 
     console.log(`Processed ${channels.length} channels from ${source.name}`);
     if (statusCallback) statusCallback(source.name, 'success');
+    succeeded = true;
   } catch (err) {
     console.error(`❌ Failed to process ${source.name}: ${err.message}`);
 
@@ -292,7 +295,7 @@ async function processSource(source, map) {
     }
   }
 
-  return channels;
+  return { channels, sourceName: source.name, succeeded };
 }
 
 export async function parseAll() {
@@ -307,12 +310,23 @@ export async function parseAll() {
   const map = loadChannelMapFromStore();
 
   // Process sources in parallel with concurrency limit
-  const channelArrays = await Promise.all(
+  const sourceResults = await Promise.all(
     sources.map(source => limit(() => processSource(source, map)))
   );
 
-  // Flatten the array of arrays
-  const allChannels = channelArrays.flat();
+  // Preserve a failed source's last known channels while healthy sources refresh.
+  // This lets a temporarily stalled tuner fail independently without taking its
+  // persisted lineup offline.
+  const failedSourceNames = new Set(
+    sourceResults.filter(result => !result.succeeded).map(result => result.sourceName)
+  );
+  const cachedFailedSourceChannels = loadChannelSnapshot().filter(channel =>
+    failedSourceNames.has(channel.source)
+  );
+  const allChannels = [
+    ...sourceResults.flatMap(result => result.channels),
+    ...cachedFailedSourceChannels,
+  ];
 
   replaceChannelSnapshot(allChannels);
   rebuildCanonicalChannels();

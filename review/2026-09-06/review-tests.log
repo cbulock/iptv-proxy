@@ -1,0 +1,463 @@
+
+
+  GET /api/epg/validate
+    1) "before all" hook for "includes the failed EPG source in validation results"
+
+  Output Format Validators
+    M3U Format Validation
+      √ should validate correct M3U format
+      √ should detect missing M3U header
+      √ should detect invalid URL protocol
+      √ should detect missing channel name
+      √ should accept all valid protocols
+      √ should handle empty M3U gracefully
+    XMLTV Format Validation
+      √ should validate correct XMLTV format
+      √ should detect missing tv root element
+      √ should detect malformed XML structure
+      √ should detect missing channel id attribute
+      √ should detect missing programme attributes
+      √ should warn about missing display-name
+      √ should handle empty XMLTV gracefully
+
+  admin draft state helpers
+    √ normalizes app drafts without UI-only client ids
+    √ normalizes provider drafts without row ids
+    √ detects unsaved guide number input before blur commits it
+    √ normalizes output profile entries for stable comparisons
+    √ normalizes channel workflow drafts without trimming custom channel names
+    √ clones output profile draft state for storage
+
+  app settings service
+    2) seeds app settings from app.yaml when the database is empty
+    3) replaces stored app settings and exports the compatibility app.yaml file
+
+  Cache Manager
+    Cache
+      Basic Operations
+        √ should set and get values
+        √ should return undefined for non-existent keys
+        √ should check if key exists
+        √ should delete keys
+        √ should clear all entries
+        √ should report correct size
+      TTL Expiration
+        √ should expire entries after TTL
+        √ should not expire entries with TTL=0
+        √ should remove expired entries from size count
+        √ should update TTL dynamically
+      Statistics
+        √ should track cache hits
+        √ should track cache misses
+        √ should calculate hit rate
+        √ should return stats with cache name
+        √ should include TTL in stats
+        √ should include entry metadata in stats
+        √ should show TTL remaining for entries with TTL
+        √ should handle zero hits and misses
+      Data Types
+        √ should cache strings
+        √ should cache numbers
+        √ should cache objects
+        √ should cache arrays
+        √ should cache null values
+        √ should cache boolean values
+    CacheManager
+      √ should create new caches
+      √ should retrieve existing caches
+      √ should return undefined for non-existent caches
+      √ should manage multiple caches
+      √ should clear all caches
+      √ should get stats for all caches
+    Singleton cacheManager
+      √ should be a CacheManager instance
+      √ should create and manage caches
+
+  channel map service
+    4) seeds mappings from channel-map.yaml when the database is empty
+    5) replaces stored mappings and exports the compatibility channel-map.yaml file
+
+  Channel Matcher
+    normalize
+      √ should convert to lowercase
+      √ should remove special characters
+      √ should normalize whitespace
+      √ should trim leading/trailing whitespace
+      √ should handle empty strings
+      √ should handle null/undefined
+    similarity
+      √ should return 1 for identical strings
+      √ should return 1 for identical strings with different cases
+      √ should return value between 0 and 1 for similar strings
+      √ should return low score for very different strings
+      √ should return 0 for null/undefined
+      √ should return 0 for empty strings
+      √ should handle unicode characters
+    findMatches
+      √ should find matches by name above threshold
+      √ should sort matches by score descending
+      √ should include match type in results
+      √ should return empty array if no matches above threshold
+      √ should handle empty candidates array
+      √ should skip exact tvg_id matches
+      √ should match by tvg_id when name is different
+      √ should handle null channel gracefully
+      √ should handle null candidates gracefully
+    generateSuggestions
+      √ should generate suggestions for unmapped channels
+      √ should respect threshold option
+      √ should limit suggestions to maxSuggestions
+      √ should include score and matchType in suggestions
+      √ should handle multiple unmapped channels
+      √ should return empty array for channels with no matches
+    detectDuplicates
+      √ should detect duplicate channel names
+      √ should detect duplicate tvg_ids
+      √ should return empty arrays when no duplicates
+      √ should handle channels without tvg_id
+      √ should handle empty array
+      √ should handle null/undefined input
+      √ should handle channels with null entries
+      √ should include all duplicate channels in results
+
+  check-channel-health
+    6) "before all" hook for "checks HDHomeRun channels via device /discover.json, not individual stream URLs"
+    7) "after all" hook for "uses device discover for HDHomeRun and stream probe for regular channels together"
+
+  normalizeChannelMapKeys
+    √ should return the map unchanged when no HTML entities are present
+    √ should decode HTML entities in keys
+    √ should warn when a key contains HTML entities
+    √ should warn on key collision when two keys decode to the same value
+    √ should handle null or non-object input gracefully
+
+  validateConfigData - channelMap
+    √ accepts a mapping with only number (no tvg_id)
+    √ accepts a mapping with both number and tvg_id
+    √ accepts a mapping with extra fields preserved alongside number
+    √ rejects a mapping where tvg_id is an empty string
+    √ rejects a mapping where number is an empty string
+
+  database foundation
+    8) initializes a SQLite database file and returns the open connection
+    9) creates the planned core tables during bootstrap
+    10) applies migrations only once when initialized repeatedly
+    11) supports the shared run/get helpers for future repositories
+
+  EPG Utility Functions
+    parseXMLTVDate
+      √ parses a basic UTC date string
+      √ parses a positive timezone offset
+      √ parses a negative timezone offset
+      √ parses a date string without a timezone offset
+      √ returns null for an empty string
+      √ returns null for null input
+      √ returns null for undefined input
+      √ returns null for a non-date string
+      √ handles a numeric input by converting to string first
+      √ handles a half-hour timezone offset
+    extractTextField
+      √ returns an empty string for null
+      √ returns an empty string for undefined
+      √ returns the string itself when given a plain string
+      √ coerces non-string primitives to strings
+      √ extracts #text from a fast-xml-parser text object
+      √ returns empty string when object has no #text property
+      √ returns empty string for an empty object
+      √ handles #text being 0 (falsy but valid)
+      √ returns empty string when #text is null
+      √ extracts text from the first element of an array
+      √ extracts #text from an array of objects
+      √ returns empty string for an empty array
+
+  getBaseUrl
+    Standard Request
+      √ should return base URL from protocol and host
+      √ should handle HTTPS protocol
+      √ should include port in host
+    X-Forwarded-Proto Header
+      √ should use X-Forwarded-Proto over req.protocol
+      √ should handle X-Forwarded-Proto with http
+    X-Forwarded-Host Header
+      √ should use X-Forwarded-Host over host header
+      √ should handle X-Forwarded-Host with port
+    Combined Reverse Proxy Headers
+      √ should use both X-Forwarded-Proto and X-Forwarded-Host
+      √ should reconstruct proper URL behind reverse proxy
+    Alternative Headers
+      √ should use X-Forwarded-Protocol as alternative to X-Forwarded-Proto
+      √ should use X-Url-Scheme as alternative to X-Forwarded-Proto
+      √ should use X-Forwarded-Ssl to detect HTTPS
+      √ should not use HTTPS when X-Forwarded-Ssl is off
+    Header Priority
+      √ should prefer X-Forwarded-Proto over X-Forwarded-Protocol
+      √ should prefer X-Forwarded-Protocol over X-Url-Scheme
+      √ should prefer X-Url-Scheme over X-Forwarded-Ssl
+    Edge Cases
+      √ should return empty string when host cannot be determined
+      √ should handle IPv4 addresses
+      √ should handle IPv6 addresses
+      √ should handle localhost
+      √ should normalize 127.0.0.1 to localhost
+
+  M3U Parser - applyMapping
+    Name-based mapping
+      √ should apply mapping by channel name
+      √ should preserve original values when mapping fields are not provided
+    TVG ID-based mapping
+      √ should fall back to tvg_id mapping when name not found
+      √ should prefer name-based mapping over tvg_id mapping
+      √ should map by reverse tvg_id match when key is canonical EPG name
+      √ should map HDHomeRun channel by guideNumber matching mapping tvg_id when no tvg_id set
+      √ should not match by guideNumber when tvg_id is already set
+    Fallback behavior
+      √ should use guideNumber as tvg_id when tvg_id is missing
+      √ should not override existing tvg_id with guideNumber
+      √ should handle channel with no mapping
+    Edge cases
+      √ should handle empty mapping object
+      √ should handle channel without tvg_id
+      √ should handle mapping with null/undefined values
+      √ should apply number from mapping as guideNumber (used for tvg-chno in lineup.m3u)
+
+  M3U Parser - proxyURL
+    √ should generate proxy URL with encoded source and name
+    √ should properly encode special characters in channel name
+    √ should properly encode special characters in source name
+    √ should handle unicode characters
+
+  source service
+    12) seeds sources from providers.yaml when the database is empty
+    13) replaces stored sources and exports the compatibility providers.yaml file
+
+  parseClientName
+    √ returns empty string for empty input
+    √ detects Plex
+    √ detects Jellyfin
+    √ detects Emby
+    √ detects Infuse
+    √ detects VLC
+    √ detects Kodi
+    √ detects TiViMate (case-insensitive)
+    √ detects IPTV Smarters
+    √ detects IPTV Pro
+    √ detects GSE IPTV
+    √ detects Perfect Player
+    √ detects Televizo
+    √ detects Sparkle
+    √ detects OTT Navigator
+    √ falls back to first UA token for unknown clients
+    √ is case-insensitive for known clients
+
+
+  175 passing (278ms)
+  13 failing
+
+  1) GET /api/epg/validate
+       "before all" hook for "includes the failed EPG source in validation results":
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at ensureDatabaseReady (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-snapshot-service.js:4:10)
+      at replaceChannelSnapshot (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-snapshot-service.js:19:3)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/epg-validation-route.test.js:51:5)
+
+  2) app settings service
+       seeds app settings from app.yaml when the database is empty:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at ensureDatabaseReady (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/app-settings-service.js?test=1788705308997:12:10)
+      at ensureAppConfigSeeded (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/app-settings-service.js?test=1788705308997:66:3)
+      at Module.loadAppConfigFromStore (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/app-settings-service.js?test=1788705308997:100:3)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/app-settings-service.test.js:47:31)
+
+  3) app settings service
+       replaces stored app settings and exports the compatibility app.yaml file:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at ensureDatabaseReady (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/app-settings-service.js?test=1788705309003:12:10)
+      at replaceAppConfigInternal (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/app-settings-service.js?test=1788705309003:41:3)
+      at Module.replaceAppConfig (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/app-settings-service.js?test=1788705309003:115:3)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/app-settings-service.test.js:62:24)
+
+  4) channel map service
+       seeds mappings from channel-map.yaml when the database is empty:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at ensureDatabaseReady (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-map-service.js?test=1788705309014:10:10)
+      at ensureChannelMapSeeded (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-map-service.js?test=1788705309014:104:3)
+      at Module.loadChannelMapFromStore (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-map-service.js?test=1788705309014:138:3)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/channel-map-service.test.js:48:39)
+
+  5) channel map service
+       replaces stored mappings and exports the compatibility channel-map.yaml file:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at ensureDatabaseReady (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-map-service.js?test=1788705309018:10:10)
+      at replaceChannelMapInternal (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-map-service.js?test=1788705309018:64:3)
+      at Module.replaceChannelMap (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-map-service.js?test=1788705309018:155:3)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/channel-map-service.test.js:65:23)
+
+  6) check-channel-health
+       "before all" hook for "checks HDHomeRun channels via device /discover.json, not individual stream URLs":
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at ensureDatabaseReady (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-snapshot-service.js:4:10)
+      at loadChannelSnapshot (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/channel-snapshot-service.js:8:3)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/check-channel-health.test.js:23:24)
+
+  7) check-channel-health
+       "after all" hook for "uses device discover for HDHomeRun and stream probe for regular channels together":
+     TypeError [ERR_INVALID_ARG_TYPE]: The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received undefined
+      at Object.writeFile (node:internal/fs/promises:1307:5)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/check-channel-health.test.js:41:18)
+      at process.processImmediate (node:internal/timers:534:21)
+
+  8) database foundation
+       initializes a SQLite database file and returns the open connection:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/database.test.js:30:16)
+
+  9) database foundation
+       creates the planned core tables during bootstrap:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/database.test.js:39:5)
+
+  10) database foundation
+       applies migrations only once when initialized repeatedly:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/database.test.js:66:5)
+
+  11) database foundation
+       supports the shared run/get helpers for future repositories:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/database.test.js:74:5)
+
+  12) source service
+       seeds sources from providers.yaml when the database is empty:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at ensureDatabaseReady (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/source-service.js?test=1788705309047:11:10)
+      at ensureSourcesSeeded (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/source-service.js?test=1788705309047:122:3)
+      at Module.listSources (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/source-service.js?test=1788705309047:151:3)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/source-service.test.js:45:35)
+
+  13) source service
+       replaces stored sources and exports the compatibility providers.yaml file:
+     Error: \\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node is not a valid Win32 application.
+\\?\C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\better-sqlite3\build\Release\better_sqlite3.node
+      at Module._extensions..node (node:internal/modules/cjs/loader:2030:18)
+      at Module.load (node:internal/modules/cjs/loader:1594:32)
+      at Module._load (node:internal/modules/cjs/loader:1396:12)
+      at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+      at Module.require (node:internal/modules/cjs/loader:1617:12)
+      at require (node:internal/modules/helpers:153:16)
+      at bindings (node_modules\bindings\bindings.js:112:48)
+      at new Database (node_modules\better-sqlite3\lib\database.js:48:64)
+      at initDatabase (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/database.js:275:14)
+      at ensureDatabaseReady (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/source-service.js?test=1788705309051:11:10)
+      at replaceSourcesInternal (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/source-service.js?test=1788705309051:70:3)
+      at Module.replaceProvidersConfig (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/source-service.js?test=1788705309051:186:3)
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/unit/source-service.test.js:58:19)

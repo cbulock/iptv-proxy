@@ -141,6 +141,7 @@ const appSchema = Joi.object({
             'string.empty': 'OAuth client "client_id" cannot be empty',
           }),
           client_name: Joi.string().trim().optional().allow(''),
+          enabled: Joi.boolean().optional(),
           redirect_uris: Joi.array()
             .items(
               Joi.string().uri({ allowRelative: false }).required().messages({

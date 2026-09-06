@@ -1,0 +1,62 @@
+
+
+  1) Uncaught error outside test suite
+
+  0 passing (14ms)
+  1 failing
+
+  1) Uncaught error outside test suite:
+     Uncaught Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:458:11)
+      at spawn (node:child_process:813:9)
+      at Object.fork (node:child_process:174:10)
+      at setupProcessWorker (node_modules\workerpool\src\WorkerHandler.js:151:30)
+      at setupWorker (node_modules\workerpool\src\WorkerHandler.js:78:12)
+      at new WorkerHandler (node_modules\workerpool\src\WorkerHandler.js:243:17)
+      at Pool._createWorkerHandler (node_modules\workerpool\src\Pool.js:424:10)
+      at Pool._getWorker (node_modules\workerpool\src\Pool.js:280:19)
+      at Pool._next (node_modules\workerpool\src\Pool.js:227:23)
+      at Pool.exec (node_modules\workerpool\src\Pool.js:163:10)
+      at Array.map (<anonymous>)
+      at new Promise (<anonymous>)
+      at C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\yargs\build\index.cjs:1:8993
+      at C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\yargs\build\index.cjs:1:4949
+
+
+
+
+  2) Uncaught error outside test suite
+
+  3) Uncaught error outside test suite
+
+  4) Uncaught error outside test suite
+
+  5) Uncaught error outside test suite
+
+  6) Uncaught error outside test suite
+
+  7) Uncaught error outside test suite
+
+  8) Uncaught error outside test suite
+
+  9) Uncaught error outside test suite
+
+  10) Uncaught error outside test suite
+
+  11) Uncaught error outside test suite
+
+  12) Uncaught error outside test suite
+
+  13) Uncaught error outside test suite
+
+  14) Uncaught error outside test suite
+
+  15) Uncaught error outside test suite
+
+  16) Uncaught error outside test suite
+
+  17) Uncaught error outside test suite
+
+  18) Uncaught error outside test suite
+
+  19) Uncaught error outside test suite

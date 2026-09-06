@@ -49,6 +49,14 @@ function scopeIncludes(scope, requiredScope) {
     .includes(requiredScope);
 }
 
+function scopeAllows(allowedScope, requestedScope) {
+  const allowed = new Set(String(allowedScope || '').split(/\s+/).filter(Boolean));
+  return String(requestedScope || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .every(scope => allowed.has(scope));
+}
+
 function sanitizeOauthClient(rawClient) {
   if (!rawClient || typeof rawClient !== 'object') {
     return null;
@@ -68,6 +76,7 @@ function sanitizeOauthClient(rawClient) {
   return {
     client_id: clientId,
     client_name: String(rawClient.client_name || clientId).trim(),
+    enabled: rawClient.enabled !== false,
     redirect_uris: redirectUris,
     scope: normalizeScope(rawClient.scope || DEFAULT_SCOPE),
     token_endpoint_auth_method: 'none',
@@ -93,7 +102,7 @@ function getOAuthConfig() {
 }
 
 export function listOAuthClients() {
-  return getOAuthConfig().clients;
+  return getOAuthConfig().clients.filter(client => client.enabled);
 }
 
 export function getOAuthClient(clientId) {
@@ -184,6 +193,11 @@ export function exchangeAuthorizationCode({
 }) {
   ensureDatabaseReady();
 
+  const client = getOAuthClient(clientId);
+  if (!client) {
+    return { error: 'invalid-code' };
+  }
+
   const db = getDatabase();
   const consumeCode = transaction(() => {
     const row = db
@@ -208,6 +222,10 @@ export function exchangeAuthorizationCode({
     }
 
     if (row.client_id !== clientId || row.redirect_uri !== redirectUri) {
+      return { error: 'invalid-code' };
+    }
+
+    if (!scopeAllows(client.scope, row.scope)) {
       return { error: 'invalid-code' };
     }
 
@@ -320,6 +338,11 @@ export function authenticateAccessToken(token, requiredScope = DEFAULT_SCOPE) {
   }
 
   if (requiredScope && !scopeIncludes(row.scope, requiredScope)) {
+    return null;
+  }
+
+  const client = getOAuthClient(row.client_id);
+  if (!client || !scopeIncludes(client.scope, requiredScope)) {
     return null;
   }
 

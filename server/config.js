@@ -19,6 +19,7 @@ import {
   replaceM3UConfig,
   replaceProvidersConfig,
 } from '../libs/source-service.js';
+import { fetchSourceMetadata } from '../libs/source-fetch-policy.js';
 
 const router = express.Router();
 
@@ -320,9 +321,9 @@ router.get('/api/mapping/m3u-tvg-ids', requireAuth, readLimiter, async (req, res
           data = fs.readFileSync(filePath, 'utf8');
         } else if (source.type === 'hdhomerun') {
           // HDHomeRun discovery - get channel list
-          const discovery = await axios.get(`${source.url}/discover.json`);
+          const discovery = await fetchSourceMetadata(`${source.url}/discover.json`);
           const deviceInfo = discovery.data;
-          const lineup = (await axios.get(`${deviceInfo.BaseURL}/lineup.json`)).data;
+          const lineup = (await fetchSourceMetadata(`${deviceInfo.BaseURL}/lineup.json`)).data;
 
           for (const chan of lineup) {
             // HDHomeRun doesn't have tvg_id, use guideNumber instead
