@@ -510,6 +510,142 @@ export function updateOutputProfileEntries(slug = DEFAULT_PROFILE_SLUG, channels
   return listOutputProfileEntries(slug);
 }
 
+/**
+ * Apply all edits made by the output-profile authoring screen in one database
+ * transaction. Keeping this at the service boundary lets HTTP and MCP callers
+ * invalidate/refresh derived guide state once, after every row is committed.
+ *
+ * @param {string} slug
+ * @param {{profile?: {name?: string, enabled?: boolean}, canonicalChannels?: Array, channels?: Array}} changes
+ * @returns {{profile?: object, channels?: Array}|{error: string, canonicalId?: string}}
+ */
+export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
+  ensureDatabaseReady();
+  ensureDefaultOutputProfile();
+
+  const db = getDatabase();
+  const profile = getProfileBySlug(slug);
+  if (!profile) return { error: 'profile-not-found' };
+
+  const profileChanges = changes.profile || {};
+  const nextName =
+    profileChanges.name === undefined ? profile.name : String(profileChanges.name || '').trim();
+  if (!nextName) return { error: 'invalid-name' };
+  const nextEnabled =
+    profileChanges.enabled === undefined ? Boolean(profile.enabled) : Boolean(profileChanges.enabled);
+  if (profile.slug === DEFAULT_PROFILE_SLUG && !nextEnabled) {
+    return { error: 'default-profile-required' };
+  }
+
+  const canonicalChanges = Array.isArray(changes.canonicalChannels) ? changes.canonicalChannels : [];
+  const channels = Array.isArray(changes.channels) ? changes.channels : [];
+  const canonicalById = new Map(
+    db
+      .prepare('SELECT id FROM canonical_channels')
+      .all()
+      .map(row => [row.id, row])
+  );
+  const entryRows = db
+    .prepare(
+      `SELECT opc.canonical_channel_id, cc.guide_number AS canonical_guide_number
+         FROM output_profile_channels opc
+         JOIN canonical_channels cc ON cc.id = opc.canonical_channel_id
+        WHERE opc.output_profile_id = ?`
+    )
+    .all(profile.id);
+  const entryByCanonicalId = new Map(entryRows.map(row => [row.canonical_channel_id, row]));
+
+  for (const change of canonicalChanges) {
+    if (!change?.id || !canonicalById.has(change.id)) {
+      return { error: 'canonical-not-found', canonicalId: change?.id };
+    }
+    if (change.preferredSourceChannelId !== undefined) {
+      const binding = db
+        .prepare(
+          'SELECT id FROM channel_bindings WHERE canonical_channel_id = ? AND source_channel_id = ?'
+        )
+        .get(change.id, change.preferredSourceChannelId);
+      if (!binding) return { error: 'binding-not-found', canonicalId: change.id };
+    }
+    if (change.guideBinding !== undefined) {
+      const binding = db
+        .prepare(
+          'SELECT id FROM guide_bindings WHERE canonical_channel_id = ? AND source_id = ?'
+        )
+        .get(change.id, change.guideBinding?.sourceId);
+      if (!binding || !String(change.guideBinding?.epgChannelId || '').trim()) {
+        return { error: 'guide-binding-not-found', canonicalId: change.id };
+      }
+    }
+  }
+
+  for (const channel of channels) {
+    if (!channel?.canonicalId || !entryByCanonicalId.has(channel.canonicalId)) {
+      return { error: 'entry-not-found', canonicalId: channel?.canonicalId };
+    }
+    if (!Number.isInteger(channel.position) || channel.position < 0 || typeof channel.enabled !== 'boolean') {
+      return { error: 'invalid-entry', canonicalId: channel.canonicalId };
+    }
+    if (channel.guideNumberOverride !== null && channel.guideNumberOverride !== undefined && typeof channel.guideNumberOverride !== 'string') {
+      return { error: 'invalid-entry', canonicalId: channel.canonicalId };
+    }
+  }
+
+  transaction(() => {
+    db.prepare('UPDATE output_profiles SET name = ?, enabled = ?, updated_at = ? WHERE id = ?').run(
+      nextName,
+      nextEnabled ? 1 : 0,
+      new Date().toISOString(),
+      profile.id
+    );
+    const updateName = db.prepare('UPDATE canonical_channels SET custom_name = ?, updated_at = ? WHERE id = ?');
+    const updatePreferred = db.prepare(
+      'UPDATE channel_bindings SET is_preferred_stream = CASE WHEN source_channel_id = ? THEN 1 ELSE 0 END WHERE canonical_channel_id = ?'
+    );
+    const updateGuide = db.prepare(
+      'UPDATE guide_bindings SET epg_channel_id = CASE WHEN source_id = ? THEN ? ELSE epg_channel_id END, priority = CASE WHEN source_id = ? THEN 0 ELSE 1 END WHERE canonical_channel_id = ?'
+    );
+    for (const change of canonicalChanges) {
+      if (Object.hasOwn(change, 'customName')) {
+        updateName.run(
+          typeof change.customName === 'string' && change.customName.trim()
+            ? change.customName.trim()
+            : null,
+          new Date().toISOString(),
+          change.id
+        );
+      }
+      if (change.preferredSourceChannelId !== undefined) updatePreferred.run(change.preferredSourceChannelId, change.id);
+      if (change.guideBinding !== undefined) {
+        updateGuide.run(
+          change.guideBinding.sourceId,
+          change.guideBinding.epgChannelId,
+          change.guideBinding.sourceId,
+          change.id
+        );
+      }
+    }
+    const updateEntry = db.prepare(
+      'UPDATE output_profile_channels SET position = ?, guide_number_override = ?, enabled = ? WHERE output_profile_id = ? AND canonical_channel_id = ?'
+    );
+    for (const channel of channels) {
+      const effectiveGuideNumber = resolveEffectiveGuideNumber(
+        { guideNumberOverride: channel.guideNumberOverride },
+        { guide_number: entryByCanonicalId.get(channel.canonicalId).canonical_guide_number }
+      );
+      updateEntry.run(
+        channel.position,
+        channel.guideNumberOverride || null,
+        channel.enabled && effectiveGuideNumber ? 1 : 0,
+        profile.id,
+        channel.canonicalId
+      );
+    }
+  })();
+
+  return { profile: getOutputProfile(slug), channels: listOutputProfileEntries(slug) };
+}
+
 export function createOutputProfile({ name, copyFromSlug = null, enabled = true } = {}) {
   ensureDatabaseReady();
 
@@ -648,6 +784,7 @@ export default {
   listOutputProfiles,
   syncAllOutputProfiles,
   syncDefaultOutputProfile,
+  saveOutputProfile,
   updateOutputProfile,
   updateOutputProfileEntries,
 };

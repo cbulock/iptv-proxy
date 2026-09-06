@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import RateLimit from 'express-rate-limit';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import { decodeXmltvStream, readXmltvRecords } from './xmltv-stream.js';
 import { loadAppConfigFromStore } from '../libs/app-settings-service.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
@@ -79,6 +80,7 @@ let mergedEPG = null;
 let lastEPGSourceResults = [];
 let lastEPGRefreshOutcome = null;
 const lastGoodSourceXml = new Map();
+let guideProgrammeIndex = new Map();
 
 // Maximum number of programmes returned per guide query (matches /api/guide behaviour)
 const MAX_GUIDE_PROGRAMMES = 20;
@@ -86,6 +88,8 @@ const MAX_GUIDE_PROGRAMMES = 20;
 // number of request variants so arbitrary filter combinations cannot retain
 // unbounded copies of the guide in memory.
 const MAX_EPG_CACHE_ENTRIES = 32;
+const MAX_EPG_CACHE_BYTES = 16 * 1024 * 1024;
+const MAX_XMLTV_INPUT_BYTES = 64 * 1024 * 1024;
 
 /**
  * Extract a plain string from an XMLTV text field which may be a raw string,
@@ -185,15 +189,12 @@ export function getGuideData(tvgId, hours = 24) {
   if (!mergedEPG) return null;
 
   const clampedHours = Math.min(48, Math.max(1, hours));
-  const parsed = parser.parse(mergedEPG);
   const now = Date.now();
   const cutoff = now + clampedHours * 60 * 60 * 1000;
 
-  let programmes = [].concat(parsed.tv?.programme || []);
-
-  if (tvgId) {
-    programmes = programmes.filter(p => p && p['@_channel'] === tvgId);
-  }
+  let programmes = tvgId
+    ? guideProgrammeIndex.get(tvgId) || []
+    : Array.from(guideProgrammeIndex.values()).flat();
 
   programmes = programmes.filter(p => {
     const start = parseXMLTVDate(p['@_start']);
@@ -226,6 +227,7 @@ export function getGuideData(tvgId, hours = 24) {
  */
 export function _resetMergedEPGForTesting() {
   mergedEPG = null;
+  guideProgrammeIndex = new Map();
   lastEPGSourceResults = [];
   lastEPGRefreshOutcome = null;
   lastGoodSourceXml.clear();
@@ -241,6 +243,7 @@ export function getEPGRefreshOutcome() {
 /** Clear derived guide data after a state restore. */
 export function invalidateEPGCache() {
   mergedEPG = null;
+  guideProgrammeIndex = new Map();
   epgCache = null;
   lastEPGSourceResults = [];
 }
@@ -424,7 +427,12 @@ export async function setupEPGRoutes(app) {
 
   // Initialize EPG cache with TTL from config (default: 6 hours)
   const epgTTL = (appConfig.cache?.epg_ttl ?? 21600) * 1000; // Convert seconds to milliseconds
-  epgCache = cacheManager.createCache('epg', epgTTL, MAX_EPG_CACHE_ENTRIES);
+  epgCache = cacheManager.createCache(
+    'epg',
+    epgTTL,
+    MAX_EPG_CACHE_ENTRIES,
+    MAX_EPG_CACHE_BYTES
+  );
   console.log(`EPG cache initialized with TTL: ${epgTTL / 1000}s`);
 
   async function fetchAndMergeEPGs(revision) {
@@ -462,12 +470,16 @@ export async function setupEPGRoutes(app) {
       try {
         console.log(`Loading EPG: ${sourceName} (${sourceUrl})`);
 
-        let xmlData;
+        let sourceRecords;
 
         if (sourceUrl.startsWith('file://')) {
           const path = fileURLToPath(sourceUrl);
           try {
-            xmlData = fs.readFileSync(path, 'utf-8');
+            const compressed = /\.gz$/i.test(path);
+            sourceRecords = await readXmltvRecords(
+              decodeXmltvStream(fs.createReadStream(path), compressed),
+              { maxBytes: MAX_XMLTV_INPUT_BYTES }
+            );
           } catch (fileErr) {
             sourceFetchError = new Error(`Failed to read file: ${fileErr.message}`);
             const lastGood = lastGoodSourceXml.get(sourceName);
@@ -475,15 +487,22 @@ export async function setupEPGRoutes(app) {
               throw sourceFetchError;
             }
             usedStaleSource = true;
-            xmlData = lastGood.xmlData;
+            sourceRecords = lastGood.sourceRecords;
           }
         } else {
           try {
             const response = await axios.get(sourceUrl, {
               timeout: 15000,
               validateStatus: status => status === 200,
+              responseType: 'stream',
+              decompress: false,
             });
-            xmlData = response.data;
+            const encoding = String(response.headers['content-encoding'] || '').toLowerCase();
+            const compressed = encoding.includes('gzip') || /\.gz(?:$|\?)/i.test(sourceUrl);
+            sourceRecords = await readXmltvRecords(
+              decodeXmltvStream(response.data, compressed),
+              { maxBytes: MAX_XMLTV_INPUT_BYTES }
+            );
           } catch (httpErr) {
             sourceFetchError = new Error(`Failed to fetch EPG: ${httpErr.message}`);
             const lastGood = lastGoodSourceXml.get(sourceName);
@@ -491,40 +510,21 @@ export async function setupEPGRoutes(app) {
               throw sourceFetchError;
             }
             usedStaleSource = true;
-            xmlData = lastGood.xmlData;
+            sourceRecords = lastGood.sourceRecords;
           }
         }
 
-        // Validate that we got XML data
-        if (!xmlData || typeof xmlData !== 'string' || xmlData.trim().length === 0) {
+        if (!sourceRecords || (!sourceRecords.channels.length && !sourceRecords.programmes.length)) {
           throw new Error('Empty or invalid EPG data received');
         }
 
-        // Validate basic XML structure (allow whitespace/comments before declaration)
-        const trimmedXml = xmlData.trim();
-        if (!trimmedXml.includes('<?xml') && !trimmedXml.includes('<tv')) {
-          throw new Error('Invalid XML format - missing XML declaration or root element');
-        }
-
-        let parsed;
-        try {
-          parsed = parser.parse(xmlData);
-        } catch (parseErr) {
-          throw new Error(`XML parsing failed: ${parseErr.message}`);
-        }
-
-        // Validate parsed structure
-        if (!parsed || !parsed.tv) {
-          throw new Error('Invalid XMLTV structure - missing <tv> root element');
-        }
-
         if (!usedStaleSource) {
-          lastGoodSourceXml.set(sourceName, { url: sourceUrl, xmlData });
+          lastGoodSourceXml.set(sourceName, { url: sourceUrl, sourceRecords });
         }
 
-        if (parsed.tv?.channel) {
+        if (sourceRecords.channels.length) {
           const channels = []
-            .concat(parsed.tv.channel)
+            .concat(sourceRecords.channels)
             .flatMap(channel => {
               if (!channel) {
                 return [];
@@ -568,9 +568,9 @@ export async function setupEPGRoutes(app) {
         }
 
         let sourceProgrammeCount = 0;
-        if (parsed.tv?.programme) {
+        if (sourceRecords.programmes.length) {
           const programmes = []
-            .concat(parsed.tv.programme)
+            .concat(sourceRecords.programmes)
             .flatMap(programme => {
               if (!programme) {
                 return [];
@@ -674,6 +674,13 @@ export async function setupEPGRoutes(app) {
     const deduplicated = deduplicateXmltvRecords(merged);
     merged.tv.channel = deduplicated.tv.channel;
     merged.tv.programme = deduplicated.tv.programme;
+    guideProgrammeIndex = new Map();
+    for (const programme of merged.tv.programme) {
+      const channelId = programme?.['@_channel'];
+      if (!channelId) continue;
+      if (!guideProgrammeIndex.has(channelId)) guideProgrammeIndex.set(channelId, []);
+      guideProgrammeIndex.get(channelId).push(programme);
+    }
 
     lastEPGSourceResults = sourceResults;
     const usableSources = sourceResults.filter(result => result.status !== 'error');

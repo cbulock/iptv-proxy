@@ -16,6 +16,7 @@ import {
   getOutputProfileChannels,
   listOutputProfileEntries,
   listOutputProfiles,
+  saveOutputProfile,
   syncAllOutputProfiles,
   updateOutputProfileEntries,
   updateOutputProfile,
@@ -373,6 +374,46 @@ router.patch('/api/output-profiles/:slug/channels', requireAuth, async (req, res
     res.json({ status: 'saved', channels: updatedChannels });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update output profile channels', detail: err.message });
+  }
+});
+
+// The authoring UI may change profile metadata, canonical channel choices, and
+// output entries together. Save them atomically, then rebuild the guide once.
+router.put('/api/output-profiles/:slug', requireAuth, async (req, res) => {
+  try {
+    await ensureCanonicalModelReady();
+    const result = saveOutputProfile(req.params.slug, {
+      profile: req.body?.profile,
+      canonicalChannels: req.body?.canonicalChannels,
+      channels: req.body?.channels,
+    });
+    if (result?.error === 'profile-not-found') {
+      return res.status(404).json({ error: 'Output profile not found' });
+    }
+    if (result?.error === 'default-profile-required') {
+      return res.status(400).json({ error: 'Default output profile must remain enabled' });
+    }
+    if (result?.error === 'invalid-name') {
+      return res.status(400).json({ error: 'name must be a non-empty string' });
+    }
+    if (result?.error === 'canonical-not-found') {
+      return res.status(404).json({ error: `Canonical channel not found: ${result.canonicalId}` });
+    }
+    if (result?.error === 'binding-not-found' || result?.error === 'guide-binding-not-found') {
+      return res.status(404).json({ error: `Channel binding not found for canonical channel ${result.canonicalId}` });
+    }
+    if (result?.error === 'entry-not-found') {
+      return res.status(404).json({ error: `Output profile entry not found for canonical channel ${result.canonicalId}` });
+    }
+    if (result?.error === 'invalid-entry') {
+      return res.status(400).json({ error: `Invalid output profile entry for canonical channel ${result.canonicalId}` });
+    }
+
+    invalidateLineupCaches();
+    if (hasEPGRefresh()) await refreshEPG();
+    res.json({ status: 'saved', ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save output profile', detail: err.message });
   }
 });
 

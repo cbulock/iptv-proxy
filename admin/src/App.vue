@@ -2445,178 +2445,42 @@ async function saveOutputProfileChanges() {
       setChannelRowFeedback(channelId, 'accent', 'Saving changes…');
     });
 
-    if (profileMetaDirty.value) {
-      const profileResponse = await apiFetch(
-        `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: state.outputProfileDraft.name.trim(),
-            enabled: state.outputProfileDraft.enabled,
-          }),
-        }
-      );
-      const profileJson = await profileResponse.json();
-      if (!profileResponse.ok) {
-        throw new Error(buildApiErrorMessage(profileJson, 'Failed to save output profile details'));
-      }
-    }
-
-    for (const row of canonicalRowsToSave) {
-      if (row.customNameDirty) {
-        state.updatingCanonicalNameChannelId = row.id;
-        const response = await apiFetch(`/api/canonical/channels/${encodeURIComponent(row.id)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customName:
-              typeof row.customNameDraft === 'string' && row.customNameDraft.trim()
-                ? row.customNameDraft.trim()
-                : null,
-          }),
-        });
-        const json = await response.json();
-        if (!response.ok) {
-          throw Object.assign(new Error(buildApiErrorMessage(json, 'Failed to update channel name')), {
-            channelId: row.id,
-          });
-        }
-
-        const updatedChannel = {
-          ...json.channel,
-          customNameDraft: json.channel?.customName || '',
-        };
-        state.canonicalChannels = state.canonicalChannels.map(entry =>
-          entry.id === row.id ? updatedChannel : entry
-        );
-        state.channelBindings = state.channelBindings.map(binding =>
-          binding.canonical?.id === row.id
+    const response = await apiFetch(
+      `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: profileMetaDirty.value
             ? {
-              ...binding,
-              canonical: {
-                ...binding.canonical,
-                name: updatedChannel.name,
-                baseName: updatedChannel.baseName,
-                customName: updatedChannel.customName,
-              },
+              name: state.outputProfileDraft.name.trim(),
+              enabled: state.outputProfileDraft.enabled,
             }
-            : binding
-        );
-        state.guideBindings = state.guideBindings.map(binding =>
-          binding.canonical?.id === row.id
-            ? {
-              ...binding,
-              canonical: {
-                ...binding.canonical,
-                name: updatedChannel.name,
-                baseName: updatedChannel.baseName,
-                customName: updatedChannel.customName,
-              },
-            }
-            : binding
-        );
-        state.outputProfileEntries = state.outputProfileEntries.map(entry =>
-          entry.canonical?.id === row.id
-            ? {
-              ...entry,
-              canonical: {
-                ...entry.canonical,
-                name: updatedChannel.name,
-                baseName: updatedChannel.baseName,
-                customName: updatedChannel.customName,
-              },
-            }
-            : entry
-        );
-      }
-
-      if (row.preferredStreamDirty) {
-        state.updatingPreferredStreamChannelId = row.id;
-        const response = await apiFetch(
-          `/api/canonical/channels/${encodeURIComponent(row.id)}/preferred-stream`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sourceChannelId: row.preferredSourceChannelId }),
-          }
-        );
-        const json = await response.json();
-        if (!response.ok) {
-          throw Object.assign(
-            new Error(buildApiErrorMessage(json, 'Failed to update preferred stream')),
-            { channelId: row.id }
-          );
-        }
-
-        state.channelBindings = state.channelBindings.map(binding => ({
-          ...binding,
-          isPreferredStream:
-            binding.canonical?.id === row.id ? binding.id === json.binding.id : binding.isPreferredStream,
-        }));
-      }
-
-      if (row.guideBindingDirty) {
-        state.updatingGuideBindingChannelId = row.id;
-        const response = await apiFetch(
-          `/api/canonical/channels/${encodeURIComponent(row.id)}/guide-binding`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(parseGuideBindingValue(row.selectedGuideBindingValue)),
-          }
-        );
-        const json = await response.json();
-        if (!response.ok) {
-          throw Object.assign(
-            new Error(buildApiErrorMessage(json, 'Failed to update guide binding')),
-            { channelId: row.id }
-          );
-        }
-
-        state.guideBindings = state.guideBindings.map(entry => {
-          if (entry.canonical?.id !== row.id) {
-            return entry;
-          }
-
-          if (entry.source?.id === json.binding.source.id) {
-            return {
-              ...entry,
-              epgChannelId: json.binding.epgChannelId,
-              priority: json.binding.priority,
-              selected: true,
-            };
-          }
-
-          return {
-            ...entry,
-            selected: false,
-            priority: entry.priority === 0 ? 1 : entry.priority,
-          };
-        });
-      }
-    }
-
-    if (outputProfileEntriesDirty.value) {
-      const response = await apiFetch(
-        `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}/channels`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            channels: channelWorkflowRows.value.map(row => ({
+            : undefined,
+          canonicalChannels: canonicalRowsToSave.map(row => ({
+            id: row.id,
+            ...(row.customNameDirty ? { customName: row.customNameDraft } : {}),
+            ...(row.preferredStreamDirty
+              ? { preferredSourceChannelId: row.preferredSourceChannelId }
+              : {}),
+            ...(row.guideBindingDirty
+              ? { guideBinding: parseGuideBindingValue(row.selectedGuideBindingValue) }
+              : {}),
+          })),
+          channels: outputProfileEntriesDirty.value
+            ? channelWorkflowRows.value.map(row => ({
               canonicalId: row.id,
               position: row.position,
               enabled: row.outputEnabled,
               guideNumberOverride: row.committedGuideNumberOverride,
-            })),
-          }),
-        }
-      );
-      const json = await response.json();
-      if (!response.ok) {
-        throw new Error(buildApiErrorMessage(json, 'Failed to save output profile channels'));
+            }))
+            : undefined,
+        }),
       }
+    );
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(buildApiErrorMessage(json, 'Failed to save output profile'));
     }
 
     await loadChannelAuthoringData();

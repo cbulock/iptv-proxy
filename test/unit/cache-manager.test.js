@@ -23,6 +23,14 @@ describe('Cache Manager', () => {
         expect(bounded.get('second')).to.be.undefined;
         expect(bounded.get('third')).to.equal(3);
       });
+      it('bounds cached payload bytes as well as entry count', () => {
+        const bounded = new Cache('byte-bounded', 0, 10, 5);
+        bounded.set('a', '1234');
+        bounded.set('b', '5678');
+        expect(bounded.has('a')).to.be.false;
+        expect(bounded.get('b')).to.equal('5678');
+        expect(bounded.getStats().bytes).to.equal(4);
+      });
       it('should set and get values', () => {
         cache.set('key1', 'value1');
         const result = cache.get('key1');
