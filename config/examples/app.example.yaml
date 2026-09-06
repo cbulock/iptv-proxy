@@ -72,6 +72,9 @@
 #       redirect_uris:
 #         - "https://chat.openai.com/aip/oauth/callback"
 #       scope: "mcp"
+#       # Set enabled: false (or remove the client) to immediately invalidate
+#       # its outstanding authorization codes and access tokens. Removing a
+#       # scope similarly rejects existing tokens when that scope is required.
 #
 # OAuth discovery endpoints:
 # - /.well-known/oauth-authorization-server

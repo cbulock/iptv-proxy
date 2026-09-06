@@ -1,0 +1,17 @@
+{"id":1,"title":"[P1] Preserve source IDs and bindings when saving provider configuration","url":"https://github.com/cbulock/iptv-proxy/issues/164"}
+{"id":2,"title":"[P1] Restore backups without deleting restored bindings or leaving partial live state","url":"https://github.com/cbulock/iptv-proxy/issues/165"}
+{"id":3,"title":"[P1] Isolate XMLTV responses by output profile and intersect guide filters","url":"https://github.com/cbulock/iptv-proxy/issues/166"}
+{"id":4,"title":"[P1] Resolve playback by stable source-channel identity after channel mapping","url":"https://github.com/cbulock/iptv-proxy/issues/167"}
+{"id":5,"title":"[P1] Keep the default lineup empty when all profile entries are disabled","url":"https://github.com/cbulock/iptv-proxy/issues/168"}
+{"id":6,"title":"[P1] Advertise a reachable LAN address in HDHomeRun discovery","url":"https://github.com/cbulock/iptv-proxy/issues/169"}
+{"id":7,"title":"[P1] Make proxy trust explicit before using forwarded IPs for access checks","url":"https://github.com/cbulock/iptv-proxy/issues/170"}
+{"id":8,"title":"[P1] Close upstream streams when viewers disconnect and health probes finish","url":"https://github.com/cbulock/iptv-proxy/issues/171"}
+{"id":9,"title":"[P2] Stream XMLTV ingestion and bound guide/cache memory","url":"https://github.com/cbulock/iptv-proxy/issues/172"}
+{"id":10,"title":"[P2] Enforce deterministic XMLTV deduplication and guide-binding fan-out","url":"https://github.com/cbulock/iptv-proxy/issues/173"}
+{"id":11,"title":"[P1] Preserve the last good guide and coordinate concurrent EPG refreshes","url":"https://github.com/cbulock/iptv-proxy/issues/174"}
+{"id":12,"title":"[P2] Preserve canonical IDs and user settings across mapping edits","url":"https://github.com/cbulock/iptv-proxy/issues/175"}
+{"id":13,"title":"[P1] Bound HDHomeRun discovery and keep startup usable when a tuner stalls","url":"https://github.com/cbulock/iptv-proxy/issues/176"}
+{"id":14,"title":"[P2] Bound ffmpeg resources and launch Windows transcoding without a command shell","url":"https://github.com/cbulock/iptv-proxy/issues/177"}
+{"id":15,"title":"[P1] Invalidate OAuth access when its configured client is removed","url":"https://github.com/cbulock/iptv-proxy/issues/178"}
+{"id":16,"title":"[P2] Save channel edits without downloading every EPG once per edited field","url":"https://github.com/cbulock/iptv-proxy/issues/179"}
+{"id":17,"title":"[P2] Make CI scan the PR image it actually builds and enforce actionable checks","url":"https://github.com/cbulock/iptv-proxy/issues/180"}

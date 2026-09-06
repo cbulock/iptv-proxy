@@ -14,6 +14,20 @@ const transcodeLimiter = RateLimit({
   },
 });
 
+// A request rate is not a bound on the amount of work currently running. Keep
+// this intentionally small: every worker encodes video and can consume a core.
+const MAX_ACTIVE_WORKERS = Number.parseInt(process.env.TRANSCODE_MAX_WORKERS || '3', 10);
+const STARTUP_TIMEOUT_MS = Number.parseInt(process.env.TRANSCODE_STARTUP_TIMEOUT_MS || '15000', 10);
+const IDLE_TIMEOUT_MS = Number.parseInt(process.env.TRANSCODE_IDLE_TIMEOUT_MS || '30000', 10);
+const MAX_STDERR_BYTES = 16 * 1024;
+const activeWorkers = new Set();
+
+function ffmpegCommand() {
+  // Do not invoke cmd.exe: an upstream URL is untrusted input and cmd parsing
+  // treats ordinary URL characters such as &, % and spaces as syntax.
+  return process.env.FFMPEG_PATH || (process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+}
+
 /**
  * Set up the server-side transcoding route.
  * GET /transcode/:source/:name
@@ -43,6 +57,10 @@ export function setupTranscodeRoutes(app) {
     const upstreamUrl = channel.original_url;
     if (!upstreamUrl) {
       return res.status(404).send('No upstream URL for channel');
+    }
+
+    if (activeWorkers.size >= MAX_ACTIVE_WORKERS) {
+      return res.status(503).json({ error: 'Transcoding capacity is currently exhausted. Please try again later.' });
     }
 
     console.info('[transcode] %s/%s -> %s', source, name, upstreamUrl);
@@ -78,12 +96,11 @@ export function setupTranscodeRoutes(app) {
       'pipe:1',
     ];
 
-    const ffmpegProcess =
-      process.platform === 'win32'
-        ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'ffmpeg', ...ffmpegArgs], {
-          windowsHide: true,
-        })
-        : spawn('ffmpeg', ffmpegArgs);
+    const ffmpegProcess = spawn(ffmpegCommand(), ffmpegArgs, {
+      shell: false,
+      windowsHide: true,
+    });
+    activeWorkers.add(ffmpegProcess);
 
     res.setHeader('Content-Type', 'video/MP2T');
     res.setHeader('Cache-Control', 'no-cache, no-store');
@@ -94,10 +111,42 @@ export function setupTranscodeRoutes(app) {
     // non-zero exit code before headers are committed.
     let responseStarted = false;
     let stderrText = '';
+    let cleanedUp = false;
+    let idleTimer;
+
+    const stopWorker = signal => {
+      if (ffmpegProcess.exitCode === null && !ffmpegProcess.killed) ffmpegProcess.kill(signal);
+    };
+    const clearTimers = () => {
+      clearTimeout(startupTimer);
+      clearTimeout(idleTimer);
+    };
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        console.warn('[transcode] ffmpeg idle timeout for %s/%s', source, name);
+        stopWorker('SIGTERM');
+      }, IDLE_TIMEOUT_MS);
+    };
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      clearTimers();
+      activeWorkers.delete(ffmpegProcess);
+    };
+
+    const startupTimer = setTimeout(() => {
+      if (!responseStarted) {
+        console.warn('[transcode] ffmpeg startup timeout for %s/%s', source, name);
+        stopWorker('SIGTERM');
+      }
+    }, STARTUP_TIMEOUT_MS);
+    resetIdleTimer();
 
     // Register error handler before attaching stdout to ensure it fires before
     // any response data is written (handles ENOENT / spawn failures).
     ffmpegProcess.on('error', err => {
+      cleanup();
       console.warn('[transcode] spawn error %s/%s: %s', source, name, err.message);
       if (!res.headersSent) {
         if (err.code === 'ENOENT') {
@@ -115,15 +164,29 @@ export function setupTranscodeRoutes(app) {
 
     ffmpegProcess.stderr.on('data', data => {
       const text = data.toString();
-      stderrText += text;
+      stderrText = `${stderrText}${text}`.slice(-MAX_STDERR_BYTES);
       console.warn('[transcode] ffmpeg: %s/%s: %s', source, name, text.trim());
+    });
+
+    ffmpegProcess.stderr.on('error', err => {
+      console.warn('[transcode] ffmpeg stderr error %s/%s: %s', source, name, err.message);
     });
 
     ffmpegProcess.stdout.on('data', chunk => {
       // Guard against writing to a destroyed/closed response (e.g. client disconnected).
       if (!res.writable) return;
       responseStarted = true;
-      res.write(chunk);
+      clearTimeout(startupTimer);
+      resetIdleTimer();
+      if (!res.write(chunk)) {
+        ffmpegProcess.stdout.pause();
+        res.once('drain', () => ffmpegProcess.stdout.resume());
+      }
+    });
+
+    ffmpegProcess.stdout.on('error', err => {
+      console.warn('[transcode] ffmpeg stdout error %s/%s: %s', source, name, err.message);
+      stopWorker('SIGTERM');
     });
 
     // Only finalize when data was already sent; the exit handler owns the
@@ -135,6 +198,7 @@ export function setupTranscodeRoutes(app) {
     });
 
     ffmpegProcess.on('exit', (code, signal) => {
+      cleanup();
       if (code !== 0 && code !== null) {
         console.warn('[transcode] ffmpeg exited with code %d for %s/%s', code, source, name);
         if (!responseStarted && !res.headersSent) {
@@ -163,9 +227,7 @@ export function setupTranscodeRoutes(app) {
     // Kill ffmpeg when the client disconnects to free up CPU/network resources.
     // Guard against calling kill() on a process that has already exited naturally.
     req.on('close', () => {
-      if (ffmpegProcess.exitCode === null && !ffmpegProcess.killed) {
-        ffmpegProcess.kill('SIGTERM');
-      }
+      stopWorker('SIGTERM');
     });
   });
 }

@@ -286,11 +286,9 @@ if (process.env.NODE_ENV === 'development') {
 // Set up source status tracking for parseM3U
 setStatusCallback(updateSourceStatus);
 
-// Parse channels from M3U sources before server setup
+// Load the persisted snapshot before server setup. Source refreshes run after
+// listening so a stalled tuner cannot hold admin and health endpoints hostage.
 resetSourceStatus();
-await parseAll();
-
-// Initialize channels cache after parsing
 await initChannelsCache();
 
 // Register lineup cache invalidation when channels update
@@ -340,4 +338,10 @@ app.listen(port, () => {
   console.log(chalk.cyan('  XMLTV Guide:'), chalk.yellow(`${base}/xmltv.xml`));
   console.log(chalk.cyan('  MCP Endpoint:'), chalk.yellow(`${base}/mcp`));
   console.log(chalk.cyan('  Admin UI:'), chalk.yellow(adminUrl));
+});
+
+// Do not await source discovery during startup. parseAll records failures per
+// source and preserves the last persisted snapshot until healthy sources finish.
+void parseAll().catch(err => {
+  console.error(`❌ Background source refresh failed: ${err.message}`);
 });

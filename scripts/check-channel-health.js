@@ -48,6 +48,7 @@ async function checkStream(url) {
       timeout: 8000,
       maxContentLength: 1024 * 8,
       validateStatus: null,
+      proxy: false,
     });
     const headCT = headResp.headers['content-type'] || '';
     const headHealthy = isHealthyStatus(headResp.status, headCT);
@@ -71,6 +72,7 @@ async function checkStream(url) {
       responseType: 'stream',
       maxContentLength: 1024 * 128,
       validateStatus: null,
+      proxy: false,
     });
     const ms = Date.now() - started;
     const statusCode = getResp.status;
@@ -159,6 +161,9 @@ async function checkHDHomeRunDevice(baseURL) {
     const resp = await axios.get(`${baseURL}/discover.json`, {
       timeout: 5000,
       validateStatus: null,
+      // Tuners are on the local network. Do not route their device probe
+      // through an ambient HTTP proxy, which cannot reach the LAN address.
+      proxy: false,
     });
     const ms = Date.now() - started;
     const healthy = resp.status === 200 && resp.data && !!resp.data.DeviceID;

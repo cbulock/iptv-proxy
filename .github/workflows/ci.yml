@@ -35,15 +35,12 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
-        continue-on-error: true
 
       - name: Check code formatting with Prettier
         run: npm run format:check
-        continue-on-error: true
 
       - name: Run npm audit
         run: npm audit --audit-level=moderate
-        continue-on-error: true
 
       - name: Install admin dependencies
         working-directory: admin
@@ -52,7 +49,6 @@ jobs:
       - name: Run admin npm audit
         working-directory: admin
         run: npm audit --audit-level=moderate
-        continue-on-error: true
 
   test:
     name: Run Tests
@@ -151,25 +147,49 @@ jobs:
         with:
           context: .
           platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          # PR images are loaded into the runner so Trivy scans this exact build,
+          # rather than an image tag that was never pushed to a registry.
+          load: ${{ github.event_name == 'pull_request' }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            iptv-proxy-ci:${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
 
+      - name: Verify scan image is available
+        if: github.event_name == 'pull_request'
+        env:
+          SCAN_IMAGE: iptv-proxy-ci:${{ github.sha }}
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          test -n "$BUILD_DIGEST"
+          docker image inspect "$SCAN_IMAGE" > /dev/null
+          {
+            echo "### Container scan target"
+            echo "- Image: \`$SCAN_IMAGE\`"
+            echo "- Build digest: \`$BUILD_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.35.0
         if: github.event_name == 'pull_request'
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          image-ref: iptv-proxy-ci:${{ github.sha }}
           format: 'sarif'
           output: 'trivy-results.sarif'
-        continue-on-error: true
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Verify Trivy report
+        if: always() && github.event_name == 'pull_request'
+        run: test -s trivy-results.sarif
 
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         with:
           sarif_file: 'trivy-results.sarif'
-        continue-on-error: true

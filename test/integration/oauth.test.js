@@ -88,6 +88,8 @@ describe('OAuth Integration', () => {
   let originalDataPath;
   let closeDatabase;
   let invalidateAuthCache;
+  let replaceAppConfig;
+  let loadAppConfigFromStore;
 
   before(async () => {
     tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-oauth-config-'));
@@ -97,7 +99,7 @@ describe('OAuth Integration', () => {
     process.env.CONFIG_PATH = tmpConfigDir;
     process.env.DATA_PATH = tmpDataDir;
 
-    const [{ default: authRouter }, { default: oauthRouter }, { setupMCPRoutes }, { csrfMiddleware }, databaseModule, authModule] =
+    const [{ default: authRouter }, { default: oauthRouter }, { setupMCPRoutes }, { csrfMiddleware }, databaseModule, authModule, appSettingsModule] =
       await Promise.all([
         import('../../server/auth-routes.js'),
         import('../../server/oauth.js'),
@@ -105,10 +107,13 @@ describe('OAuth Integration', () => {
         import('../../server/csrf.js'),
         import('../../libs/database.js'),
         import('../../server/auth.js'),
+        import('../../libs/app-settings-service.js'),
       ]);
 
     closeDatabase = databaseModule.closeDatabase;
     invalidateAuthCache = authModule.invalidateAuthCache;
+    replaceAppConfig = appSettingsModule.replaceAppConfig;
+    loadAppConfigFromStore = appSettingsModule.loadAppConfigFromStore;
 
     const app = buildApp({ authRouter, oauthRouter, csrfMiddleware, setupMCPRoutes });
     ({ server, baseUrl } = await startServer(app));
@@ -268,6 +273,131 @@ describe('OAuth Integration', () => {
     const events = parseSSE(mcpRes.data);
     const toolList = events.find(event => event.id === 2);
     expect(toolList.result.tools.map(tool => tool.name)).to.include('get_agent_workflow');
+  });
+
+  it('invalidates removed or scope-disabled client credentials without affecting other clients', async () => {
+    await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+    const sessionInfo = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+    const clients = [
+      {
+        client_id: 'test-chatgpt',
+        redirect_uris: ['http://127.0.0.1/callback'],
+        scope: 'mcp',
+      },
+      {
+        client_id: 'other-client',
+        redirect_uris: ['http://127.0.0.1/other-callback'],
+        scope: 'mcp',
+      },
+    ];
+
+    async function authorizeAndExchange(clientId, redirectUri, codeVerifier) {
+      const authorizeRes = await axios.get(`${baseUrl}/oauth/authorize`, {
+        params: {
+          response_type: 'code',
+          client_id: clientId,
+          redirect_uri: redirectUri,
+          scope: 'mcp',
+          code_challenge: sha256Base64Url(codeVerifier),
+          code_challenge_method: 'S256',
+        },
+        headers: cookieHeader(sessionInfo),
+        maxRedirects: 0,
+        validateStatus: () => true,
+      });
+      const code = new URL(authorizeRes.headers.location).searchParams.get('code');
+      const tokenRes = await axios.post(
+        `${baseUrl}/oauth/token`,
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          code,
+          redirect_uri: redirectUri,
+          code_verifier: codeVerifier,
+        }).toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      return { code, token: tokenRes.data.access_token };
+    }
+
+    async function callMcp(token) {
+      return axios.post(
+        `${baseUrl}/mcp`,
+        { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            Authorization: `Bearer ${token}`,
+          },
+          responseType: 'text',
+          validateStatus: () => true,
+        }
+      );
+    }
+
+    function setOauthClients(updatedClients) {
+      replaceAppConfig({
+        ...loadAppConfigFromStore(),
+        oauth: { clients: updatedClients },
+      });
+    }
+
+    setOauthClients(clients);
+
+    const removedClient = await authorizeAndExchange(
+      'test-chatgpt',
+      'http://127.0.0.1/callback',
+      'removed-client-verifier'
+    );
+    const remainingClient = await authorizeAndExchange(
+      'other-client',
+      'http://127.0.0.1/other-callback',
+      'remaining-client-verifier'
+    );
+    const outstandingCode = await axios.get(`${baseUrl}/oauth/authorize`, {
+      params: {
+        response_type: 'code',
+        client_id: 'test-chatgpt',
+        redirect_uri: 'http://127.0.0.1/callback',
+        scope: 'mcp',
+        code_challenge: sha256Base64Url('outstanding-code-verifier'),
+        code_challenge_method: 'S256',
+      },
+      headers: cookieHeader(sessionInfo),
+      maxRedirects: 0,
+      validateStatus: () => true,
+    });
+    const code = new URL(outstandingCode.headers.location).searchParams.get('code');
+
+    setOauthClients([clients[1]]);
+
+    expect((await callMcp(removedClient.token)).status).to.equal(401);
+    expect((await callMcp(remainingClient.token)).status).to.equal(200);
+
+    const removedCodeExchange = await axios.post(
+      `${baseUrl}/oauth/token`,
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: 'test-chatgpt',
+        code,
+        redirect_uri: 'http://127.0.0.1/callback',
+        code_verifier: 'outstanding-code-verifier',
+      }).toString(),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        validateStatus: () => true,
+      }
+    );
+    expect(removedCodeExchange.status).to.equal(401);
+    expect(removedCodeExchange.data.error).to.equal('invalid_client');
+
+    setOauthClients([{ ...clients[1], enabled: false }]);
+    expect((await callMcp(remainingClient.token)).status).to.equal(401);
+
+    setOauthClients([{ ...clients[1], scope: 'other' }]);
+    expect((await callMcp(remainingClient.token)).status).to.equal(401);
   });
 
   it('rejects token exchange when the PKCE verifier does not match', async () => {
