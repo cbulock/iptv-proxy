@@ -187,6 +187,7 @@ describe('MCP Route Integration', () => {
       'list_output_profiles',
       'create_output_profile',
       'update_output_profile',
+      'save_output_profile',
       'delete_output_profile',
       'get_output_profile_channels',
       'list_output_profile_entries',
@@ -327,6 +328,16 @@ describe('MCP Route Integration', () => {
     });
     const profiles = expectToolSuccess(msg, 'list_output_profiles').data;
     expect(profiles).to.be.an('array');
+  });
+
+  it('save_output_profile atomically saves profile state through MCP', async () => {
+    const { msg } = await mcpPost(baseUrl, 'tools/call', {
+      name: 'save_output_profile',
+      arguments: { slug: 'default', profile: { name: 'MCP Default', enabled: true } },
+    });
+    const result = expectToolSuccess(msg, 'save_output_profile').data;
+    expect(result.profile).to.include({ slug: 'default', name: 'MCP Default', enabled: true });
+    expect(result.channels).to.be.an('array');
   });
 
   it('create_output_profile, update_output_profile, and delete_output_profile manage named profiles', async () => {

@@ -14,8 +14,8 @@ class CacheManager {
    * @param {number} ttl - Time to live in milliseconds (0 = no expiration)
    * @returns {Cache} Cache instance
    */
-  createCache(name, ttl = 0, maxEntries = Infinity) {
-    const cache = new Cache(name, ttl, maxEntries);
+  createCache(name, ttl = 0, maxEntries = Infinity, maxBytes = Infinity) {
+    const cache = new Cache(name, ttl, maxEntries, maxBytes);
     this.caches.set(name, cache);
     return cache;
   }
@@ -52,14 +52,31 @@ class CacheManager {
 }
 
 class Cache {
-  constructor(name, ttl = 0, maxEntries = Infinity) {
+  constructor(name, ttl = 0, maxEntries = Infinity, maxBytes = Infinity) {
     this.name = name;
     this.ttl = ttl; // TTL in milliseconds
     this.maxEntries = maxEntries;
+    this.maxBytes = maxBytes;
+    this.byteSize = 0;
     this.data = new Map();
     this.timestamps = new Map();
     this.hits = 0;
     this.misses = 0;
+    // Expiry must not depend on a later read of the same cache key.  The
+    // timer is unref'd so a cache never keeps the service/test process alive.
+    this.cleanupTimer =
+      this.ttl > 0
+        ? setInterval(() => this.purgeExpired(), Math.max(1000, Math.min(this.ttl, 60000))).unref()
+        : null;
+  }
+
+  estimateBytes(value) {
+    if (typeof value === 'string') return Buffer.byteLength(value);
+    try {
+      return Buffer.byteLength(JSON.stringify(value));
+    } catch {
+      return 0;
+    }
   }
 
   /**
@@ -71,12 +88,14 @@ class Cache {
     // Map insertion order gives us a small, dependency-free LRU cache. Refresh
     // an existing entry so frequently used variants are not evicted first.
     if (this.data.has(key)) {
+      this.byteSize -= this.estimateBytes(this.data.get(key));
       this.data.delete(key);
       this.timestamps.delete(key);
     }
     this.data.set(key, value);
+    this.byteSize += this.estimateBytes(value);
     this.timestamps.set(key, Date.now());
-    while (this.data.size > this.maxEntries) {
+    while (this.data.size > this.maxEntries || this.byteSize > this.maxBytes) {
       const oldestKey = this.data.keys().next().value;
       this.delete(oldestKey);
     }
@@ -143,6 +162,7 @@ class Cache {
    * @param {string} key - Cache key
    */
   delete(key) {
+    if (this.data.has(key)) this.byteSize -= this.estimateBytes(this.data.get(key));
     this.data.delete(key);
     this.timestamps.delete(key);
   }
@@ -153,6 +173,15 @@ class Cache {
   clear() {
     this.data.clear();
     this.timestamps.clear();
+    this.byteSize = 0;
+  }
+
+  purgeExpired() {
+    if (this.ttl <= 0) return;
+    const now = Date.now();
+    for (const [key, timestamp] of this.timestamps) {
+      if (now - timestamp > this.ttl) this.delete(key);
+    }
   }
 
   /**
@@ -162,12 +191,7 @@ class Cache {
   size() {
     // Clean up expired entries before counting
     if (this.ttl > 0) {
-      const now = Date.now();
-      for (const [key, timestamp] of this.timestamps.entries()) {
-        if (now - timestamp > this.ttl) {
-          this.delete(key);
-        }
-      }
+      this.purgeExpired();
     }
     return this.data.size;
   }
@@ -186,6 +210,8 @@ class Cache {
       size,
       ttl: this.ttl,
       maxEntries: this.maxEntries,
+      maxBytes: this.maxBytes,
+      bytes: this.byteSize,
       hits: this.hits,
       misses: this.misses,
       hitRate: `${hitRate}%`,

@@ -258,6 +258,51 @@ describe('output profile routes', () => {
     });
   });
 
+  it('atomically saves profile metadata, canonical edits, and output entries', async () => {
+    const entriesResponse = await axios.get(`${baseUrl}/api/output-profiles/default/entries`);
+    const [first, second] = entriesResponse.data.channels;
+
+    const response = await axios.put(`${baseUrl}/api/output-profiles/default`, {
+      profile: { name: 'Living Room', enabled: true },
+      canonicalChannels: [{ id: first.canonical.id, customName: 'Renamed One' }],
+      channels: [
+        {
+          canonicalId: first.canonical.id,
+          position: 1,
+          enabled: false,
+          guideNumberOverride: null,
+        },
+        {
+          canonicalId: second.canonical.id,
+          position: 0,
+          enabled: true,
+          guideNumberOverride: '900',
+        },
+      ],
+    });
+
+    expect(response.data).to.include({ status: 'saved' });
+    expect(response.data.profile).to.include({ name: 'Living Room', slug: 'default' });
+    expect(response.data.channels.find(entry => entry.canonical.id === first.canonical.id)).to.include({
+      position: 1,
+      enabled: false,
+    });
+
+    const profiles = await axios.get(`${baseUrl}/api/output-profiles`);
+    expect(profiles.data.profiles.find(profile => profile.slug === 'default').name).to.equal('Living Room');
+    const channels = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    expect(channels.data.channels.find(channel => channel.canonicalId === second.canonical.id)).to.include({
+      canonicalId: second.canonical.id,
+      name: 'Canonical Two',
+      guideNumber: '900',
+      position: 0,
+    });
+    const canonical = await axios.get(`${baseUrl}/api/canonical/channels`);
+    expect(canonical.data.channels.find(channel => channel.id === first.canonical.id)).to.include({
+      customName: 'Renamed One',
+    });
+  });
+
   it('creates, updates, and deletes named output profiles', async () => {
     const createResponse = await axios.post(`${baseUrl}/api/output-profiles`, {
       name: 'Bedroom TV',

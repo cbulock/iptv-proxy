@@ -22,6 +22,7 @@ import {
   getOutputProfileChannels,
   listOutputProfileEntries,
   listOutputProfiles,
+  saveOutputProfile,
   syncAllOutputProfiles,
   updateOutputProfileEntries,
   updateOutputProfile,
@@ -114,6 +115,7 @@ function buildWorkflowOverview() {
       mutation: [
         'create_output_profile',
         'update_output_profile',
+        'save_output_profile',
         'delete_output_profile',
         'set_canonical_channel_name',
         'set_canonical_channel_published',
@@ -162,6 +164,7 @@ function buildWorkflowOverview() {
           'set_canonical_channel_preferred_stream',
           'set_canonical_channel_guide_binding',
           'update_output_profile_channels',
+          'save_output_profile',
         ],
       },
       {
@@ -174,6 +177,10 @@ function buildWorkflowOverview() {
     mutationSideEffects: {
       create_output_profile: ['Creates profile state and syncs initial output entries.'],
       update_output_profile: ['Updates profile metadata only.'],
+      save_output_profile: [
+        'Atomically updates profile metadata, canonical choices, and output entries.',
+        'Invalidates lineup caches and triggers at most one EPG refresh.',
+      ],
       delete_output_profile: ['Removes profile state for that lineup.'],
       set_canonical_channel_name: [
         'Updates the canonical channel display name override.',
@@ -647,6 +654,81 @@ function createMcpServer() {
         summary: `Updated output profile ${profile.slug}.`,
         sideEffects: ['Updated output profile metadata.'],
         nextSuggestedTools: ['list_output_profiles', 'list_output_profile_entries'],
+      });
+    }
+  );
+
+  registerJsonTool(
+    server,
+    'save_output_profile',
+    'Atomically save output profile metadata, canonical choices, and channel entries with at most one EPG refresh.',
+    {
+      slug: z.string().default('default').describe('Output profile slug (default: "default")'),
+      profile: z
+        .object({ name: z.string().min(1).optional(), enabled: z.boolean().optional() })
+        .optional(),
+      canonical_channels: z
+        .array(
+          z.object({
+            id: z.string().min(1),
+            custom_name: z.string().nullable().optional(),
+            preferred_source_channel_id: z.string().min(1).optional(),
+            guide_binding: z
+              .object({ source_id: z.string().min(1), epg_channel_id: z.string().min(1) })
+              .optional(),
+          })
+        )
+        .optional(),
+      channels: z
+        .array(
+          z.object({
+            canonicalId: z.string().min(1),
+            position: z.number().int().min(0),
+            enabled: z.boolean(),
+            guideNumberOverride: z.union([z.string(), z.null()]).optional(),
+          })
+        )
+        .optional(),
+    },
+    async ({ slug = 'default', profile, canonical_channels: canonicalChannels, channels }) => {
+      const result = saveOutputProfile(slug, {
+        profile,
+        canonicalChannels: (canonicalChannels || []).map(channel => ({
+          id: channel.id,
+          customName: channel.custom_name,
+          preferredSourceChannelId: channel.preferred_source_channel_id,
+          guideBinding: channel.guide_binding
+            ? {
+              sourceId: channel.guide_binding.source_id,
+              epgChannelId: channel.guide_binding.epg_channel_id,
+            }
+            : undefined,
+        })),
+        channels,
+      });
+      if (result?.error) {
+        return createError('save_output_profile', {
+          code: result.error,
+          message: `Failed to save output profile: ${result.error}`,
+          details: { slug, canonicalId: result.canonicalId },
+          nextSuggestedTools: ['list_output_profiles', 'list_output_profile_entries'],
+        });
+      }
+
+      invalidateLineupCaches();
+      if (hasEPGRefresh()) await refreshEPG();
+      return createSuccess('save_output_profile', result, {
+        summary: `Saved output profile ${slug} atomically.`,
+        sideEffects: [
+          'Output profile and channel state were updated atomically.',
+          'Lineup caches were invalidated.',
+          ...epgRefreshSideEffect(),
+        ],
+        nextSuggestedTools: [
+          'list_output_profile_entries',
+          'get_output_profile_channels',
+          'diagnose_agent_readiness',
+        ],
       });
     }
   );
