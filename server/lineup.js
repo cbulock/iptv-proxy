@@ -7,7 +7,12 @@ import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import cacheManager from '../libs/cache-manager.js';
 import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
-import { getOutputProfile, getOutputProfileChannels } from '../libs/output-profile-service.js';
+import { getSourceChannelById } from '../libs/source-channel-resolver.js';
+import {
+  getOutputProfile,
+  getOutputProfileChannels,
+  hasOutputProfileEntries,
+} from '../libs/output-profile-service.js';
 
 // Rate limiter for public playlist endpoints
 const lineupLimiter = RateLimit({
@@ -101,6 +106,13 @@ function rewriteUriToProxy(uri, playlistUrl, req, source, name) {
   return `${baseUrl}/stream/${sourcePart}/${namePart}?upstream=${encodeURIComponent(resolvedUrl)}`;
 }
 
+function getStreamUrl(baseUrl, channel) {
+  if (channel?.sourceChannelId) {
+    return `${baseUrl}/stream/channel/${encodeURIComponent(channel.sourceChannelId)}`;
+  }
+  return `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.streamName || channel.name)}`;
+}
+
 function rewriteHlsPlaylist(body, playlistUrl, req, source, name) {
   const lines = String(body || '').split('\n');
   const rewritten = lines.map(line => {
@@ -166,7 +178,12 @@ function loadPublishedChannels(includeUnmapped) {
   }
 
   const outputChannels = getOutputProfileChannels();
-  if (outputChannels.length > 0) {
+  // Once the default profile has entries, it is the source of truth even when
+  // none are currently publishable.  In particular, falling back here would
+  // republish mapped source channels after an operator disables every entry or
+  // clears every effective guide number.  Keep the legacy mapping fallback
+  // only for installations where no profile entries have been initialized.
+  if (outputChannels.length > 0 || hasOutputProfileEntries()) {
     return outputChannels;
   }
 
@@ -261,7 +278,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       .map(channel => ({
         GuideNumber: resolveGuideNumberForLineup(channel),
         GuideName: channel.name,
-        URL: `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.streamName || channel.name)}`,
+        URL: getStreamUrl(baseUrl, channel),
       }));
 
     jsonCache.set(cacheKey, lineup);
@@ -327,7 +344,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
           : '';
         const tvgChno = resolveGuideNumberForM3U(channel);
         const groupTitle = channel.source || '';
-        const streamUrl = `${baseUrl}/stream/${encodeURIComponent(channel.source)}/${encodeURIComponent(channel.streamName || channel.name)}`;
+        const streamUrl = getStreamUrl(baseUrl, channel);
 
         output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}"`;
         if (tvgChno) {
@@ -349,11 +366,18 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
   app.get('/profiles/:slug/lineup.m3u', lineupLimiter, handleLineupM3u);
 
   app.all('/stream/:source/:name', async (req, res) => {
-    const { source, name } = req.params;
+    let { source, name } = req.params;
     const upstreamOverride = req.query.upstream ? String(req.query.upstream) : null;
     const channels = loadChannels();
 
-    const channel = channels.find(c => c.source === source && c.name === name);
+    let channel = channels.find(c => c.source === source && c.name === name);
+    if (source === 'channel') {
+      channel = getSourceChannelById(name);
+      if (channel) {
+        source = channel.source;
+        name = channel.name;
+      }
+    }
 
     if (!channel) return res.status(404).send('Channel not found');
 
@@ -444,6 +468,32 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     const userAgent = req.headers['user-agent'] || '';
     let usageKey;
     let usageInterval;
+    let upstreamBody;
+    let cleanedUp = false;
+    const upstreamRequest = new AbortController();
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      upstreamRequest.abort();
+      // axios does not automatically tear down a fulfilled response body when the
+      // downstream client disappears. Destroy it so a paused live stream does not
+      // continue to occupy an upstream tuner/provider connection.
+      const upstreamSocket = upstreamBody?.socket;
+      if (upstreamBody && !upstreamBody.destroyed) upstreamBody.destroy();
+      // Explicitly tear down the response socket too. Some HTTP agents retain
+      // a socket after destroying only the readable response wrapper.
+      upstreamSocket?.destroy();
+      if (usageInterval) clearInterval(usageInterval);
+      usageInterval = null;
+      if (usageKey) unregisterUsage(usageKey);
+      usageKey = null;
+    };
+    const abortForDisconnectedClient = () => {
+      if (!res.writableEnded) cleanup();
+    };
+    req.on('aborted', cleanup);
+    res.on('close', abortForDisconnectedClient);
+    res.on('error', cleanup);
     const touchViewer = async () => {
       usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent });
       touchUsage(usageKey);
@@ -452,18 +502,17 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       if (usageKey) return;
       usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent });
       usageInterval = setInterval(() => touchUsage(usageKey), 10000);
-      const cleanup = () => {
-        if (usageInterval) clearInterval(usageInterval);
-        usageInterval = null;
-        if (usageKey) unregisterUsage(usageKey);
-        usageKey = null;
-      };
-      res.on('close', cleanup);
       res.on('finish', cleanup);
-      res.on('error', cleanup);
     };
 
     const handleStreamResponse = async (response, resolvedUrl, isUpstreamOverride) => {
+      upstreamBody = response.data;
+      if (cleanedUp) {
+        const upstreamSocket = upstreamBody.socket;
+        if (!upstreamBody.destroyed) upstreamBody.destroy();
+        upstreamSocket?.destroy();
+        return;
+      }
       const responseUrl = response.request?.res?.responseUrl || resolvedUrl;
       const contentType = response.headers?.['content-type'] || '';
       // Determine whether the upstream response is an HLS playlist:
@@ -533,7 +582,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
       response.data.on('error', err => {
         console.warn('[stream] upstream error %s/%s: %s', source, name, err.message);
-        res.destroy(err);
+        if (!res.destroyed) res.destroy(err);
       });
 
       res.set(response.headers);
@@ -548,14 +597,15 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       const axiosOptions = {
         responseType: 'stream',
         timeout: 15000,
+        signal: upstreamRequest.signal,
         ...(upstreamOverride ? { maxRedirects: 0 } : {}),
       };
       const response = await axios.get(upstreamUrl, axiosOptions);
 
       await handleStreamResponse(response, upstreamUrl, !!upstreamOverride);
     } catch (err) {
-      if (usageKey && !upstreamOverride) unregisterUsage(usageKey);
-      if (usageInterval) clearInterval(usageInterval);
+      cleanup();
+      if (res.destroyed || res.writableEnded) return;
       console.warn('[stream] failed %s/%s: %s', source, name, err.message, {
         status: err.response?.status,
         code: err.code,

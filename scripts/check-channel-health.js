@@ -41,6 +41,7 @@ function isHealthyStatus(statusCode, contentType) {
 
 async function checkStream(url) {
   const started = Date.now();
+  let stream;
   // First try HEAD (faster) then GET if needed
   try {
     const headResp = await axios.head(url, {
@@ -78,7 +79,7 @@ async function checkStream(url) {
     const statusCode = getResp.status;
     const contentType = getResp.headers['content-type'] || '';
     // Wait for first byte up to 4s or until 1KB read
-    const stream = getResp.data;
+    stream = getResp.data;
     let bytesRead = 0;
     let ttfb = null;
     await new Promise(resolve => {
@@ -135,6 +136,11 @@ async function checkStream(url) {
       method: 'GET',
     };
   } catch (err) {
+    // Axios may attach an error response body (for example, when a server
+    // returns an error after opening a streaming response). Release it too.
+    if (err.response?.data && typeof err.response.data.destroy === 'function') {
+      err.response.data.destroy();
+    }
     return {
       healthy: false,
       statusCode: err.response?.status || 0,
@@ -145,6 +151,13 @@ async function checkStream(url) {
       error: err.message || 'request failed',
       method: 'GET-ERR',
     };
+  } finally {
+    // A probe only needs a small sample. Always close the GET body after the
+    // byte/time budget, including failures, so scheduled probes cannot retain
+    // live provider connections.
+    const streamSocket = stream?.socket;
+    if (stream && !stream.destroyed) stream.destroy();
+    streamSocket?.destroy();
   }
 }
 

@@ -22,11 +22,44 @@ export function imageProxyRoute(app) {
       return res.status(400).send('Invalid image URL');
     }
 
+    const upstreamRequest = new AbortController();
+    let upstreamBody;
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      upstreamRequest.abort();
+      const upstreamSocket = upstreamBody?.socket;
+      if (upstreamBody && !upstreamBody.destroyed) upstreamBody.destroy();
+      upstreamSocket?.destroy();
+    };
+    const abortForDisconnectedClient = () => {
+      if (!res.writableEnded) cleanup();
+    };
+    req.on('aborted', cleanup);
+    res.on('close', abortForDisconnectedClient);
+    res.on('error', cleanup);
+
     try {
-      const response = await axios.get(parsedUrl.href, { responseType: 'stream' });
+      const response = await axios.get(parsedUrl.href, {
+        responseType: 'stream',
+        signal: upstreamRequest.signal,
+      });
+      upstreamBody = response.data;
+      if (cleanedUp) {
+        const upstreamSocket = upstreamBody.socket;
+        if (!upstreamBody.destroyed) upstreamBody.destroy();
+        upstreamSocket?.destroy();
+        return;
+      }
       res.set(response.headers);
-      response.data.pipe(res);
+      upstreamBody.on('error', err => {
+        if (!res.destroyed) res.destroy(err);
+      });
+      upstreamBody.pipe(res);
     } catch (err) {
+      cleanup();
+      if (res.destroyed || res.writableEnded) return;
       console.warn(`Failed to fetch image from ${decodedUrl}: ${err.message}`);
       // Return a more helpful error message
       if (err.response?.status === 404) {

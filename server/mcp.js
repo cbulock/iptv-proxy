@@ -514,9 +514,11 @@ function createMcpServer() {
     {},
     async () => {
       const providers = listSources().map(source => ({
+        id: source.id,
         name: source.name,
         type: source.type || 'm3u',
         hasEpg: Boolean(source.epg),
+        enabled: source.enabled,
       }));
 
       return createSuccess('list_providers', providers, {

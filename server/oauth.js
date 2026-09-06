@@ -11,6 +11,7 @@ import {
   revokeAccessToken,
 } from '../libs/oauth-service.js';
 import { loadAppConfigFromStore } from '../libs/app-settings-service.js';
+import resolveRequestBaseUrl from '../libs/getBaseUrl.js';
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ function getBaseUrl(req) {
     return appConfig.base_url.trim().replace(/\/+$/, '');
   }
 
-  return `${req.protocol}://${req.get('host')}`.replace(/\/+$/, '');
+  return resolveRequestBaseUrl(req).replace(/\/+$/, '');
 }
 
 function getMetadata(req) {

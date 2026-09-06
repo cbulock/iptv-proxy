@@ -57,6 +57,9 @@ const m3uSchema = Joi.object({
   urls: Joi.array()
     .items(
       Joi.object({
+        id: Joi.string().trim().min(1).optional().messages({
+          'string.empty': 'Provider "id" cannot be empty',
+        }),
         name: Joi.string().required().messages({
           'any.required': 'Each M3U source must have a "name"',
           'string.empty': 'M3U source "name" cannot be empty',
@@ -94,6 +97,9 @@ const providersSchema = Joi.object({
   providers: Joi.array()
     .items(
       Joi.object({
+        id: Joi.string().trim().min(1).optional().messages({
+          'string.empty': 'Provider "id" cannot be empty',
+        }),
         name: Joi.string().required().messages({
           'any.required': 'Each provider must have a "name"',
           'string.empty': 'Provider "name" cannot be empty',
@@ -108,6 +114,7 @@ const providersSchema = Joi.object({
         epg: Joi.string().optional().allow(null, '').messages({
           'string.base': 'Provider "epg" must be a string URL',
         }),
+        enabled: Joi.boolean().optional(),
       })
     )
     .default([]),
@@ -117,6 +124,13 @@ const appSchema = Joi.object({
   base_url: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
     'string.uri': 'app.yaml "base_url" must be a valid URL',
   }),
+  trusted_proxies: Joi.array()
+    .items(Joi.string().trim().max(255))
+    .optional()
+    .messages({
+      'array.base': 'app.yaml "trusted_proxies" must be an array of proxy IPs or CIDR ranges',
+      'string.base': 'Each trusted proxy must be a string',
+    }),
   oauth: Joi.object({
     issuer: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
       'string.uri': 'app.yaml "oauth.issuer" must be a valid URL',

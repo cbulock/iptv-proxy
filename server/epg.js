@@ -13,11 +13,13 @@ import { listSources } from '../libs/source-service.js';
 import {
   getOutputProfile,
   getOutputProfileChannels,
+  hasOutputProfileEntries,
   listOutputProfiles,
 } from '../libs/output-profile-service.js';
 import { listGuideBindings } from '../libs/canonical-channel-service.js';
 
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
+import getBaseUrl from '../libs/getBaseUrl.js';
 
 // Rate limiter for the public XMLTV endpoint
 const epgLimiter = RateLimit({
@@ -59,6 +61,10 @@ let lastEPGSourceResults = [];
 
 // Maximum number of programmes returned per guide query (matches /api/guide behaviour)
 const MAX_GUIDE_PROGRAMMES = 20;
+// Rewritten XMLTV responses can be several megabytes. Cache only a bounded
+// number of request variants so arbitrary filter combinations cannot retain
+// unbounded copies of the guide in memory.
+const MAX_EPG_CACHE_ENTRIES = 32;
 
 /**
  * Extract a plain string from an XMLTV text field which may be a raw string,
@@ -109,16 +115,13 @@ export function parseXMLTVDate(str) {
 }
 
 function rewriteImageUrls(xmlString, req) {
-  const protocol =
-    req.get('X-Forwarded-Proto') ||
-    req.get('X-Forwarded-Protocol') ||
-    req.get('X-Url-Scheme') ||
-    (req.get('X-Forwarded-Ssl') === 'on' ? 'https' : req.protocol);
+  const requestBaseUrl = getBaseUrl(req);
 
-  // Check cache - include filter params in cache key
+  // Check cache. A profile affects both selected records and display names.
   const filterSource = req.query.source || '';
   const filterChannels = req.query.channels || '';
-  const cacheKey = `${protocol}://${req.get('host')}|source:${filterSource}|channels:${filterChannels}`;
+  const profileSlug = req.params.slug ? String(req.params.slug).trim() : 'default';
+  const cacheKey = `${requestBaseUrl}|profile:${profileSlug}|source:${filterSource}|channels:${filterChannels}`;
   if (epgCache && epgCache.has(cacheKey)) {
     return epgCache.get(cacheKey);
   }
@@ -205,6 +208,13 @@ export function _resetMergedEPGForTesting() {
   lastEPGSourceResults = [];
 }
 
+/** Clear derived guide data after a state restore. */
+export function invalidateEPGCache() {
+  mergedEPG = null;
+  epgCache = null;
+  lastEPGSourceResults = [];
+}
+
 function loadOutputChannels(slug = '') {
   if (slug) {
     const profile = getOutputProfile(slug);
@@ -216,7 +226,7 @@ function loadOutputChannels(slug = '') {
   }
 
   const outputChannels = getOutputProfileChannels();
-  return outputChannels.length > 0 ? outputChannels : getChannels();
+  return outputChannels.length > 0 || hasOutputProfileEntries() ? outputChannels : getChannels();
 }
 
 function loadChannelsForGuideMerge() {
@@ -242,6 +252,52 @@ function loadChannelsForGuideMerge() {
 
 function cloneNode(node) {
   return JSON.parse(JSON.stringify(node));
+}
+
+/**
+ * Deduplicate the merged XMLTV records deterministically.
+ *
+ * EPG sources are processed in the stable order returned by listSources()
+ * (created-at, then source name), and records retain their order within each
+ * source.  The first channel for an id and the first programme for
+ * (channel, start, title) win.  Keeping the entire first node preserves
+ * language-tagged title fields and any provider-specific metadata.
+ *
+ * Records missing one of the programme identity fields are preserved rather
+ * than collapsed, because they cannot be safely identified as duplicates.
+ *
+ * @param {{tv?: {channel?: Array, programme?: Array}}} guide
+ * @returns {{tv: {channel: Array, programme: Array}}}
+ */
+export function deduplicateXmltvRecords(guide) {
+  const channels = [];
+  const programmes = [];
+  const channelIds = new Set();
+  const programmeKeys = new Set();
+
+  for (const channel of [].concat(guide?.tv?.channel || [])) {
+    if (!channel) continue;
+    const channelId = String(channel?.['@_id'] || '').trim();
+    if (!channelId || !channelIds.has(channelId)) {
+      channels.push(channel);
+      if (channelId) channelIds.add(channelId);
+    }
+  }
+
+  for (const programme of [].concat(guide?.tv?.programme || [])) {
+    if (!programme) continue;
+    const channelId = String(programme?.['@_channel'] || '').trim();
+    const start = String(programme?.['@_start'] || '').trim();
+    const title = extractTextField(programme?.title);
+    const key = channelId && start && title ? `${channelId}\u0000${start}\u0000${title}` : '';
+
+    if (!key || !programmeKeys.has(key)) {
+      programmes.push(programme);
+      if (key) programmeKeys.add(key);
+    }
+  }
+
+  return { tv: { channel: channels, programme: programmes } };
 }
 
 function getDisplayNameValues(channel) {
@@ -338,7 +394,7 @@ export async function setupEPGRoutes(app) {
 
   // Initialize EPG cache with TTL from config (default: 6 hours)
   const epgTTL = (appConfig.cache?.epg_ttl ?? 21600) * 1000; // Convert seconds to milliseconds
-  epgCache = cacheManager.createCache('epg', epgTTL);
+  epgCache = cacheManager.createCache('epg', epgTTL, MAX_EPG_CACHE_ENTRIES);
   console.log(`EPG cache initialized with TTL: ${epgTTL / 1000}s`);
 
   async function fetchAndMergeEPGs() {
@@ -354,9 +410,15 @@ export async function setupEPGRoutes(app) {
       const sourceName = source.name;
       const sourceUrl = source.url;
       const sourceBindingRules = guideBindingsBySource.get(sourceName) || [];
-      const bindingRuleByInputId = new Map(
-        sourceBindingRules.map(rule => [rule.inputChannelId, rule])
-      );
+      // An input guide channel can intentionally drive more than one
+      // canonical output. Keep every selected rule so both IDs are emitted.
+      const bindingRulesByInputId = new Map();
+      for (const rule of sourceBindingRules) {
+        if (!bindingRulesByInputId.has(rule.inputChannelId)) {
+          bindingRulesByInputId.set(rule.inputChannelId, []);
+        }
+        bindingRulesByInputId.get(rule.inputChannelId).push(rule);
+      }
       const sourceChannels = allChannels.filter(c => c.source === sourceName);
       const fallbackChannels = sourceChannels.filter(
         channel => !channel.canonicalId || !selectedCanonicalIds.has(channel.canonicalId)
@@ -420,16 +482,18 @@ export async function setupEPGRoutes(app) {
                 return [];
               }
 
-              const selectedRule = bindingRuleByInputId.get(channel['@_id']);
-              if (selectedRule) {
-                const rewrittenChannel = cloneNode(channel);
-                rewrittenChannel['@_id'] = selectedRule.outputChannelId;
-                if (!getDisplayNameValues(rewrittenChannel).includes(selectedRule.outputName)) {
-                  rewrittenChannel['display-name'] = [selectedRule.outputName].concat(
-                    [].concat(rewrittenChannel['display-name'] || [])
-                  );
-                }
-                return [rewrittenChannel];
+              const selectedRules = bindingRulesByInputId.get(channel['@_id']);
+              if (selectedRules) {
+                return selectedRules.map(selectedRule => {
+                  const rewrittenChannel = cloneNode(channel);
+                  rewrittenChannel['@_id'] = selectedRule.outputChannelId;
+                  if (!getDisplayNameValues(rewrittenChannel).includes(selectedRule.outputName)) {
+                    rewrittenChannel['display-name'] = [selectedRule.outputName].concat(
+                      [].concat(rewrittenChannel['display-name'] || [])
+                    );
+                  }
+                  return rewrittenChannel;
+                });
               }
 
               const displayNames = getDisplayNameValues(channel);
@@ -463,11 +527,13 @@ export async function setupEPGRoutes(app) {
                 return [];
               }
 
-              const selectedRule = bindingRuleByInputId.get(programme['@_channel']);
-              if (selectedRule) {
-                const rewrittenProgramme = cloneNode(programme);
-                rewrittenProgramme['@_channel'] = selectedRule.outputChannelId;
-                return [rewrittenProgramme];
+              const selectedRules = bindingRulesByInputId.get(programme['@_channel']);
+              if (selectedRules) {
+                return selectedRules.map(selectedRule => {
+                  const rewrittenProgramme = cloneNode(programme);
+                  rewrittenProgramme['@_channel'] = selectedRule.outputChannelId;
+                  return rewrittenProgramme;
+                });
               }
 
               if (
@@ -555,6 +621,10 @@ export async function setupEPGRoutes(app) {
       }
     }
 
+    const deduplicated = deduplicateXmltvRecords(merged);
+    merged.tv.channel = deduplicated.tv.channel;
+    merged.tv.programme = deduplicated.tv.programme;
+
     lastEPGSourceResults = sourceResults;
 
     try {
@@ -597,40 +667,32 @@ export async function setupEPGRoutes(app) {
 
     let xmlToSend = mergedEPG;
 
-    if ((profileSlug || filterSource || filterChannels) && typeof mergedEPG === 'string' && mergedEPG.trim()) {
+    if (typeof mergedEPG === 'string' && mergedEPG.trim()) {
       try {
         const parsed = parser.parse(mergedEPG);
         if (!parsed || !parsed.tv) {
           throw new Error('Invalid EPG structure');
         }
 
-        const allChannels = displayNameChannels;
-        const allowedTvgIds = new Set();
-
-        if (profileSlug) {
-          allChannels.forEach(channel => {
-            if (channel?.tvg_id) {
-              allowedTvgIds.add(channel.tvg_id);
-            }
-          });
-        }
-
+        // The unscoped route is the default profile, rather than the union
+        // used while merging sources. Apply membership first, then intersect
+        // all requested filters so they cannot expand profile visibility.
+        let allowedChannels = displayNameChannels;
         if (filterSource) {
-          allowedTvgIds.clear();
-          displayNameChannels = allChannels.filter(c => c && c.source === filterSource);
-          displayNameChannels.forEach(c => {
-            if (c.tvg_id) {
-              allowedTvgIds.add(c.tvg_id);
-            }
-          });
-        } else if (filterChannels) {
-          allowedTvgIds.clear();
-          const allowedChannelIds = new Set(filterChannels.map(id => id.trim()));
-          filterChannels.forEach(id => allowedTvgIds.add(id.trim()));
-          displayNameChannels = allChannels.filter(c => c?.tvg_id && allowedChannelIds.has(c.tvg_id));
+          allowedChannels = allowedChannels.filter(c => c && c.source === filterSource);
         }
+        if (filterChannels) {
+          const allowedChannelIds = new Set(filterChannels.map(id => id.trim()));
+          allowedChannels = allowedChannels.filter(
+            channel => channel?.tvg_id && allowedChannelIds.has(channel.tvg_id)
+          );
+        }
+        displayNameChannels = allowedChannels;
+        const allowedTvgIds = new Set(
+          allowedChannels.map(channel => channel?.tvg_id).filter(Boolean)
+        );
 
-        if (allowedTvgIds.size > 0 && parsed.tv) {
+        if (parsed.tv) {
           const tv = parsed.tv;
           tv.channel = [].concat(tv.channel || []).filter(c => c && allowedTvgIds.has(c['@_id']));
           tv.programme = []

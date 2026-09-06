@@ -18,8 +18,13 @@ describe('Lineup Route Integration', () => {
   let setupLineupRoutes;
   let errorHandler;
   let databaseModule;
+  let originalAxiosProxy;
 
   before(async () => {
+    // The route and its mocks address upstream hosts directly. Do not inherit a
+    // developer-machine HTTP proxy while exercising those local test doubles.
+    originalAxiosProxy = axios.defaults.proxy;
+    axios.defaults.proxy = false;
     configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-lineup-config-'));
     dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-lineup-data-'));
     process.env.CONFIG_PATH = configDir;
@@ -107,6 +112,7 @@ describe('Lineup Route Integration', () => {
     }
     cleanupCache();
     databaseModule.closeDatabase();
+    axios.defaults.proxy = originalAxiosProxy;
     delete process.env.CONFIG_PATH;
     delete process.env.DATA_PATH;
     await fs.rm(configDir, { recursive: true, force: true });

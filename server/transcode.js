@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import RateLimit from 'express-rate-limit';
 import { getChannels } from '../libs/channels-cache.js';
+import { getSourceChannelById } from '../libs/source-channel-resolver.js';
 
 // Rate limiter for the transcoding endpoint — each ffmpeg process consumes significant
 // CPU and network resources, so keep the per-IP limit stricter than other endpoints.
@@ -46,9 +47,13 @@ function ffmpegCommand() {
  */
 export function setupTranscodeRoutes(app) {
   app.get('/transcode/:source/:name', transcodeLimiter, (req, res) => {
-    const { source, name } = req.params;
+    let { source, name } = req.params;
     const channels = getChannels();
-    const channel = channels.find(c => c.source === source && c.name === name);
+    const channel = source === 'channel' ? getSourceChannelById(name) : channels.find(c => c.source === source && c.name === name);
+    if (channel) {
+      source = channel.source;
+      name = channel.name;
+    }
 
     if (!channel) {
       return res.status(404).send('Channel not found');

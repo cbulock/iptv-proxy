@@ -141,22 +141,55 @@ describe('legacy config compatibility routes', () => {
     expect(epgResponse.status).to.equal(200);
 
     const providersResponse = await axios.get(`${baseUrl}/api/config/providers`);
-    expect(providersResponse.data).to.deep.equal({
-      providers: [
-        {
-          name: 'Source One',
-          url: 'http://updated.example/one.m3u',
-          type: 'm3u',
-          epg: 'http://updated.example/one.xml',
-        },
-        {
-          name: 'Source Three',
-          url: 'http://updated.example/three.m3u',
-          type: 'm3u',
-          epg: 'http://updated.example/three.xml',
-        },
-      ],
+    expect(
+      providersResponse.data.providers.map(({ id: _id, ...provider }) => provider)
+    ).to.deep.equal([
+      {
+        name: 'Source One',
+        url: 'http://updated.example/one.m3u',
+        type: 'm3u',
+        epg: 'http://updated.example/one.xml',
+      },
+      {
+        name: 'Source Three',
+        url: 'http://updated.example/three.m3u',
+        type: 'm3u',
+        epg: 'http://updated.example/three.xml',
+      },
+    ]);
+    expect(providersResponse.data.providers.every(provider => typeof provider.id === 'string')).to.equal(
+      true
+    );
+  });
+
+  it('keeps source relationships when the primary provider configuration is saved', async () => {
+    const initial = await axios.get(`${baseUrl}/api/config/providers`);
+    const provider = initial.data.providers.find(item => item.name === 'Source One');
+    const db = databaseModule.getDatabase();
+    const timestamp = new Date().toISOString();
+
+    db.prepare('INSERT INTO source_channels (id, source_id, name, last_seen_at) VALUES (?, ?, ?, ?)').run(
+      'primary-config-channel',
+      provider.id,
+      'Saved Channel',
+      timestamp
+    );
+
+    await axios.put(`${baseUrl}/api/config/providers`, initial.data);
+    await axios.put(`${baseUrl}/api/config/providers`, {
+      providers: [{ ...provider, epg: 'http://updated.example/one.xml' }],
     });
+
+    const updated = await axios.get(`${baseUrl}/api/config/providers`);
+    expect(updated.data.providers).to.deep.equal([
+      {
+        ...provider,
+        epg: 'http://updated.example/one.xml',
+      },
+    ]);
+    expect(db.prepare('SELECT id, source_id FROM source_channels').all()).to.deep.equal([
+      { id: 'primary-config-channel', source_id: provider.id },
+    ]);
   });
 
   it('rejects legacy EPG updates for unknown source names', async () => {

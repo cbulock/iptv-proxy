@@ -2,6 +2,7 @@ import { describe, it, beforeEach } from 'mocha';
 import { expect } from 'chai';
 import { XMLParser } from 'fast-xml-parser';
 import { loadFixture, generateXMLTV } from '../helpers.js';
+import { deduplicateXmltvRecords } from '../../server/epg.js';
 
 describe('EPG/XMLTV Integration', () => {
   let parser;
@@ -201,6 +202,43 @@ describe('EPG/XMLTV Integration', () => {
   });
 
   describe('EPG Merging Logic', () => {
+    it('deduplicates channel and programme conflicts deterministically while retaining language-tagged titles', () => {
+      const englishFirst = {
+        '@_channel': 'merged.1',
+        '@_start': '20250101000000 +0000',
+        '@_stop': '20250101010000 +0000',
+        title: [
+          { '#text': 'Shared Show', '@_lang': 'en' },
+          { '#text': 'Programme partage', '@_lang': 'fr' },
+        ],
+        desc: 'First source wins',
+      };
+      const conflictingSecond = {
+        '@_channel': 'merged.1',
+        '@_start': '20250101000000 +0000',
+        '@_stop': '20250101013000 +0000',
+        title: 'Shared Show',
+        desc: 'Later source must not replace the first record',
+      };
+
+      const merged = deduplicateXmltvRecords({
+        tv: {
+          channel: [
+            { '@_id': 'merged.1', 'display-name': 'First Source Name' },
+            { '@_id': 'merged.1', 'display-name': 'Later Source Name' },
+          ],
+          programme: [englishFirst, conflictingSecond],
+        },
+      });
+
+      expect(merged.tv.channel).to.deep.equal([
+        { '@_id': 'merged.1', 'display-name': 'First Source Name' },
+      ]);
+      expect(merged.tv.programme).to.have.lengthOf(1);
+      expect(merged.tv.programme[0]).to.equal(englishFirst);
+      expect(merged.tv.programme[0].title).to.deep.equal(englishFirst.title);
+    });
+
     it('should merge multiple EPG sources correctly', () => {
       const epg1 = generateXMLTV(
         [{ id: 'ch1', name: 'Channel 1' }],

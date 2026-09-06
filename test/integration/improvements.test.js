@@ -173,6 +173,76 @@ describe('Config Backup API', () => {
     expect(content).to.include('base_url: https://db-backed.example.com');
   });
 
+  it('restores canonical bindings and output settings from a database snapshot', async () => {
+    databaseModule.initDatabase();
+    const db = databaseModule.getDatabase();
+    const timestamp = new Date().toISOString();
+    const sourceId = 'restore-source';
+    const channelId = 'restore-source-channel';
+    const canonicalId = 'restore-canonical';
+    const profileId = 'restore-profile';
+
+    db.prepare(
+      `INSERT INTO sources (id, name, type, playlist_url, enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(sourceId, 'Restore Source', 'm3u', 'http://restore.example/playlist.m3u', 1, timestamp, timestamp);
+    db.prepare(
+      `INSERT INTO source_channels (id, source_id, name, last_seen_at)
+       VALUES (?, ?, ?, ?)`
+    ).run(channelId, sourceId, 'Restore Channel', timestamp);
+    db.prepare(
+      `INSERT INTO canonical_channels (id, slug, name, published, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(canonicalId, 'restore-canonical', 'Restore Canonical', 1, timestamp, timestamp);
+    db.prepare(
+      `INSERT INTO channel_bindings (
+        id, source_channel_id, canonical_channel_id, binding_type, priority, is_preferred_stream, resolution_state
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run('restore-binding', channelId, canonicalId, 'source', 0, 1, 'resolved');
+    db.prepare(
+      `INSERT INTO guide_bindings (id, canonical_channel_id, source_id, epg_channel_id, priority)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run('restore-guide-binding', canonicalId, sourceId, 'restore.guide', 0);
+    db.prepare(
+      `INSERT INTO output_profiles (id, name, slug, enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(profileId, 'Restore Profile', 'restore-profile', 1, timestamp, timestamp);
+    db.prepare(
+      `INSERT INTO output_profile_channels (
+        id, output_profile_id, canonical_channel_id, position, guide_number_override, enabled
+      ) VALUES (?, ?, ?, ?, ?, ?)`
+    ).run('restore-output-entry', profileId, canonicalId, 7, '707', 0);
+
+    const createRes = await axios.post(`${baseUrl}/api/config/backup`);
+    db.prepare('DELETE FROM sources WHERE id = ?').run(sourceId);
+    db.prepare('DELETE FROM canonical_channels WHERE id = ?').run(canonicalId);
+    databaseModule.closeDatabase();
+
+    const restoreRes = await axios.post(`${baseUrl}/api/config/backups/${createRes.data.name}/restore`);
+    expect(restoreRes.status).to.equal(200);
+
+    expect(
+      databaseModule.get('SELECT id FROM source_channels WHERE id = ?', [channelId])
+    ).to.deep.equal({ id: channelId });
+    expect(
+      databaseModule.get(
+        'SELECT source_channel_id, canonical_channel_id FROM channel_bindings WHERE id = ?',
+        ['restore-binding']
+      )
+    ).to.deep.equal({ source_channel_id: channelId, canonical_channel_id: canonicalId });
+    expect(
+      databaseModule.get('SELECT epg_channel_id FROM guide_bindings WHERE id = ?', [
+        'restore-guide-binding',
+      ])
+    ).to.deep.equal({ epg_channel_id: 'restore.guide' });
+    expect(
+      databaseModule.get(
+        'SELECT position, guide_number_override, enabled FROM output_profile_channels WHERE id = ?',
+        ['restore-output-entry']
+      )
+    ).to.deep.equal({ position: 7, guide_number_override: '707', enabled: 0 });
+  });
+
   it('DELETE /api/config/backups/:name deletes a backup', async () => {
     const createRes = await axios.post(`${baseUrl}/api/config/backup`);
     const { name } = createRes.data;
