@@ -1056,7 +1056,7 @@ function createMcpServer() {
             summary:
               outcome.status === 'degraded'
                 ? 'EPG reload completed with stale source data retained.'
-                : 'EPG reload triggered successfully.',
+                : 'EPG reload completed successfully.',
             sideEffects: [
               outcome.status === 'degraded'
                 ? 'Guide data was rebuilt while retaining last-known-good data for failed sources.'
