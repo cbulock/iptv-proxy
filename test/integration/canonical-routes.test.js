@@ -399,4 +399,114 @@ describe('canonical model routes', () => {
     expect(selectedAfterReload.source.id).to.equal(nextBinding.source.id);
     expect(selectedAfterReload.epgChannelId).to.equal('preferred.guide.id');
   });
+
+  it('preserves canonical settings when a mapping is renamed or renumbered', async () => {
+    const channelsResponse = await axios.get(`${baseUrl}/api/canonical/channels`);
+    const canonicalChannel = channelsResponse.data.channels[0];
+    const bindingsResponse = await axios.get(`${baseUrl}/api/canonical/bindings`);
+    const preferredStream = bindingsResponse.data.bindings.find(
+      binding => binding.sourceChannel.source === 'IPTV Two'
+    );
+    const guideBindingsResponse = await axios.get(`${baseUrl}/api/canonical/guide-bindings`);
+    const guideBinding = guideBindingsResponse.data.bindings.find(
+      binding => binding.source.name === 'IPTV Two'
+    );
+
+    await axios.patch(`${baseUrl}/api/canonical/channels/${canonicalChannel.id}`, {
+      customName: 'My Saved Channel',
+    });
+    await axios.patch(`${baseUrl}/api/canonical/channels/${canonicalChannel.id}`, {
+      published: false,
+    });
+    await axios.patch(`${baseUrl}/api/canonical/channels/${canonicalChannel.id}/preferred-stream`, {
+      sourceChannelId: preferredStream.sourceChannel.id,
+    });
+    await axios.patch(`${baseUrl}/api/canonical/channels/${canonicalChannel.id}/guide-binding`, {
+      sourceId: guideBinding.source.id,
+      epgChannelId: 'my.saved.guide',
+    });
+    await axios.patch(`${baseUrl}/api/output-profiles/default/channels`, {
+      channels: [
+        {
+          canonicalId: canonicalChannel.id,
+          position: 9,
+          enabled: true,
+          guideNumberOverride: '909',
+        },
+      ],
+    });
+
+    const channelMapService = await import('../../libs/channel-map-service.js');
+    channelMapService.replaceChannelMap({
+      'Source One': {
+        name: 'Renamed Mapping',
+        tvg_id: 'renamed.mapping',
+        number: '909',
+      },
+      'Source Two': {
+        name: 'Renamed Mapping',
+        tvg_id: 'renamed.mapping',
+        number: '909',
+      },
+    });
+
+    nock('http://canonical-routes.example')
+      .get('/one.m3u')
+      .reply(
+        200,
+        ['#EXTM3U', '#EXTINF:-1 tvg-id="raw.one",Source One', 'http://streams.example/one'].join(
+          '\n'
+        )
+      );
+    nock('http://canonical-routes.example')
+      .get('/two.m3u')
+      .reply(
+        200,
+        ['#EXTM3U', '#EXTINF:-1 tvg-id="raw.two",Source Two', 'http://streams.example/two'].join(
+          '\n'
+        )
+      );
+
+    await parseM3UModule.parseAll();
+
+    const [reloadedChannels, reloadedBindings, reloadedGuideBindings, reloadedProfileEntries] =
+      await Promise.all([
+        axios.get(`${baseUrl}/api/canonical/channels`),
+        axios.get(`${baseUrl}/api/canonical/bindings`),
+        axios.get(`${baseUrl}/api/canonical/guide-bindings`),
+        axios.get(`${baseUrl}/api/output-profiles/default/entries`),
+      ]);
+
+    expect(reloadedChannels.data.channels).to.deep.include({
+      id: canonicalChannel.id,
+      name: 'My Saved Channel',
+      baseName: 'Renamed Mapping',
+      customName: 'My Saved Channel',
+      guideNumber: '909',
+      published: false,
+    });
+    expect(
+      reloadedBindings.data.bindings.find(
+        binding => binding.canonical.id === canonicalChannel.id && binding.isPreferredStream
+      ).sourceChannel.id
+    ).to.equal(preferredStream.sourceChannel.id);
+    expect(
+      reloadedGuideBindings.data.bindings.find(
+        binding => binding.canonical.id === canonicalChannel.id && binding.selected
+      )
+    ).to.include({ epgChannelId: 'my.saved.guide' });
+    expect(reloadedProfileEntries.data.entries).to.deep.include({
+      position: 9,
+      guideNumberOverride: '909',
+      enabled: true,
+      canonical: {
+        id: canonicalChannel.id,
+        name: 'My Saved Channel',
+        baseName: 'Renamed Mapping',
+        customName: 'My Saved Channel',
+        tvg_id: 'renamed.mapping',
+        guideNumber: '909',
+      },
+    });
+  });
 });

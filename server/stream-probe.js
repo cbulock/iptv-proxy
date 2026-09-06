@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getChannels } from '../libs/channels-cache.js';
+import { getSourceChannelById } from '../libs/source-channel-resolver.js';
 import { requireAuth } from './auth.js';
 
 // Read at most 64 KB — enough to reliably find PAT and PMT in any MPEG-TS stream.
@@ -363,9 +364,13 @@ async function readStreamBytes(stream, maxBytes) {
  */
 export function setupStreamProbeRoutes(app) {
   app.get('/api/stream-probe/:source/:name', requireAuth, async (req, res) => {
-    const { source, name } = req.params;
+    let { source, name } = req.params;
     const channels = getChannels();
-    const channel = channels.find(c => c.source === source && c.name === name);
+    const channel = source === 'channel' ? getSourceChannelById(name) : channels.find(c => c.source === source && c.name === name);
+    if (channel) {
+      source = channel.source;
+      name = channel.name;
+    }
 
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
 

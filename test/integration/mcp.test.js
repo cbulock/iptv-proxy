@@ -278,7 +278,7 @@ describe('MCP Route Integration', () => {
     });
     const providers = expectToolSuccess(msg, 'list_providers').data;
     expect(providers).to.have.lengthOf(2);
-    expect(providers[0]).to.have.all.keys('name', 'type', 'hasEpg');
+    expect(providers[0]).to.have.all.keys('id', 'name', 'type', 'hasEpg', 'enabled');
     expect(providers.map(p => p.name)).to.include.members(['TestProvider', 'OtherProvider']);
   });
 

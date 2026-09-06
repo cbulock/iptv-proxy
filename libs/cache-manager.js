@@ -14,8 +14,8 @@ class CacheManager {
    * @param {number} ttl - Time to live in milliseconds (0 = no expiration)
    * @returns {Cache} Cache instance
    */
-  createCache(name, ttl = 0) {
-    const cache = new Cache(name, ttl);
+  createCache(name, ttl = 0, maxEntries = Infinity) {
+    const cache = new Cache(name, ttl, maxEntries);
     this.caches.set(name, cache);
     return cache;
   }
@@ -52,9 +52,10 @@ class CacheManager {
 }
 
 class Cache {
-  constructor(name, ttl = 0) {
+  constructor(name, ttl = 0, maxEntries = Infinity) {
     this.name = name;
     this.ttl = ttl; // TTL in milliseconds
+    this.maxEntries = maxEntries;
     this.data = new Map();
     this.timestamps = new Map();
     this.hits = 0;
@@ -67,8 +68,18 @@ class Cache {
    * @param {*} value - Value to cache
    */
   set(key, value) {
+    // Map insertion order gives us a small, dependency-free LRU cache. Refresh
+    // an existing entry so frequently used variants are not evicted first.
+    if (this.data.has(key)) {
+      this.data.delete(key);
+      this.timestamps.delete(key);
+    }
     this.data.set(key, value);
     this.timestamps.set(key, Date.now());
+    while (this.data.size > this.maxEntries) {
+      const oldestKey = this.data.keys().next().value;
+      this.delete(oldestKey);
+    }
   }
 
   /**
@@ -96,7 +107,11 @@ class Cache {
     }
 
     this.hits++;
-    return this.data.get(key);
+    const value = this.data.get(key);
+    // Promote a hit to most recently used.
+    this.data.delete(key);
+    this.data.set(key, value);
+    return value;
   }
 
   /**
@@ -170,6 +185,7 @@ class Cache {
       name: this.name,
       size,
       ttl: this.ttl,
+      maxEntries: this.maxEntries,
       hits: this.hits,
       misses: this.misses,
       hitRate: `${hitRate}%`,

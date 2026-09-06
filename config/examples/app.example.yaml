@@ -16,6 +16,13 @@
 # - Custom port: base_url: "https://iptv.example.com:8443"
 # - Subdirectory: base_url: "https://example.com/iptv"
 
+# Optional: Trust forwarded client-IP, host, and protocol headers only from
+# your reverse proxy. Leave empty for direct LAN access (the secure default).
+# trusted_proxies:
+#   - "127.0.0.1"
+#   - "::1"
+#   - "192.168.1.10"
+
 # ============================================================================
 # Admin Authentication Configuration
 # ============================================================================

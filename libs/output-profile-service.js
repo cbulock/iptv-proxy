@@ -353,6 +353,7 @@ function hydrateOutputChannel(row) {
     logo: row.logo || raw.logo || '',
     group: row.group_name || raw.group || '',
     source: row.source_name || raw.source || '',
+    sourceChannelId: row.source_channel_id || null,
     streamName: row.source_channel_name || raw.name || row.canonical_name,
     original_url: row.stream_url || raw.original_url || '',
     position: row.position,
@@ -381,6 +382,7 @@ export function getOutputProfileChannels(slug = DEFAULT_PROFILE_SLUG) {
           cc.logo,
           cc.group_name,
           cb.id AS binding_id,
+          cb.source_channel_id AS source_channel_id,
           cb.priority,
           cb.is_preferred_stream,
           sc.name AS source_channel_name,
@@ -415,6 +417,38 @@ export function getOutputProfileChannels(slug = DEFAULT_PROFILE_SLUG) {
   }
 
   return outputChannels.sort(compareOutputChannels);
+}
+
+/**
+ * Return whether a profile has been initialized with editable channel entries.
+ *
+ * An empty result from getOutputProfileChannels() is ambiguous: it can mean a
+ * legacy installation has not yet built its output-profile model, or that an
+ * operator deliberately disabled every entry (or removed every effective guide
+ * number).  Callers that publish a lineup need that distinction so they do not
+ * fall back to the legacy mapped-channel output after an intentional edit.
+ *
+ * @param {string} slug output profile slug
+ * @returns {boolean} true when the profile has one or more persisted entries
+ */
+export function hasOutputProfileEntries(slug = DEFAULT_PROFILE_SLUG) {
+  ensureDatabaseReady();
+
+  const profile = getProfileBySlug(slug);
+  if (!profile) {
+    return false;
+  }
+
+  const entry = getDatabase()
+    .prepare(
+      `SELECT 1
+         FROM output_profile_channels
+        WHERE output_profile_id = ?
+        LIMIT 1`
+    )
+    .get(profile.id);
+
+  return Boolean(entry);
 }
 
 export function updateOutputProfileEntries(slug = DEFAULT_PROFILE_SLUG, channels = []) {
@@ -609,6 +643,7 @@ export default {
   deleteOutputProfile,
   getOutputProfile,
   getOutputProfileChannels,
+  hasOutputProfileEntries,
   listOutputProfileEntries,
   listOutputProfiles,
   syncAllOutputProfiles,

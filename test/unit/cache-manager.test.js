@@ -12,6 +12,17 @@ describe('Cache Manager', () => {
     });
 
     describe('Basic Operations', () => {
+      it('evicts the least recently used entry when maxEntries is reached', () => {
+        const bounded = new Cache('bounded', 0, 2);
+        bounded.set('first', 1);
+        bounded.set('second', 2);
+        bounded.get('first');
+        bounded.set('third', 3);
+
+        expect(bounded.get('first')).to.equal(1);
+        expect(bounded.get('second')).to.be.undefined;
+        expect(bounded.get('third')).to.equal(3);
+      });
       it('should set and get values', () => {
         cache.set('key1', 'value1');
         const result = cache.get('key1');

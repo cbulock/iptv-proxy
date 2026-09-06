@@ -49,7 +49,15 @@ const appConfig = loadConfig('app');
 
 const config = { ...appConfig, host: 'localhost' };
 
-app.set('trust proxy', true);
+// Forwarded headers are trusted only when the direct peer is explicitly
+// configured as a reverse proxy. A direct LAN client must not be able to
+// forge X-Forwarded-For/Host/Proto to impersonate loopback or HTTPS.
+app.set(
+  'trust proxy',
+  Array.isArray(appConfig.trusted_proxies) && appConfig.trusted_proxies.length
+    ? appConfig.trusted_proxies
+    : false
+);
 app.use(express.json({ limit: '1mb' }));
 
 // Session middleware — secret is read from config or generated and saved on first run

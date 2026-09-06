@@ -303,6 +303,135 @@ describe('output profile persistence', () => {
     }
   });
 
+  it('fans one selected source guide channel out to every canonical output and deduplicates it', async () => {
+    const epgPath = path.join(configDir, 'fanout.xml');
+    await fs.writeFile(
+      epgPath,
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<tv>',
+        '  <channel id="shared.guide"><display-name>Shared Guide</display-name></channel>',
+        '  <programme channel="shared.guide" start="20250101000000 +0000" stop="20250101010000 +0000">',
+        '    <title lang="en">Shared Show</title><title lang="fr">Programme partage</title><desc>First copy</desc>',
+        '  </programme>',
+        '  <programme channel="shared.guide" start="20250101000000 +0000" stop="20250101013000 +0000">',
+        '    <title>Shared Show</title><desc>Duplicate must not win</desc>',
+        '  </programme>',
+        '</tv>',
+      ].join('\n'),
+      'utf8'
+    );
+
+    nock('http://output.example')
+      .get('/one.m3u')
+      .reply(
+        200,
+        ['#EXTM3U', '#EXTINF:-1 tvg-id="raw.one",Source One', 'http://streams.example/one'].join(
+          '\n'
+        )
+      );
+    nock('http://output.example')
+      .get('/two.m3u')
+      .reply(
+        200,
+        ['#EXTM3U', '#EXTINF:-1 tvg-id="raw.two",Source Two', 'http://streams.example/two'].join(
+          '\n'
+        )
+      );
+    await parseM3UModule.parseAll();
+
+    const db = databaseModule.getDatabase();
+    const source = db.prepare("SELECT id FROM sources WHERE name = 'IPTV One'").get();
+    const sourceChannel = db
+      .prepare(
+        `SELECT sc.id
+           FROM source_channels sc
+           JOIN sources s ON s.id = sc.source_id
+          WHERE s.name = 'IPTV One'
+          LIMIT 1`
+      )
+      .get();
+    const firstCanonical = canonicalService.listCanonicalChannels()[0];
+    const defaultProfile = db.prepare("SELECT id FROM output_profiles WHERE slug = 'default'").get();
+    const now = new Date().toISOString();
+    const secondCanonicalId = 'fanout-canonical-two';
+
+    db.prepare('UPDATE sources SET epg_url = ? WHERE id = ?').run(pathToFileURL(epgPath).href, source.id);
+    db.prepare('UPDATE channel_bindings SET is_preferred_stream = 0 WHERE canonical_channel_id = ?').run(
+      firstCanonical.id
+    );
+    db.prepare(
+      `UPDATE channel_bindings
+          SET is_preferred_stream = 1
+        WHERE canonical_channel_id = ? AND source_channel_id = ?`
+    ).run(firstCanonical.id, sourceChannel.id);
+    db.prepare('DELETE FROM guide_bindings').run();
+    db.prepare(
+      `INSERT INTO canonical_channels (
+        id, slug, name, custom_name, tvg_id, guide_number, logo, group_name, published, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      secondCanonicalId,
+      'fanout-two',
+      'Canonical Fanout Two',
+      null,
+      'output.fanout.two',
+      '902',
+      null,
+      null,
+      1,
+      now,
+      now
+    );
+    db.prepare(
+      `INSERT INTO channel_bindings (
+        id, source_channel_id, canonical_channel_id, binding_type, priority, is_preferred_stream, confidence, resolution_state
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'fanout-channel-binding',
+      sourceChannel.id,
+      secondCanonicalId,
+      'mapping',
+      0,
+      1,
+      1,
+      'resolved'
+    );
+    for (const canonicalId of [firstCanonical.id, secondCanonicalId]) {
+      db.prepare(
+        `INSERT INTO guide_bindings (id, canonical_channel_id, source_id, epg_channel_id, priority)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(`fanout-guide-${canonicalId}`, canonicalId, source.id, 'shared.guide', 0);
+    }
+    db.prepare(
+      `INSERT INTO output_profile_channels (
+        id, output_profile_id, canonical_channel_id, position, guide_number_override, enabled
+      ) VALUES (?, ?, ?, ?, ?, ?)`
+    ).run('fanout-output-entry', defaultProfile.id, secondCanonicalId, 1, null, 1);
+
+    const app = express();
+    const epgModule = await import(`../../server/epg.js?test=${Date.now()}`);
+    const { errorHandler } = await import(`../../server/error-handler.js?test=${Date.now()}`);
+    await epgModule.setupEPGRoutes(app);
+    app.use(errorHandler);
+    const server = await new Promise(resolve => {
+      const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+    });
+
+    try {
+      const response = await axios.get(`http://127.0.0.1:${server.address().port}/xmltv.xml`);
+      expect(response.data.match(/<channel id="output\.1">/g)).to.have.lengthOf(1);
+      expect(response.data.match(/<channel id="output\.fanout\.two">/g)).to.have.lengthOf(1);
+      expect(response.data.match(/<programme channel="output\.1"/g)).to.have.lengthOf(1);
+      expect(response.data.match(/<programme channel="output\.fanout\.two"/g)).to.have.lengthOf(1);
+      expect(response.data).to.include('<title lang="en">Shared Show</title>');
+      expect(response.data).to.include('<title lang="fr">Programme partage</title>');
+      expect(response.data).to.not.include('Duplicate must not win');
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+
   it('preserves output profile entry settings across reloads', async () => {
     await fs.writeFile(
       path.join(configDir, 'channel-map.yaml'),

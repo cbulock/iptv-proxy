@@ -112,29 +112,26 @@ export function rebuildCanonicalChannels() {
   const mapping = loadChannelMapFromStore();
   const reverseIndex = buildReverseIndex(mapping);
   const db = getDatabase();
+  const existingCanonicalRows = db
+    .prepare(
+      `SELECT id, slug, name, custom_name, tvg_id, guide_number, published, created_at
+         FROM canonical_channels`
+    )
+    .all();
+  const existingCanonicalById = new Map(existingCanonicalRows.map(row => [row.id, row]));
   const existingCanonicalByIdentity = new Map(
-    db
-      .prepare(
-        `SELECT id, slug, name, custom_name, tvg_id, guide_number, published, created_at
-           FROM canonical_channels`
-      )
-      .all()
-      .map(row => [
-        getCanonicalIdentity({
-          name: row.name,
-          tvg_id: row.tvg_id,
-          guideNumber: row.guide_number,
-        }),
-        row,
-      ])
+    existingCanonicalRows.map(row => [
+      getCanonicalIdentity({
+        name: row.name,
+        tvg_id: row.tvg_id,
+        guideNumber: row.guide_number,
+      }),
+      row,
+    ])
   );
-  const existingCanonicalIdentityById = new Map(
-    Array.from(existingCanonicalByIdentity.entries()).map(([identity, row]) => [row.id, identity])
-  );
-  const existingBindingsByKey = new Map(
-    db
-      .prepare(
-        `SELECT
+  const existingBindingRows = db
+    .prepare(
+      `SELECT
             cb.id,
             cb.source_channel_id,
             cb.canonical_channel_id,
@@ -144,10 +141,21 @@ export function rebuildCanonicalChannels() {
             cb.confidence,
             cb.resolution_state
          FROM channel_bindings cb`
-      )
-      .all()
-      .map(row => [`${row.canonical_channel_id}|${row.source_channel_id}`, hydrateBindingRow(row)])
+    )
+    .all()
+    .map(hydrateBindingRow);
+  const existingBindingsByKey = new Map(
+    existingBindingRows.map(row => [`${row.canonical_channel_id}|${row.source_channel_id}`, row])
   );
+  const existingCanonicalIdsBySourceChannelId = new Map();
+  for (const binding of existingBindingRows) {
+    if (!existingCanonicalIdsBySourceChannelId.has(binding.source_channel_id)) {
+      existingCanonicalIdsBySourceChannelId.set(binding.source_channel_id, []);
+    }
+    existingCanonicalIdsBySourceChannelId
+      .get(binding.source_channel_id)
+      .push(binding.canonical_channel_id);
+  }
   const existingGuideBindingsByKey = new Map(
     db
       .prepare(
@@ -187,12 +195,7 @@ export function rebuildCanonicalChannels() {
       .map(row => row.id)
   );
 
-  const canonicalByIdentity = new Map();
-  const canonicalRows = [];
-  const bindingRows = [];
-  const guideBindingRows = [];
-  const seenGuideBindings = new Set();
-  const usedSlugs = new Set();
+  const canonicalGroupsByIdentity = new Map();
 
   for (const sourceChannel of sourceChannels) {
     const hydrated = hydrateSourceChannel(sourceChannel);
@@ -203,58 +206,110 @@ export function rebuildCanonicalChannels() {
       continue;
     }
 
-    let canonicalId = canonicalByIdentity.get(identity);
-    if (!canonicalId) {
-      const preserved = existingCanonicalByIdentity.get(identity);
-      canonicalId = preserved?.id || crypto.randomUUID();
-      const now = new Date().toISOString();
-      canonicalByIdentity.set(identity, canonicalId);
-      canonicalRows.push({
-        id: canonicalId,
-        slug: allocateUniqueSlug(
-          preserved?.slug || slugify(canonicalChannel.tvg_id || canonicalChannel.name),
-          usedSlugs,
-          canonicalRows.length + 1
-        ),
-        name: canonicalChannel.name,
-        custom_name: preserved?.custom_name || null,
-        tvg_id: canonicalChannel.tvg_id || null,
-        guide_number: canonicalChannel.guideNumber || null,
-        logo: canonicalChannel.logo || null,
-        group_name: canonicalChannel.group || null,
-        published: preserved?.published ?? 1,
-        created_at: preserved?.created_at || now,
-        updated_at: now,
-      });
+    if (!canonicalGroupsByIdentity.has(identity)) {
+      canonicalGroupsByIdentity.set(identity, { identity, canonicalChannel, channels: [] });
     }
+    canonicalGroupsByIdentity.get(identity).channels.push({ sourceChannel, hydrated, resolution });
+  }
 
-    const existingBinding = existingBindingsByKey.get(`${canonicalId}|${sourceChannel.id}`);
-    bindingRows.push({
-      id: existingBinding?.id || crypto.randomUUID(),
-      source_channel_id: sourceChannel.id,
-      canonical_channel_id: canonicalId,
-      binding_type:
-        existingBinding?.binding_type || (resolution.matched ? 'mapping' : 'source'),
-      priority: existingBinding?.priority || 0,
-      is_preferred_stream: existingBinding?.is_preferred_stream || 0,
-      confidence: existingBinding?.confidence ?? 1,
-      resolution_state:
-        existingBinding?.resolution_state || (resolution.matched ? 'resolved' : 'discovered'),
+  // Source-channel IDs survive mapping-label and guide-number edits. Prefer an
+  // existing canonical ID associated with those stable IDs over the editable
+  // display identity. If mappings merge, the group with the largest overlap
+  // retains its ID (then identity order breaks ties); if they split, that same
+  // group retains the old settings and newly split groups start with defaults.
+  const canonicalGroups = Array.from(canonicalGroupsByIdentity.values()).map(group => {
+    const candidateCounts = new Map();
+    for (const { sourceChannel } of group.channels) {
+      for (const canonicalId of existingCanonicalIdsBySourceChannelId.get(sourceChannel.id) || []) {
+        candidateCounts.set(canonicalId, (candidateCounts.get(canonicalId) || 0) + 1);
+      }
+    }
+    return { ...group, candidateCounts };
+  });
+  canonicalGroups.sort((left, right) => {
+    const leftMax = Math.max(0, ...left.candidateCounts.values());
+    const rightMax = Math.max(0, ...right.candidateCounts.values());
+    return rightMax - leftMax || left.identity.localeCompare(right.identity);
+  });
+
+  const claimedCanonicalIds = new Set();
+  for (const group of canonicalGroups) {
+    const candidates = Array.from(group.candidateCounts.entries())
+      .filter(([canonicalId]) => !claimedCanonicalIds.has(canonicalId))
+      .sort(([leftId, leftCount], [rightId, rightCount]) => {
+        const left = existingCanonicalById.get(leftId);
+        const right = existingCanonicalById.get(rightId);
+        return (
+          rightCount - leftCount ||
+          String(left?.created_at || '').localeCompare(String(right?.created_at || '')) ||
+          leftId.localeCompare(rightId)
+        );
+      });
+    const identityMatch = existingCanonicalByIdentity.get(group.identity);
+    group.canonicalId =
+      candidates[0]?.[0] ||
+      (identityMatch && !claimedCanonicalIds.has(identityMatch.id) ? identityMatch.id : null) ||
+      crypto.randomUUID();
+    claimedCanonicalIds.add(group.canonicalId);
+  }
+
+  const canonicalRows = [];
+  const bindingRows = [];
+  const guideBindingRows = [];
+  const seenGuideBindings = new Set();
+  const usedSlugs = new Set();
+
+  for (const group of canonicalGroups) {
+    const { canonicalChannel, canonicalId } = group;
+    const preserved = existingCanonicalById.get(canonicalId);
+    const now = new Date().toISOString();
+    canonicalRows.push({
+      id: canonicalId,
+      slug: allocateUniqueSlug(
+        preserved?.slug || slugify(canonicalChannel.tvg_id || canonicalChannel.name),
+        usedSlugs,
+        canonicalRows.length + 1
+      ),
+      name: canonicalChannel.name,
+      custom_name: preserved?.custom_name || null,
+      tvg_id: canonicalChannel.tvg_id || null,
+      guide_number: canonicalChannel.guideNumber || null,
+      logo: canonicalChannel.logo || null,
+      group_name: canonicalChannel.group || null,
+      published: preserved?.published ?? 1,
+      created_at: preserved?.created_at || now,
+      updated_at: now,
     });
 
-    const defaultGuideBindingId = pickGuideBindingId(canonicalChannel, hydrated);
-    if (epgEnabledSourceIds.has(sourceChannel.source_id) && defaultGuideBindingId) {
-      const guideKey = `${canonicalId}|${sourceChannel.source_id}`;
-      if (!seenGuideBindings.has(guideKey)) {
-        seenGuideBindings.add(guideKey);
-        const preservedGuideBinding = existingGuideBindingsByKey.get(guideKey);
-        guideBindingRows.push({
-          id: preservedGuideBinding?.id || crypto.randomUUID(),
-          canonical_channel_id: canonicalId,
-          source_id: sourceChannel.source_id,
-          epg_channel_id: preservedGuideBinding?.epg_channel_id || defaultGuideBindingId,
-          priority: preservedGuideBinding?.priority ?? 1,
-        });
+    for (const { sourceChannel, hydrated, resolution } of group.channels) {
+      const existingBinding = existingBindingsByKey.get(`${canonicalId}|${sourceChannel.id}`);
+      bindingRows.push({
+        id: existingBinding?.id || crypto.randomUUID(),
+        source_channel_id: sourceChannel.id,
+        canonical_channel_id: canonicalId,
+        binding_type:
+          existingBinding?.binding_type || (resolution.matched ? 'mapping' : 'source'),
+        priority: existingBinding?.priority || 0,
+        is_preferred_stream: existingBinding?.is_preferred_stream || 0,
+        confidence: existingBinding?.confidence ?? 1,
+        resolution_state:
+          existingBinding?.resolution_state || (resolution.matched ? 'resolved' : 'discovered'),
+      });
+
+      const defaultGuideBindingId = pickGuideBindingId(canonicalChannel, hydrated);
+      if (epgEnabledSourceIds.has(sourceChannel.source_id) && defaultGuideBindingId) {
+        const guideKey = `${canonicalId}|${sourceChannel.source_id}`;
+        if (!seenGuideBindings.has(guideKey)) {
+          seenGuideBindings.add(guideKey);
+          const preservedGuideBinding = existingGuideBindingsByKey.get(guideKey);
+          guideBindingRows.push({
+            id: preservedGuideBinding?.id || crypto.randomUUID(),
+            canonical_channel_id: canonicalId,
+            source_id: sourceChannel.source_id,
+            epg_channel_id: preservedGuideBinding?.epg_channel_id || defaultGuideBindingId,
+            priority: preservedGuideBinding?.priority ?? 1,
+          });
+        }
       }
     }
   }
@@ -352,17 +407,16 @@ export function rebuildCanonicalChannels() {
       );
     }
 
+    const retainedCanonicalIds = new Set(canonicalRows.map(row => row.id));
     for (const row of existingOutputProfileRows) {
-      const identity = existingCanonicalIdentityById.get(row.canonical_channel_id);
-      const nextCanonicalId = identity ? canonicalByIdentity.get(identity) : null;
-      if (!nextCanonicalId) {
+      if (!retainedCanonicalIds.has(row.canonical_channel_id)) {
         continue;
       }
 
       insertOutputProfileChannel.run(
         row.id,
         row.output_profile_id,
-        nextCanonicalId,
+        row.canonical_channel_id,
         row.position,
         row.guide_number_override,
         row.enabled

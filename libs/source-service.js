@@ -32,12 +32,12 @@ function normalizeSourceRow(row) {
   };
 }
 
-function serializeSource(provider, timestamp) {
+function serializeSource(provider, timestamp, existingSource = null) {
   const type = provider.type || 'm3u';
   const sourceUrl = provider.url || '';
 
   return {
-    id: provider.id || crypto.randomUUID(),
+    id: existingSource?.id || provider.id || crypto.randomUUID(),
     name: provider.name,
     type,
     base_url: type === 'hdhomerun' ? sourceUrl : null,
@@ -46,7 +46,7 @@ function serializeSource(provider, timestamp) {
     auth_mode: null,
     headers_json: null,
     enabled: provider.enabled === false ? 0 : 1,
-    created_at: timestamp,
+    created_at: existingSource?.created_at || timestamp,
     updated_at: timestamp,
   };
 }
@@ -54,10 +54,12 @@ function serializeSource(provider, timestamp) {
 function toProvidersConfig(sources) {
   return {
     providers: sources.map(source => ({
+      id: source.id,
       name: source.name,
       url: source.url,
       type: source.type || 'm3u',
       ...(source.epg ? { epg: source.epg } : {}),
+      ...(source.enabled === false ? { enabled: false } : {}),
     })),
   };
 }
@@ -71,12 +73,28 @@ function replaceSourcesInternal(providersConfig, { writeConfig = true } = {}) {
 
   const providers = Array.isArray(providersConfig?.providers) ? providersConfig.providers : [];
   const timestamp = new Date().toISOString();
-  const rows = providers.map(provider => serializeSource(provider, timestamp));
 
-  const applyChanges = transaction(sourceRows => {
-    getDatabase().prepare('DELETE FROM sources').run();
+  const applyChanges = transaction(nextProviders => {
+    const db = getDatabase();
+    const existingSources = db
+      .prepare(
+        `SELECT id, name, type, base_url, playlist_url, epg_url, auth_mode, headers_json, enabled, created_at
+           FROM sources`
+      )
+      .all();
+    const existingById = new Map(existingSources.map(source => [source.id, source]));
+    const existingByName = new Map();
+    for (const source of existingSources) {
+      // A name is a legacy fallback only when it is unambiguous. Current
+      // provider exports include IDs, so renamed providers retain their IDs.
+      existingByName.set(
+        source.name,
+        existingByName.has(source.name) ? null : source
+      );
+    }
+    const retainedIds = new Set();
 
-    const insertSource = getDatabase().prepare(`
+    const insertSource = db.prepare(`
       INSERT INTO sources (
         id,
         name,
@@ -91,25 +109,69 @@ function replaceSourcesInternal(providersConfig, { writeConfig = true } = {}) {
         updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    const updateSource = db.prepare(`
+      UPDATE sources
+         SET name = ?,
+             type = ?,
+             base_url = ?,
+             playlist_url = ?,
+             epg_url = ?,
+             enabled = ?,
+             updated_at = ?
+       WHERE id = ?
+    `);
+    const deleteSource = db.prepare('DELETE FROM sources WHERE id = ?');
+    const sourceRows = [];
 
-    for (const row of sourceRows) {
-      insertSource.run(
-        row.id,
-        row.name,
-        row.type,
-        row.base_url,
-        row.playlist_url,
-        row.epg_url,
-        row.auth_mode,
-        row.headers_json,
-        row.enabled,
-        row.created_at,
-        row.updated_at
-      );
+    for (const provider of nextProviders) {
+      const existing =
+        existingById.get(provider.id) || existingByName.get(provider.name) || null;
+      if (existing && retainedIds.has(existing.id)) {
+        throw new Error(`Provider ${provider.name} is specified more than once`);
+      }
+
+      const row = serializeSource(provider, timestamp, existing);
+      sourceRows.push(row);
+      retainedIds.add(row.id);
+
+      if (existing) {
+        updateSource.run(
+          row.name,
+          row.type,
+          row.base_url,
+          row.playlist_url,
+          row.epg_url,
+          row.enabled,
+          row.updated_at,
+          row.id
+        );
+      } else {
+        insertSource.run(
+          row.id,
+          row.name,
+          row.type,
+          row.base_url,
+          row.playlist_url,
+          row.epg_url,
+          row.auth_mode,
+          row.headers_json,
+          row.enabled,
+          row.created_at,
+          row.updated_at
+        );
+      }
     }
+
+    for (const source of existingSources) {
+      if (!retainedIds.has(source.id)) {
+        deleteSource.run(source.id);
+      }
+    }
+
+    return sourceRows;
   });
 
-  applyChanges(rows);
+  const rows = applyChanges(providers);
 
   if (writeConfig) {
     writeProvidersConfigFile(toProvidersConfig(rows.map(normalizeSourceRow)));
@@ -193,6 +255,7 @@ export function replaceM3UConfig(m3uConfig) {
   replaceProvidersConfig({
     providers: urls.map(source => ({
       name: source.name,
+      id: source.id,
       url: source.url,
       type: source.type || 'm3u',
       epg: existingSourcesByName.get(source.name)?.epg || '',
@@ -220,6 +283,7 @@ export function replaceEPGConfig(epgConfig) {
   replaceProvidersConfig({
     providers: sources.map(source => ({
       name: source.name,
+      id: source.id,
       url: source.url,
       type: source.type || 'm3u',
       epg: epgBySourceName.get(source.name) || '',
