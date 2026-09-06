@@ -23,7 +23,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 # Install ffmpeg for server-side transcoding of MPEG-TS streams
 # (converts MPEG-2/AC-3 from HDHomeRun to H.264/AAC for browser playback)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg wget && \
     rm -rf /var/lib/apt/lists/*
 
 # Create app directory
