@@ -105,6 +105,7 @@ export function replaceDiscoveredSourceChannels(sourceId, channels) {
 
     const seenAt = new Date().toISOString();
     const retainedIds = new Set();
+    const sourceChannelIds = new Map();
     for (const channel of nextChannels) {
       const existing =
         (channel.external_key ? existingByExternalKey.get(channel.external_key) : null) ||
@@ -123,6 +124,14 @@ export function replaceDiscoveredSourceChannels(sourceId, channels) {
       );
 
       const channelId = existing?.id || crypto.randomUUID();
+      // Expose the persistent identity to the in-memory snapshot as well as
+      // the normalized source_channels row.  Playback clients must not use the
+      // editable provider/channel names as an identifier.
+      channel.sourceChannelId = channelId;
+      sourceChannelIds.set(
+        channel.external_key || getChannelIdentity(channel),
+        channelId
+      );
       retainedIds.add(channelId);
 
       if (existing) {
@@ -160,9 +169,11 @@ export function replaceDiscoveredSourceChannels(sourceId, channels) {
         deleteChannel.run(row.id);
       }
     }
+
+    return sourceChannelIds;
   });
 
-  saveChannels(channels);
+  return saveChannels(channels);
 }
 
 export default {

@@ -237,7 +237,14 @@ async function processSource(source, map) {
     }
 
     if (source.id) {
-      replaceDiscoveredSourceChannels(source.id, discoveredChannels);
+      const sourceChannelIds = replaceDiscoveredSourceChannels(source.id, discoveredChannels);
+      for (const channel of channels) {
+        const key = channel.external_key || '';
+        const sourceChannelId = sourceChannelIds?.get(key);
+        if (sourceChannelId) {
+          channel.sourceChannelId = sourceChannelId;
+        }
+      }
     }
     if (syncRunId) {
       finishSourceSyncRun(syncRunId, { status: 'success' });

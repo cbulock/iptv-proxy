@@ -551,6 +551,17 @@ describe('output profile routes', () => {
       `${publicBaseUrl}/stream/IPTV%20One/Living%20Room%20One`
     );
 
+    // The stable source-channel route must remain playable after the canonical
+    // display name changes.  This is the URL emitted to clients, so exercise
+    // the real proxy rather than only asserting the playlist text.
+    nock('http://streams.example')
+      .get('/one')
+      .reply(200, 'stable source-channel stream', { 'content-type': 'video/mp2t' });
+    const stableStreamResponse = await axios.get(stableStreamUrl, {
+      responseType: 'arraybuffer',
+    });
+    expect(Buffer.from(stableStreamResponse.data).toString()).to.equal('stable source-channel stream');
+
     const xmltvResponse = await axios.get(`${baseUrl}/xmltv.xml`);
     expect(xmltvResponse.data).to.include('<channel id="output.1">');
     expect(xmltvResponse.data).to.include('Living Room One');

@@ -108,7 +108,13 @@ describe('MCP Route Integration', () => {
 
     // Write test channels to the isolated temp data dir
     const testChannels = [
-      { name: 'CNN', tvg_id: 'cnn.us', source: 'TestProvider', group: 'News' },
+      {
+        name: 'CNN',
+        tvg_id: 'cnn.us',
+        source: 'TestProvider',
+        sourceChannelId: 'source-channel-cnn',
+        group: 'News',
+      },
       { name: 'ESPN', tvg_id: 'espn.us', source: 'TestProvider', group: 'Sports' },
       {
         name: 'Fox News',
@@ -231,6 +237,7 @@ describe('MCP Route Integration', () => {
     const channels = payload.data;
     expect(channels).to.have.lengthOf(3);
     expect(channels[0]).to.have.all.keys(
+      'sourceChannelId',
       'name',
       'source',
       'tvg_id',
@@ -238,6 +245,7 @@ describe('MCP Route Integration', () => {
       'group',
       'logo'
     );
+    expect(channels[0].sourceChannelId).to.equal('source-channel-cnn');
   });
 
   it('list_channels filters by source', async () => {
