@@ -32,7 +32,7 @@
     "dev": "concurrently \"npm:serve:dev\" \"npm:admin:dev\""
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "archiver": "^7.0.1",
     "axios": "^1.18.0",
     "bcryptjs": "^3.0.3",
