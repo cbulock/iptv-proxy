@@ -179,6 +179,22 @@ describe('GET /api/guide', () => {
     expect(res.data.total).to.equal(0);
   });
 
+  it('keeps the published guide when a refresh returns no programmes', async () => {
+    const before = await axios.get(`${baseUrl}/api/guide?tvgId=${TVG_ID}`);
+    await fs.writeFile(epgFilePath,
+      `<?xml version="1.0" encoding="UTF-8"?><tv><channel id="${TVG_ID}"><display-name>Guide Test Channel</display-name></channel></tv>`,
+      'utf8');
+    try {
+      const outcome = await refreshEPG();
+      const after = await axios.get(`${baseUrl}/api/guide?tvgId=${TVG_ID}`);
+      expect(outcome.status).to.equal('failed');
+      expect(after.data.programmes).to.deep.equal(before.data.programmes);
+    } finally {
+      await fs.writeFile(epgFilePath, buildFutureXMLTV(TVG_ID), 'utf8');
+      await refreshEPG();
+    }
+  });
+
   it('retains last-known-good guide data on source failure and reports recovery', async () => {
     await fs.unlink(epgFilePath);
 

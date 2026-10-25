@@ -674,23 +674,20 @@ export async function setupEPGRoutes(app) {
     const deduplicated = deduplicateXmltvRecords(merged);
     merged.tv.channel = deduplicated.tv.channel;
     merged.tv.programme = deduplicated.tv.programme;
-    guideProgrammeIndex = new Map();
-    for (const programme of merged.tv.programme) {
-      const channelId = programme?.['@_channel'];
-      if (!channelId) continue;
-      if (!guideProgrammeIndex.has(channelId)) guideProgrammeIndex.set(channelId, []);
-      guideProgrammeIndex.get(channelId).push(programme);
-    }
-
     lastEPGSourceResults = sourceResults;
     const usableSources = sourceResults.filter(result => result.status !== 'error');
     const staleSources = sourceResults.filter(result => result.status === 'stale');
     const errors = sourceResults.filter(result => result.status === 'error');
 
-    if (usableSources.length === 0) {
-      const message = epgSources.length
-        ? 'All configured EPG sources failed; retained the previous guide.'
-        : 'No EPG sources are configured.';
+    const noUsableSources = usableSources.length === 0;
+    const emptyRefresh = allChannels.length > 0 &&
+      merged.tv.programme.length === 0 && guideProgrammeIndex.size > 0;
+    if (noUsableSources || emptyRefresh) {
+      const message = noUsableSources
+        ? epgSources.length
+          ? 'All configured EPG sources failed; retained the previous guide.'
+          : 'No EPG sources are configured.'
+        : 'EPG refresh returned no programmes; retained the previous guide.';
       lastEPGRefreshOutcome = {
         status: 'failed',
         revision,
@@ -702,15 +699,29 @@ export async function setupEPGRoutes(app) {
       return lastEPGRefreshOutcome;
     }
 
+    let nextMergedEPG;
     try {
-      mergedEPG = builder.build(merged);
+      nextMergedEPG = builder.build(merged);
     } catch (buildErr) {
       console.error('Failed to build merged EPG XML:', buildErr.message);
-      // Keep the old EPG if build fails
-      if (!mergedEPG) {
-        mergedEPG = '<?xml version="1.0" encoding="UTF-8"?>\n<tv></tv>';
-      }
+      lastEPGRefreshOutcome = {
+        status: 'failed',
+        revision,
+        message: 'Failed to build merged EPG XML.',
+        sourceResults,
+        refreshedAt: new Date().toISOString(),
+      };
+      return lastEPGRefreshOutcome;
     }
+    const nextProgrammeIndex = new Map();
+    for (const programme of merged.tv.programme) {
+      const channelId = programme?.['@_channel'];
+      if (!channelId) continue;
+      if (!nextProgrammeIndex.has(channelId)) nextProgrammeIndex.set(channelId, []);
+      nextProgrammeIndex.get(channelId).push(programme);
+    }
+    mergedEPG = nextMergedEPG;
+    guideProgrammeIndex = nextProgrammeIndex;
 
     // Clear EPG cache when EPG is refreshed
     if (epgCache) {
