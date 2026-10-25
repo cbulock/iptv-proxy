@@ -5,10 +5,16 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import { spawn } from 'child_process';
 import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
-import { loadChannelSnapshot, replaceChannelSnapshot } from '../../libs/channel-snapshot-service.js';
+import {
+  loadChannelSnapshot,
+  replaceChannelSnapshot,
+} from '../../libs/channel-snapshot-service.js';
 import { setupTranscodeRoutes } from '../../server/transcode.js';
 import { errorHandler } from '../../server/error-handler.js';
+
+let stubScript;
 
 /**
  * Configure the current Node executable as a direct ffmpeg fixture. This is
@@ -38,7 +44,9 @@ function setProcessPath(value) {
 function setFfmpegStub(stub, originalNodeOptions) {
   process.env.FFMPEG_PATH = process.execPath;
   process.env.FFMPEG_STUB_CONFIG = JSON.stringify(stub.options);
-  process.env.NODE_OPTIONS = `${originalNodeOptions || ''} --require ${JSON.stringify(stub.preloadPath)}`.trim();
+  stubScript = stub.preloadPath;
+  if (originalNodeOptions) process.env.NODE_OPTIONS = originalNodeOptions;
+  else delete process.env.NODE_OPTIONS;
 }
 
 describe('Transcode Route Integration', () => {
@@ -75,7 +83,10 @@ describe('Transcode Route Integration', () => {
     originalStubConfig = process.env.FFMPEG_STUB_CONFIG;
 
     const app = express();
-    setupTranscodeRoutes(app);
+    setupTranscodeRoutes(app, {
+      spawn: (command, args, options) =>
+        spawn(command, command === process.execPath ? [stubScript, ...args] : args, options),
+    });
     app.use(errorHandler);
 
     await new Promise(resolve => {
@@ -153,8 +164,8 @@ describe('Transcode Route Integration', () => {
     expect(response.status).to.equal(502);
     expect(response.data).to.have.property('error');
     expect(response.data.error).to.include('Transcoding failed');
-    expect(response.data).to.have.property('details');
-    expect(response.data.details).to.include('1');
+    expect(response.data).not.to.have.property('details');
+    expect(response.data.code).to.equal('TRANSCODE_FAILED');
   });
 
   it('pipes ffmpeg stdout to the response', async () => {

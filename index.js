@@ -1,3 +1,4 @@
+import { setupLiveTvRoutes } from './server/live-tv.js';
 import express from 'express';
 import fs from 'fs';
 import chalk from 'chalk';
@@ -322,6 +323,7 @@ setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
 setupTranscodeRoutes(app);
 setupStreamProbeRoutes(app);
 await setupEPGRoutes(app);
+setupLiveTvRoutes(app);
 setupMCPRoutes(app);
 
 // Initialize and start scheduled jobs (health checks, EPG refresh, etc.)

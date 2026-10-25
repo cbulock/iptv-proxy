@@ -56,6 +56,7 @@ describe('output profile routes', () => {
   let databaseModule;
   let epgOnePath;
   let epgTwoPath;
+  let epgRefresh;
 
   beforeEach(async () => {
     configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-output-routes-config-'));
@@ -163,6 +164,9 @@ describe('output profile routes', () => {
     const { setupMCPRoutes } = await import(`../../server/mcp.js?test=${Date.now()}`);
     lineupModule.setupLineupRoutes(app, {});
     await epgModule.setupEPGRoutes(app);
+    epgRefresh = epgModule.refreshEPG;
+    const { setupLiveTvRoutes } = await import('../../server/live-tv.js');
+    setupLiveTvRoutes(app, { getSnapshot: epgModule.getPublishedGuideSnapshot });
     app.use(canonicalRouter);
     setupMCPRoutes(app);
     app.use(errorHandlerModule.errorHandler);
@@ -180,6 +184,48 @@ describe('output profile routes', () => {
     delete process.env.DATA_PATH;
     await fs.rm(configDir, { recursive: true, force: true });
     await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  it('publishes viewer JSON from only the default profile and complete EPG index', async () => {
+    const stamp = value => new Date(value).toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    for (const file of [epgOnePath, epgTwoPath]) {
+      const xml = await fs.readFile(file, 'utf8');
+      await fs.writeFile(
+        file,
+        xml
+          .replaceAll('20240101000000', stamp(Date.now() - 1800000))
+          .replaceAll('20240101010000', stamp(Date.now() + 1800000))
+      );
+    }
+    await epgRefresh();
+    const channels = (await axios.get(baseUrl + '/channels.json')).data.channels;
+    expect(channels).to.have.length(2);
+    expect(channels.map(channel => channel.name)).to.have.members([
+      'Canonical One',
+      'Canonical Two',
+    ]);
+    const guide = (await axios.get(baseUrl + '/guide.json')).data;
+    expect(guide.programmes).to.have.length(2);
+    expect(new Set(guide.programmes.map(p => p.channelId))).to.deep.equal(
+      new Set(channels.map(c => c.id))
+    );
+    await axios.post(baseUrl + '/api/output-profiles', {
+      name: 'Other TV',
+      copyFromSlug: 'default',
+      enabled: true,
+    });
+    await axios.patch(baseUrl + '/api/output-profiles/default/channels', {
+      channels: channels.map((channel, position) => ({
+        canonicalId: channel.id,
+        position,
+        enabled: false,
+        guideNumberOverride: null,
+      })),
+    });
+    expect(
+      (await axios.get(baseUrl + '/channels.json?profile=other-tv')).data.channels
+    ).to.deep.equal([]);
+    expect((await axios.get(baseUrl + '/guide.json')).data.programmes).to.deep.equal([]);
   });
 
   it('lists output profile entries and applies updates that persist across reloads', async () => {

@@ -1,3 +1,4 @@
+import { getPublishedChannelsData, getPublishedGuideData } from './live-tv.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as z from 'zod';
@@ -471,6 +472,40 @@ function createMcpServer() {
       return createSuccess('list_channels', channels, {
         summary: `Returned ${channels.length} discovered channel(s).`,
         nextSuggestedTools: ['list_canonical_channels', 'list_channel_bindings', 'get_status'],
+      });
+    }
+  );
+
+  registerJsonTool(
+    server,
+    'get_published_channels',
+    'Read the default published viewer channel projection with relative stream and artwork paths.',
+    {},
+    async () =>
+      createSuccess('get_published_channels', getPublishedChannelsData(), {
+        summary: 'Read the published viewer lineup.',
+        nextSuggestedTools: ['get_published_guide'],
+      })
+  );
+  registerJsonTool(
+    server,
+    'get_published_guide',
+    'Read all default published guide records in revision-bound pages of up to 1000. Repeat using nextCursor until null; restart on GUIDE_CHANGED.',
+    { hours: z.number().int().min(1).max(48).optional(), cursor: z.string().max(2048).optional() },
+    async ({ hours, cursor }) => {
+      const { status, ...data } = getPublishedGuideData({
+        ...(hours === undefined ? {} : { hours }),
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+      if (status)
+        return createError('get_published_guide', {
+          code: data.code,
+          message: data.error,
+          nextSuggestedTools: ['get_published_guide'],
+        });
+      return createSuccess('get_published_guide', data, {
+        summary: 'Read a published guide page.',
+        nextSuggestedTools: data.nextCursor ? ['get_published_guide'] : [],
       });
     }
   );

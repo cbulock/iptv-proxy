@@ -1,4 +1,5 @@
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import RateLimit from 'express-rate-limit';
@@ -81,6 +82,13 @@ let lastEPGSourceResults = [];
 let lastEPGRefreshOutcome = null;
 const lastGoodSourceXml = new Map();
 let guideProgrammeIndex = new Map();
+let guideIcons = new Map();
+let publicGuideRevision = crypto.randomUUID();
+
+/** Read the complete current index without applying the legacy API limit. */
+export function getPublishedGuideSnapshot() {
+  return { revision: publicGuideRevision, programmes: guideProgrammeIndex, icons: guideIcons };
+}
 
 // Maximum number of programmes returned per guide query (matches /api/guide behaviour)
 const MAX_GUIDE_PROGRAMMES = 20;
@@ -228,6 +236,8 @@ export function getGuideData(tvgId, hours = 24) {
 export function _resetMergedEPGForTesting() {
   mergedEPG = null;
   guideProgrammeIndex = new Map();
+  guideIcons = new Map();
+  publicGuideRevision = crypto.randomUUID();
   lastEPGSourceResults = [];
   lastEPGRefreshOutcome = null;
   lastGoodSourceXml.clear();
@@ -244,6 +254,8 @@ export function getEPGRefreshOutcome() {
 export function invalidateEPGCache() {
   mergedEPG = null;
   guideProgrammeIndex = new Map();
+  guideIcons = new Map();
+  publicGuideRevision = crypto.randomUUID();
   epgCache = null;
   lastEPGSourceResults = [];
 }
@@ -675,6 +687,10 @@ export async function setupEPGRoutes(app) {
     merged.tv.channel = deduplicated.tv.channel;
     merged.tv.programme = deduplicated.tv.programme;
     guideProgrammeIndex = new Map();
+    publicGuideRevision = crypto.randomUUID();
+    guideIcons = new Map(merged.tv.channel.map(channel => [
+      channel['@_id'], [].concat(channel.icon || [])[0]?.['@_src'] || '',
+    ]));
     for (const programme of merged.tv.programme) {
       const channelId = programme?.['@_channel'];
       if (!channelId) continue;

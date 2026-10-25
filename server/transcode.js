@@ -26,8 +26,6 @@ const MAX_ACTIVE_WORKERS = positiveInteger(process.env.TRANSCODE_MAX_WORKERS, 3)
 const STARTUP_TIMEOUT_MS = positiveInteger(process.env.TRANSCODE_STARTUP_TIMEOUT_MS, 15000);
 const IDLE_TIMEOUT_MS = positiveInteger(process.env.TRANSCODE_IDLE_TIMEOUT_MS, 30000);
 const KILL_GRACE_MS = 5000;
-const MAX_STDERR_BYTES = 16 * 1024;
-const activeWorkers = new Set();
 
 function ffmpegCommand() {
   // Do not invoke cmd.exe: an upstream URL is untrusted input and cmd parsing
@@ -51,11 +49,18 @@ function ffmpegCommand() {
  *
  * @param {import('express').Application} app
  */
-export function setupTranscodeRoutes(app) {
+export function setupTranscodeRoutes(app, dependencies = {}) {
+  const activeWorkers = new Set();
+  const spawnWorker = dependencies.spawn || spawn;
+  const loadChannels = dependencies.getChannels || getChannels;
+  const maxWorkers = dependencies.maxWorkers || MAX_ACTIVE_WORKERS;
   app.get('/transcode/:source/:name', transcodeLimiter, (req, res) => {
     let { source, name } = req.params;
-    const channels = getChannels();
-    const channel = source === 'channel' ? getSourceChannelById(name) : channels.find(c => c.source === source && c.name === name);
+    const channels = loadChannels();
+    const channel =
+      source === 'channel'
+        ? getSourceChannelById(name)
+        : channels.find(c => c.source === source && c.name === name);
     if (channel) {
       source = channel.source;
       name = channel.name;
@@ -70,11 +75,16 @@ export function setupTranscodeRoutes(app) {
       return res.status(404).send('No upstream URL for channel');
     }
 
-    if (activeWorkers.size >= MAX_ACTIVE_WORKERS) {
-      return res.status(503).json({ error: 'Transcoding capacity is currently exhausted. Please try again later.' });
+    if (activeWorkers.size >= maxWorkers) {
+      return res
+        .status(503)
+        .json({
+          error: 'Transcoding capacity is currently exhausted. Please try again later.',
+          code: 'TRANSCODE_CAPACITY',
+        });
     }
 
-    console.info('[transcode] %s/%s -> %s', source, name, upstreamUrl);
+    console.info('[transcode] Starting %s/%s', source, name);
 
     // Transcode the upstream stream to H.264/AAC in MPEG-TS format.
     // -preset ultrafast and -tune zerolatency minimise encoder latency for live streams.
@@ -109,7 +119,7 @@ export function setupTranscodeRoutes(app) {
 
     let ffmpegProcess;
     try {
-      ffmpegProcess = spawn(ffmpegCommand(), ffmpegArgs, {
+      ffmpegProcess = spawnWorker(ffmpegCommand(), ffmpegArgs, {
         shell: false,
         windowsHide: true,
       });
@@ -119,10 +129,11 @@ export function setupTranscodeRoutes(app) {
       console.warn('[transcode] spawn error %s/%s: %s', source, name, err.message);
       if (err.code === 'ENOENT') {
         return res.status(503).json({
-          error: 'ffmpeg is not installed on this server. Install ffmpeg to enable server-side transcoding.',
+          error: 'ffmpeg is unavailable on this server.',
+          code: 'TRANSCODE_UNAVAILABLE',
         });
       }
-      return res.status(502).json({ error: 'Transcoding failed' });
+      return res.status(502).json({ error: 'Transcoding failed', code: 'TRANSCODE_FAILED' });
     }
     activeWorkers.add(ffmpegProcess);
 
@@ -131,84 +142,82 @@ export function setupTranscodeRoutes(app) {
 
     // Track whether any stdout data has been written to the response.  We cannot
     // use pipe() directly because pipe() auto-calls res.end() when stdout ends,
-    // which fires before the 'exit' event — making it impossible to detect a
+    // which can fire before the process closes — making it impossible to detect a
     // non-zero exit code before headers are committed.
     let responseStarted = false;
-    let stderrText = '';
-    let cleanedUp = false;
+    let closed = false;
+    let exited = false;
+    let stopping = false;
     let idleTimer;
     let forceKillTimer;
 
-    const stopWorker = signal => {
-      if (ffmpegProcess.exitCode !== null || ffmpegProcess.killed) return;
-      ffmpegProcess.kill(signal);
-      // SIGTERM is advisory on Windows. Escalate so a stalled upstream cannot
-      // retain an expensive encoder worker indefinitely.
+    const stopWorker = () => {
+      if (closed || exited || stopping) return;
+      stopping = true;
+      clearTimeout(startupTimer);
+      clearTimeout(idleTimer);
+      try {
+        ffmpegProcess.kill('SIGTERM');
+      } catch {
+        /* keep capacity until close */
+      }
       forceKillTimer = setTimeout(() => {
-        if (ffmpegProcess.exitCode === null && !ffmpegProcess.killed) ffmpegProcess.kill('SIGKILL');
+        if (!closed && !exited) {
+          try {
+            ffmpegProcess.kill('SIGKILL');
+          } catch {
+            /* a failed signal does not release capacity */
+          }
+        }
       }, KILL_GRACE_MS);
+      forceKillTimer.unref?.();
     };
-    const clearTimers = () => {
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
       clearTimeout(startupTimer);
       clearTimeout(idleTimer);
       clearTimeout(forceKillTimer);
+      activeWorkers.delete(ffmpegProcess);
+    };
+    const fail = (status, error, code) => {
+      if (res.writableEnded || res.destroyed) return;
+      if (!res.headersSent) res.status(status).json({ error, code });
+      else res.end();
     };
     const resetIdleTimer = () => {
       clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
-        console.warn('[transcode] ffmpeg idle timeout for %s/%s', source, name);
+        stopWorker();
         if (!res.writableEnded) res.end();
-        stopWorker('SIGTERM');
       }, IDLE_TIMEOUT_MS);
+      idleTimer.unref?.();
     };
-    const cleanup = () => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-      clearTimers();
-      activeWorkers.delete(ffmpegProcess);
-    };
-
     const startupTimer = setTimeout(() => {
       if (!responseStarted) {
-        console.warn('[transcode] ffmpeg startup timeout for %s/%s', source, name);
-        if (!res.headersSent) res.status(504).json({ error: 'Transcoding startup timed out' });
-        stopWorker('SIGTERM');
+        stopWorker();
+        fail(504, 'Transcoding startup timed out', 'TRANSCODE_STARTUP_TIMEOUT');
       }
     }, STARTUP_TIMEOUT_MS);
+    startupTimer.unref?.();
     resetIdleTimer();
 
-    // Register error handler before attaching stdout to ensure it fires before
-    // any response data is written (handles ENOENT / spawn failures).
     ffmpegProcess.on('error', err => {
-      cleanup();
-      console.warn('[transcode] spawn error %s/%s: %s', source, name, err.message);
-      if (!res.headersSent) {
-        if (err.code === 'ENOENT') {
-          res.status(503).json({
-            error:
-              'ffmpeg is not installed on this server. Install ffmpeg to enable server-side transcoding.',
-          });
-        } else {
-          res.status(502).json({ error: 'Transcoding failed' });
-        }
-      } else {
-        res.end();
-      }
+      // A spawn failure has no process. Errors while signalling a running
+      // process cannot be taken as evidence that the process exited.
+      if (!ffmpegProcess.pid) cleanup();
+      else stopWorker();
+      fail(
+        err.code === 'ENOENT' ? 503 : 502,
+        err.code === 'ENOENT' ? 'ffmpeg is unavailable on this server.' : 'Transcoding failed',
+        err.code === 'ENOENT' ? 'TRANSCODE_UNAVAILABLE' : 'TRANSCODE_FAILED'
+      );
     });
-
-    ffmpegProcess.stderr.on('data', data => {
-      const text = data.toString();
-      stderrText = `${stderrText}${text}`.slice(-MAX_STDERR_BYTES);
-      console.warn('[transcode] ffmpeg: %s/%s: %s', source, name, text.trim());
-    });
-
-    ffmpegProcess.stderr.on('error', err => {
-      console.warn('[transcode] ffmpeg stderr error %s/%s: %s', source, name, err.message);
-    });
-
+    // Drain stderr without returning provider URLs or decoder details to clients.
+    ffmpegProcess.stderr.on('data', () => {});
+    ffmpegProcess.stderr.on('error', () => {});
     ffmpegProcess.stdout.on('data', chunk => {
-      // Guard against writing to a destroyed/closed response (e.g. client disconnected).
-      if (!res.writable) return;
+      if (!res.writable || res.writableEnded || res.destroyed || stopping) return;
       responseStarted = true;
       clearTimeout(startupTimer);
       resetIdleTimer();
@@ -217,51 +226,21 @@ export function setupTranscodeRoutes(app) {
         res.once('drain', () => ffmpegProcess.stdout.resume());
       }
     });
-
-    ffmpegProcess.stdout.on('error', err => {
-      console.warn('[transcode] ffmpeg stdout error %s/%s: %s', source, name, err.message);
-      stopWorker('SIGTERM');
+    ffmpegProcess.stdout.on('error', () => {
+      stopWorker();
+      fail(502, 'Transcoding failed', 'TRANSCODE_FAILED');
     });
-
-    // Only finalize when data was already sent; the exit handler owns the
-    // no-data error path and will call res.end() when appropriate.
-    ffmpegProcess.stdout.on('end', () => {
-      if (responseStarted && !res.writableEnded) {
-        res.end();
-      }
+    ffmpegProcess.on('exit', () => {
+      exited = true;
     });
-
-    ffmpegProcess.on('exit', (code, signal) => {
+    ffmpegProcess.on('close', () => {
       cleanup();
-      if (code !== 0 && code !== null) {
-        console.warn('[transcode] ffmpeg exited with code %d for %s/%s', code, source, name);
-        if (!responseStarted && !res.headersSent) {
-          const ffmpegMissingOnWindows =
-            process.platform === 'win32' &&
-            /not recognized as an internal or external command/i.test(stderrText);
-          if (ffmpegMissingOnWindows) {
-            return res.status(503).json({
-              error:
-                'ffmpeg is not installed on this server. Install ffmpeg to enable server-side transcoding.',
-            });
-          }
-          return res.status(502).json({
-            error: 'Transcoding failed',
-            details: `ffmpeg exited with code ${code}`,
-          });
-        }
-      } else if (signal) {
-        console.info('[transcode] ffmpeg stopped (%s) for %s/%s', signal, source, name);
-      }
-      if (!res.writableEnded) {
-        res.end();
-      }
+      if (!responseStarted && !res.writableEnded) {
+        fail(502, 'Transcoding failed', 'TRANSCODE_FAILED');
+      } else if (!res.writableEnded) res.end();
     });
-
-    // Kill ffmpeg when the client disconnects to free up CPU/network resources.
-    // Guard against calling kill() on a process that has already exited naturally.
-    req.on('close', () => {
-      stopWorker('SIGTERM');
-    });
+    // IncomingMessage.close can mean that a GET request has finished arriving.
+    // ServerResponse.close is the downstream playback connection lifetime.
+    res.on('close', stopWorker);
   });
 }

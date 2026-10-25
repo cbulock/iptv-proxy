@@ -180,6 +180,8 @@ describe('MCP Route Integration', () => {
       'diagnose_agent_readiness',
       'list_channels',
       'get_guide',
+      'get_published_channels',
+      'get_published_guide',
       'list_providers',
       'list_canonical_channels',
       'list_channel_bindings',
@@ -200,6 +202,32 @@ describe('MCP Route Integration', () => {
       'reload_channels',
       'reload_epg',
     ]);
+  });
+
+  it('published viewer tools return protected channel paths and guide paging metadata', async () => {
+    const channelResult = await mcpPost(baseUrl, 'tools/call', {
+      name: 'get_published_channels',
+      arguments: {},
+    });
+    const channelData = expectToolSuccess(channelResult.msg, 'get_published_channels').data;
+    expect(channelData.channels).to.be.an('array');
+    for (const channel of channelData.channels) {
+      expect(channel.streamUrl).to.match(/^\/stream\//);
+      expect(channel).not.to.have.property('original_url');
+    }
+    const guideResult = await mcpPost(baseUrl, 'tools/call', {
+      name: 'get_published_guide',
+      arguments: {},
+    });
+    const guideData = expectToolSuccess(guideResult.msg, 'get_published_guide').data;
+    expect(guideData).to.include.keys('programmes', 'revision', 'nextCursor', 'fetchedAt');
+    const invalid = await mcpPost(baseUrl, 'tools/call', {
+      name: 'get_published_guide',
+      arguments: { cursor: 'invalid' },
+    });
+    expect(expectToolError(invalid.msg, 'get_published_guide').error.code).to.equal(
+      'INVALID_CURSOR'
+    );
   });
 
   it('get_agent_workflow returns workflow guidance for agents', async () => {
@@ -345,10 +373,7 @@ describe('MCP Route Integration', () => {
       name: 'create_output_profile',
       arguments: { name: 'Bedroom TV', enabled: false },
     });
-    const createdProfile = expectToolSuccess(
-      createResult.msg,
-      'create_output_profile'
-    ).data;
+    const createdProfile = expectToolSuccess(createResult.msg, 'create_output_profile').data;
     expect(createdProfile).to.include({
       name: 'Bedroom TV',
       slug: 'bedroom-tv',
@@ -359,10 +384,7 @@ describe('MCP Route Integration', () => {
       name: 'update_output_profile',
       arguments: { slug: 'bedroom-tv', name: 'Bedroom TV Night', enabled: true },
     });
-    const updatedProfile = expectToolSuccess(
-      updateResult.msg,
-      'update_output_profile'
-    ).data;
+    const updatedProfile = expectToolSuccess(updateResult.msg, 'update_output_profile').data;
     expect(updatedProfile).to.include({
       name: 'Bedroom TV Night',
       slug: 'bedroom-tv',
@@ -373,10 +395,7 @@ describe('MCP Route Integration', () => {
       name: 'delete_output_profile',
       arguments: { slug: 'bedroom-tv' },
     });
-    const deletedProfile = expectToolSuccess(
-      deleteResult.msg,
-      'delete_output_profile'
-    ).data;
+    const deletedProfile = expectToolSuccess(deleteResult.msg, 'delete_output_profile').data;
     expect(deletedProfile).to.deep.equal({ deleted: true, slug: 'bedroom-tv' });
   });
 
