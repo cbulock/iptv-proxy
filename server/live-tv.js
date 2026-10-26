@@ -146,7 +146,8 @@ export function publishedGuidePage(channels, snapshot, query = {}, now = Date.no
   const until = from + hours * 3600000;
   const programmes = [];
   for (const channel of channels) {
-    const records = (snapshot.programmes.get(channel.tvg_id) || [])
+    const guideId = channel.tvg_id || channel.name;
+    const records = (snapshot.programmes.get(guideId) || [])
       .map(p => ({ p, start: timestamp(p['@_start']) }))
       .filter(p => p.start !== null)
       .sort((a, b) => a.start - b.start);
