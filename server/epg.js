@@ -692,7 +692,8 @@ export async function setupEPGRoutes(app) {
     const errors = sourceResults.filter(result => result.status === 'error');
 
     const noUsableSources = usableSources.length === 0;
-    const emptyRefresh = merged.tv.programme.length === 0 && guideProgrammeIndex.size > 0;
+    const emptyRefresh = allChannels.length > 0 &&
+      merged.tv.programme.length === 0 && guideProgrammeIndex.size > 0;
     if (noUsableSources || emptyRefresh) {
       const message = noUsableSources
         ? epgSources.length
