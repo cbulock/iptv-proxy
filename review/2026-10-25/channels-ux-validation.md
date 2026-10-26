@@ -1,6 +1,6 @@
 # Channels UX implementation validation
 
-Date: 2026-10-25. Implemented locally after explicit design approval; not committed or deployed.
+Date: 2026-10-25. Initial local validation after explicit design approval. Subsequently committed, pushed, and deployed with the latest changes; see `channels-release.md` for release evidence.
 
 ## Delivered
 
