@@ -160,7 +160,7 @@
       </CindorLayoutHeader>
       <CindorLayoutContent class="admin-content">
         <main class="admin-main">
-          <div class="workspace-frame">
+          <div class="workspace-frame" :class="{ 'channel-workspace': tab === 'channels' }">
             <div
               v-if="status"
               class="status-banner"
@@ -171,6 +171,18 @@
               <span class="status-banner-label">{{ statusOk ? 'Status' : 'Error' }}</span>
               <span class="status-banner-message">{{ status }}</span>
             </div>
+            <label class="mobile-section-picker"><span>Section</span>
+              <CindorSelect v-model="tab" :value.attr="tab" aria-label="Section">
+                <option value="app">{{ appTabLabel }}</option>
+                <option value="providers">{{ providersTabLabel }}</option>
+                <option value="channels">{{ channelsTabLabel }}</option>
+                <option value="preview">Preview</option>
+                <option value="health">Health</option>
+                <option value="usage">{{ usageTabLabel }}</option>
+                <option value="tasks">Tasks</option>
+                <option value="backups">Backups</option>
+              </CindorSelect>
+            </label>
             <CindorTabs v-model:value="tab" class="admin-tabs">
             <CindorTabPanel value="app" :label="appTabLabel">
               <app-settings-pane
@@ -206,7 +218,7 @@
                 :provider-validation="providerValidation"
                 :provider-columns="providerColumns"
                 :providers-can-save="providersCanSave"
-                :saving-providers="savingProviders"
+                :saving-providers="savingProviders || channelActionsBusy"
                 :loading-e-p-g-validation="loadingEPGValidation"
                 :add-provider="addProvider"
                 :save-providers="saveProviders"
@@ -226,17 +238,20 @@
                 :saving-profile="savingOutputProfile"
                 :reloading-channels="reloadingChannels"
                 :reloading-e-p-g="reloadingEPG"
-                :updating-canonical-name-id="updatingCanonicalNameChannelId"
-                :updating-preferred-stream-id="updatingPreferredStreamChannelId"
-                :updating-guide-binding-id="updatingGuideBindingChannelId"
                 :profile-dirty="profileDirty"
-                :profile-stats="channelWorkflowStats"
+                :saved-profile="savedOutputProfileDraft"
+                :actions-busy="channelActionsBusy"
+                :snapshot-invalid="channelSnapshotInvalid"
+                :load-error="channelLoadError"
+                :save-error="channelSaveError"
                 :profile-endpoint-info="selectedOutputProfileEndpointInfo"
                 :change-selected-profile="changeSelectedOutputProfile"
-                :refresh-channels="loadChannelAuthoringData"
+                :refresh-channels="refreshChannelView"
                 :reload-channels="reloadChannels"
                 :reload-e-p-g="reloadEPG"
                 :save-profile-changes="saveOutputProfileChanges"
+                :discard-changes="discardChannelChanges"
+                :open-sources="() => state.tab = 'providers'"
                 :create-profile="createOutputProfile"
                 :duplicate-profile="duplicateOutputProfile"
                 :delete-profile="deleteSelectedOutputProfile"
@@ -726,6 +741,25 @@
     </CindorDialog>
 
     <CindorDialog
+      v-model:open="channelDraftDialog.open"
+      modal
+      aria-labelledby="channel-draft-title"
+      aria-describedby="channel-draft-copy"
+      @cancel="resolveChannelDraftDialog('cancel')"
+      @close="resolveChannelDraftDialog('cancel')"
+    >
+      <div class="dialog-body">
+        <h2 id="channel-draft-title">Unsaved channel changes</h2>
+        <p id="channel-draft-copy">Save or discard your changes before {{ channelDraftDialog.action }}.</p>
+        <CindorStack direction="horizontal" gap="sm" wrap>
+          <CindorButton variant="ghost" @click="resolveChannelDraftDialog('cancel')">Cancel</CindorButton>
+          <CindorButton variant="ghost" @click="resolveChannelDraftDialog('discard')">Discard and continue</CindorButton>
+          <CindorButton @click="resolveChannelDraftDialog('save')">Save and continue</CindorButton>
+        </CindorStack>
+      </div>
+    </CindorDialog>
+
+    <CindorDialog
       v-model:open="confirmDialog.open"
       modal
       aria-labelledby="confirm-dialog-title"
@@ -838,6 +872,7 @@ import mpegts from 'mpegts.js';
 import AppSettingsPane from './components/AppSettingsPane.vue';
 import ChannelsPane from './components/ChannelsPane.vue';
 import SourcesPane from './components/SourcesPane.vue';
+import { restoreChannelDrafts, resolveChannelDraftGuard, saveChannelDrafts } from './utils/channel-workflow.js';
 import {
   cloneAppDraft,
   cloneOutputProfileDraftState,
@@ -1284,6 +1319,63 @@ const savedAppDraft = ref(cloneAppDraft(state.app));
 const savedProvidersDraft = ref(cloneProvidersDraft(state.providers));
 const savedOutputProfileDraft = ref({ name: '', enabled: true });
 const savedOutputProfileEntries = ref([]);
+const channelLoadError = ref('');
+const channelSaveError = ref('');
+const channelActionPending = ref(false);
+const channelSnapshotInvalid = ref(false);
+const pendingOutputProfileSlug = ref('');
+const channelDraftDialog = reactive({ open: false, action: '', resolve: null });
+const channelActionsBusy = computed(() => channelActionPending.value || state.savingOutputProfile ||
+  state.loadingChannelAuthoring || state.loadingOutputProfileEntries || state.reloadingChannels ||
+  state.reloadingEPG || state.savingProviders);
+
+function resolveChannelDraftDialog(choice) {
+  const resolve = channelDraftDialog.resolve;
+  channelDraftDialog.resolve = null;
+  channelDraftDialog.open = false;
+  resolve?.(choice);
+}
+
+function resetChannelChanges() {
+  restoreChannelDrafts(state, savedOutputProfileDraft.value, savedOutputProfileEntries.value);
+  channelSaveError.value = '';
+  persistDraftSnapshot();
+}
+
+async function guardChannelAction(action) {
+  if (channelSnapshotInvalid.value || channelActionsBusy.value) return false;
+  channelActionPending.value = true;
+  try {
+    return await resolveChannelDraftGuard({
+      isDirty: () => profileDirty.value,
+      prompt: () => new Promise(resolve => {
+        channelDraftDialog.action = action;
+        channelDraftDialog.resolve = resolve;
+        channelDraftDialog.open = true;
+      }),
+      save: saveOutputProfileChanges,
+      discard: resetChannelChanges,
+    });
+  } finally { channelActionPending.value = false; }
+}
+
+async function discardChannelChanges() {
+  if (channelActionsBusy.value || !profileDirty.value) return;
+  channelActionPending.value = true;
+  try {
+    if (await openConfirmDialog({ title: 'Discard channel changes?', content: 'Restore all channel and lineup settings to their last saved values.', positiveText: 'Discard changes', negativeText: 'Keep editing', tone: 'warning' })) {
+      resetChannelChanges();
+    }
+  } finally { channelActionPending.value = false; }
+}
+
+async function refreshChannelView() {
+  if (channelSnapshotInvalid.value) {
+    if (!channelActionsBusy.value) await loadChannelAuthoringData();
+    return;
+  }
+  if (await guardChannelAction('refreshing the view')) await loadChannelAuthoringData();
+}
 
 function setStatus(msg, ok = true) {
   state.status = msg;
@@ -1732,6 +1824,7 @@ async function loadProviders() {
 async function loadChannelAuthoringData() {
   try {
     state.loadingChannelAuthoring = true;
+    channelLoadError.value = '';
     const [channelsRes, bindingsRes, guideBindingsRes, profilesRes] = await Promise.all([
       apiFetch('/api/canonical/channels'),
       apiFetch('/api/canonical/bindings'),
@@ -1758,6 +1851,15 @@ async function loadChannelAuthoringData() {
       throw new Error(buildApiErrorMessage(profilesJson, 'Failed to load output profiles'));
     }
 
+    const profiles = Array.isArray(profilesJson?.profiles) ? profilesJson.profiles : [];
+    const desiredProfileSlug = pendingOutputProfileSlug.value || state.selectedOutputProfileSlug;
+    const nextProfileSlug = profiles.some(profile => profile.slug === desiredProfileSlug)
+      ? desiredProfileSlug : profiles[0]?.slug || 'default';
+    const entriesResponse = await apiFetch(`/api/output-profiles/${encodeURIComponent(nextProfileSlug)}/entries`);
+    const entriesJson = await entriesResponse.json();
+    if (!entriesResponse.ok) throw new Error(buildApiErrorMessage(entriesJson, 'Failed to load lineup channels'));
+
+    // Commit the complete read together so a failed request never partially replaces drafts.
     state.canonicalChannels = Array.isArray(channelsJson?.channels)
       ? channelsJson.channels.map(channel => ({
         ...channel,
@@ -1768,60 +1870,57 @@ async function loadChannelAuthoringData() {
     state.guideBindings = Array.isArray(guideBindingsJson?.bindings)
       ? guideBindingsJson.bindings
       : [];
-    state.outputProfiles = Array.isArray(profilesJson?.profiles) ? profilesJson.profiles : [];
+    state.outputProfiles = profiles;
     resetChannelWorkflowDraftState();
-
-    const hasSelectedProfile = state.outputProfiles.some(
-      profile => profile.slug === state.selectedOutputProfileSlug
-    );
-    const nextProfileSlug = hasSelectedProfile
-      ? state.selectedOutputProfileSlug
-      : state.outputProfiles[0]?.slug || 'default';
     state.selectedOutputProfileSlug = nextProfileSlug;
     if (!state.outputProfiles.some(profile => profile.slug === state.previewProfileSlug)) {
       state.previewProfileSlug = nextProfileSlug;
     }
     resetSelectedOutputProfileDraft();
 
-    await loadOutputProfileEntries(nextProfileSlug);
-    setStatus('Loaded channel workflows');
+    applyOutputProfileEntries(entriesJson.channels);
+    channelSnapshotInvalid.value = false;
+    pendingOutputProfileSlug.value = '';
+    setStatus('Channels loaded');
+    return true;
   } catch (e) {
+    channelLoadError.value = channelSnapshotInvalid.value
+      ? 'The lineup changed, but the updated list could not be loaded. Editing is paused. Retry refresh to continue. ' + e.message
+      : e.message;
     setStatus('Failed to load channel workflows: ' + e.message, false);
-    message.error(e.message);
+    return false;
   } finally {
     state.loadingChannelAuthoring = false;
   }
 }
 
+function applyOutputProfileEntries(channels) {
+  state.outputProfileEntries = Array.isArray(channels)
+    ? channels.map(channel => ({ ...channel, canonical: { ...(channel.canonical || {}) }, guideNumberOverrideDraft: channel.guideNumberOverride ?? '' })) : [];
+  resetSelectedOutputProfileDraft();
+  savedOutputProfileDraft.value = { ...state.outputProfileDraft };
+  savedOutputProfileEntries.value = state.outputProfileEntries.map(entry => ({ ...entry, canonical: { ...entry.canonical } }));
+  state.channelRowFeedback = {};
+}
+
 async function loadOutputProfileEntries(slug = state.selectedOutputProfileSlug) {
   try {
     state.loadingOutputProfileEntries = true;
+    channelLoadError.value = '';
     const response = await apiFetch(`/api/output-profiles/${encodeURIComponent(slug)}/entries`);
     const json = await response.json();
     if (!response.ok) {
       throw new Error(buildApiErrorMessage(json, 'Failed to load output profile entries'));
     }
 
-    state.outputProfileEntries = Array.isArray(json?.channels)
-      ? json.channels.map(channel => ({
-        ...channel,
-        canonical: { ...(channel.canonical || {}) },
-        guideNumberOverrideDraft: channel?.guideNumberOverride ?? '',
-      }))
-      : [];
-    resetSelectedOutputProfileDraft();
-    savedOutputProfileDraft.value = {
-      name: state.outputProfileDraft.name,
-      enabled: state.outputProfileDraft.enabled,
-    };
-    savedOutputProfileEntries.value = state.outputProfileEntries.map(entry => ({
-      ...entry,
-      canonical: { ...(entry.canonical || {}) },
-    }));
-    state.channelRowFeedback = {};
+    state.selectedOutputProfileSlug = slug;
+    applyOutputProfileEntries(json.channels);
+    return true;
   } catch (e) {
+    channelLoadError.value = e.message;
     setStatus(e.message, false);
     message.error(e.message);
+    return false;
   } finally {
     state.loadingOutputProfileEntries = false;
   }
@@ -1841,6 +1940,7 @@ async function loadApp() {
 }
 
 async function saveProviders() {
+  if (!(await guardChannelAction('saving sources and rescanning channels'))) return;
   if (providerValidation.value.issues.length) {
     const summary =
       providerValidation.value.issues.length === 1
@@ -1876,7 +1976,7 @@ async function saveProviders() {
     setStatus('Sources saved. Reloading...');
     message.success('Sources saved');
     // Reload channels and EPG concurrently after save
-    await Promise.all([reloadChannels(), reloadEPG()]);
+    await Promise.all([reloadChannels({ skipDraftGuard: true }), reloadEPG({ internal: true })]);
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
@@ -1885,7 +1985,8 @@ async function saveProviders() {
   }
 }
 
-async function reloadChannels() {
+async function reloadChannels({ skipDraftGuard = false } = {}) {
+  if (!skipDraftGuard && !(await guardChannelAction('rescanning sources'))) return;
   try {
     state.reloadingChannels = true;
     setStatus('Reloading channels...');
@@ -1893,11 +1994,11 @@ async function reloadChannels() {
     const j = await r.json();
     if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Reload failed'));
     setStatus(`Reloaded ${j.channels} channels.`);
-    await loadChannelAuthoringData();
+    const refreshed = await loadChannelAuthoringData();
     if (state.previewChannels.length) {
       await loadPreviewChannels();
     }
-    message.success('Channel workflows refreshed');
+    if (refreshed) message.success('Channels rescanned');
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
@@ -1906,7 +2007,8 @@ async function reloadChannels() {
   }
 }
 
-async function reloadEPG() {
+async function reloadEPG({ internal = false } = {}) {
+  if (!internal && channelActionsBusy.value) return;
   try {
     state.reloadingEPG = true;
     const r = await apiFetch('/api/reload/epg', { method: 'POST' });
@@ -2171,12 +2273,7 @@ async function changeSelectedOutputProfile(slug) {
   if (!slug || slug === state.selectedOutputProfileSlug) {
     return;
   }
-  if (profileDirty.value) {
-    message.warning('Save output changes before switching profiles.');
-    return;
-  }
-
-  state.selectedOutputProfileSlug = slug;
+  if (!(await guardChannelAction('switching lineups'))) return;
   await loadOutputProfileEntries(slug);
 }
 
@@ -2283,10 +2380,7 @@ function updateSelectedOutputProfileEnabled(value) {
 }
 
 async function createOutputProfile() {
-  if (profileDirty.value) {
-    message.warning('Save output changes before creating another profile.');
-    return;
-  }
+  if (!(await guardChannelAction('creating a lineup'))) return;
 
   const name = await openTextPromptDialog({
     title: 'Create output profile',
@@ -2312,7 +2406,8 @@ async function createOutputProfile() {
       throw new Error(buildApiErrorMessage(json, 'Failed to create output profile'));
     }
 
-    state.selectedOutputProfileSlug = json.profile.slug;
+    pendingOutputProfileSlug.value = json.profile.slug;
+    channelSnapshotInvalid.value = true;
     await loadChannelAuthoringData();
     message.success('Output profile created');
   } catch (e) {
@@ -2324,10 +2419,7 @@ async function createOutputProfile() {
 }
 
 async function duplicateOutputProfile() {
-  if (profileDirty.value) {
-    message.warning('Save output changes before duplicating a profile.');
-    return;
-  }
+  if (!(await guardChannelAction('duplicating this lineup'))) return;
 
   const sourceProfile = getSelectedOutputProfileRecord();
   if (!sourceProfile) {
@@ -2362,7 +2454,8 @@ async function duplicateOutputProfile() {
       throw new Error(buildApiErrorMessage(json, 'Failed to duplicate output profile'));
     }
 
-    state.selectedOutputProfileSlug = json.profile.slug;
+    pendingOutputProfileSlug.value = json.profile.slug;
+    channelSnapshotInvalid.value = true;
     await loadChannelAuthoringData();
     message.success('Output profile duplicated');
   } catch (e) {
@@ -2373,15 +2466,12 @@ async function duplicateOutputProfile() {
   }
 }
 
-function deleteSelectedOutputProfile() {
+async function deleteSelectedOutputProfile() {
   const profile = getSelectedOutputProfileRecord();
   if (!profile || profile.isDefault) {
     return;
   }
-  if (profileDirty.value) {
-    message.warning('Save output changes before deleting a profile.');
-    return;
-  }
+  if (!(await guardChannelAction('deleting this lineup'))) return;
 
   openConfirmDialog({
     tone: 'danger',
@@ -2404,7 +2494,8 @@ function deleteSelectedOutputProfile() {
         throw new Error(buildApiErrorMessage(json, 'Failed to delete output profile'));
       }
 
-      state.selectedOutputProfileSlug = 'default';
+      pendingOutputProfileSlug.value = 'default';
+      channelSnapshotInvalid.value = true;
       await loadChannelAuthoringData();
       message.success('Output profile deleted');
     } catch (e) {
@@ -2417,8 +2508,10 @@ function deleteSelectedOutputProfile() {
 }
 
 async function saveOutputProfileChanges() {
+  if (channelSnapshotInvalid.value || state.savingOutputProfile || state.loadingChannelAuthoring || state.loadingOutputProfileEntries) return false;
   try {
     state.savingOutputProfile = true;
+    channelSaveError.value = '';
     const selectedProfile = getSelectedOutputProfileRecord();
     if (!selectedProfile) {
       throw new Error('No output profile selected');
@@ -2445,58 +2538,106 @@ async function saveOutputProfileChanges() {
       setChannelRowFeedback(channelId, 'accent', 'Saving changes…');
     });
 
-    const response = await apiFetch(
-      `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profile: profileMetaDirty.value
-            ? {
-              name: state.outputProfileDraft.name.trim(),
-              enabled: state.outputProfileDraft.enabled,
-            }
-            : undefined,
-          canonicalChannels: canonicalRowsToSave.map(row => ({
-            id: row.id,
-            ...(row.customNameDirty ? { customName: row.customNameDraft } : {}),
-            ...(row.preferredStreamDirty
-              ? { preferredSourceChannelId: row.preferredSourceChannelId }
-              : {}),
-            ...(row.guideBindingDirty
-              ? { guideBinding: parseGuideBindingValue(row.selectedGuideBindingValue) }
-              : {}),
-          })),
-          channels: outputProfileEntriesDirty.value
-            ? channelWorkflowRows.value.map(row => ({
-              canonicalId: row.id,
-              position: row.position,
-              enabled: row.outputEnabled,
-              guideNumberOverride: row.committedGuideNumberOverride,
-            }))
-            : undefined,
-        }),
-      }
-    );
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(buildApiErrorMessage(json, 'Failed to save output profile'));
-    }
-
-    await loadChannelAuthoringData();
+    const result = await saveChannelDrafts({
+      write: async () => {
+        const response = await apiFetch(
+          `/api/output-profiles/${encodeURIComponent(state.selectedOutputProfileSlug)}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              profile: profileMetaDirty.value
+                ? {
+                  name: state.outputProfileDraft.name.trim(),
+                  enabled: state.outputProfileDraft.enabled,
+                }
+                : undefined,
+              canonicalChannels: canonicalRowsToSave.map(row => ({
+                id: row.id,
+                ...(row.customNameDirty ? { customName: row.customNameDraft } : {}),
+                ...(row.preferredStreamDirty
+                  ? { preferredSourceChannelId: row.preferredSourceChannelId }
+                  : {}),
+                ...(row.guideBindingDirty
+                  ? { guideBinding: parseGuideBindingValue(row.selectedGuideBindingValue) }
+                  : {}),
+              })),
+              channels: outputProfileEntriesDirty.value
+                ? channelWorkflowRows.value.map(row => ({
+                  canonicalId: row.id,
+                  position: row.position,
+                  enabled: row.outputEnabled,
+                  guideNumberOverride: row.committedGuideNumberOverride,
+                }))
+                : undefined,
+            }),
+          }
+        );
+        const json = await response.json();
+        if (!response.ok) {
+          const error = new Error(buildApiErrorMessage(json, 'Failed to save lineup'));
+          // Older servers include identity only at the end of the validation message.
+          error.channelId = json.canonicalId || json.channelId || dirtyRowIds.find(id => String(json.error || '').endsWith(` ${id}`));
+          throw error;
+        }
+        return json;
+      },
+      acknowledge: json => {
+        // Advance the baseline as soon as the server confirms the write. A failed
+        // follow-up GET must not leave already-saved edits masquerading as drafts.
+        for (const row of canonicalRowsToSave) {
+          const channel = state.canonicalChannels.find(item => item.id === row.id);
+          if (row.customNameDirty && channel) {
+            channel.customName = row.customNameDraft.trim() || null;
+            channel.name = channel.customName || channel.baseName || channel.name;
+            channel.customNameDraft = channel.customName || '';
+          }
+          if (row.preferredStreamDirty) {
+            state.channelBindings.filter(binding => binding.canonical?.id === row.id).forEach(binding => {
+              binding.isPreferredStream = binding.sourceChannel?.id === row.preferredSourceChannelId;
+            });
+          }
+          if (row.guideBindingDirty) {
+            const next = parseGuideBindingValue(row.selectedGuideBindingValue);
+            state.guideBindings.filter(binding => binding.canonical?.id === row.id).forEach(binding => {
+              binding.selected = binding.source?.id === next.sourceId;
+              if (binding.selected) binding.epgChannelId = next.epgChannelId;
+            });
+          }
+        }
+        Object.assign(selectedProfile, json.profile || state.outputProfileDraft);
+        applyOutputProfileEntries(json.channels || state.outputProfileEntries);
+        resetChannelWorkflowDraftState();
+        persistDraftSnapshot();
+      },
+      reload: loadChannelAuthoringData,
+    });
     if (state.previewChannels.length) {
       await loadPreviewChannels();
     }
     dirtyRowIds.forEach(channelId => {
       setChannelRowFeedback(channelId, 'success', 'Saved');
     });
-    message.success('Output profile saved');
+    if (result.refreshed) {
+      setStatus('Channel and lineup changes saved.');
+      message.success('Changes saved');
+    } else {
+      channelLoadError.value = 'Changes saved; could not refresh the list. Retry refresh to get the latest data.';
+      setStatus(channelLoadError.value, false);
+    }
+    // Do not continue a pending action with potentially stale authoring data.
+    return result.refreshed;
   } catch (e) {
+    for (const [id, feedback] of Object.entries(state.channelRowFeedback)) {
+      if (feedback.tone === 'accent') clearChannelRowFeedback(id);
+    }
     if (e?.channelId) {
       setChannelRowFeedback(e.channelId, 'danger', e.message);
     }
     setStatus(e.message, false);
+    channelSaveError.value = e.message;
     message.error(e.message);
+    return false;
   } finally {
     state.savingOutputProfile = false;
     state.updatingCanonicalNameChannelId = '';
@@ -3471,9 +3612,6 @@ const {
   savingApp,
   loadingChannelAuthoring,
   savingOutputProfile,
-  updatingCanonicalNameChannelId,
-  updatingPreferredStreamChannelId,
-  updatingGuideBindingChannelId,
   activeUsage,
   loadingUsage,
   tasks,
@@ -3617,7 +3755,7 @@ function getPublicBaseUrl() {
 }
 
 const selectedOutputProfileEndpointInfo = computed(() => {
-  const profile = selectedOutputProfile.value;
+  const profile = getSelectedOutputProfileRecord();
   if (!profile) {
     return null;
   }
@@ -3642,18 +3780,18 @@ const selectedOutputProfileEndpointInfo = computed(() => {
   if (profile.isDefault) {
     return {
       available: true,
-      title: 'Public Endpoints',
-      message: 'These public URLs currently publish this profile.',
+      title: 'Connect a player',
+      message: 'Saved lineup is enabled. Use these URLs in your player.',
       endpoints,
     };
   }
 
   return {
     available: profile.enabled,
-    title: 'Public Endpoints',
+    title: 'Connect a player',
     message: profile.enabled
-      ? 'These profile-specific public URLs publish this named profile.'
-      : 'Enable this profile to publish these profile-specific public URLs.',
+      ? 'Saved lineup is enabled. Use these URLs in your player.'
+      : 'This lineup is currently disabled. Enable it and save changes to make it available.',
     endpoints,
   };
 });
@@ -3804,8 +3942,10 @@ const channelWorkflowRows = computed(() => {
         }
         return (left.sourceChannel?.source || '').localeCompare(right.sourceChannel?.source || '');
       });
-      const guideDisplay = describeEffectiveGuideNumber(outputEntry, channel);
-      const hasGuideNumber = hasAssignedGuideNumber(outputEntry, channel);
+      const draftEntry = { ...outputEntry, guideNumberOverride: String(outputEntry?.guideNumberOverrideDraft ?? outputEntry?.guideNumberOverride ?? '').trim() || null };
+      const guideDisplay = describeEffectiveGuideNumber(draftEntry, channel);
+      const hasGuideNumber = hasAssignedGuideNumber(draftEntry, channel);
+      const savedEntry = savedOutputProfileEntries.value.find(entry => entry.canonical?.id === channel.id);
       const sourceGuideReferences = sortedBindings
         .map(binding => {
           const sourceGuideNumber =
@@ -3849,6 +3989,8 @@ const channelWorkflowRows = computed(() => {
         name: channel.name,
         baseName: channel.baseName || channel.name,
         customName: channel.customName || null,
+        savedOutputEnabled: savedEntry?.enabled ?? false,
+        savedGuideNumberOverride: savedEntry?.guideNumberOverride ?? null,
         customNameDraft: channel.customNameDraft ?? channel.customName ?? '',
         tvg_id: channel.tvg_id,
         guideNumber: channel.guideNumber,
@@ -3884,7 +4026,7 @@ const channelWorkflowRows = computed(() => {
         guideNumberOverrideInput:
           outputEntry?.guideNumberOverrideDraft ?? outputEntry?.guideNumberOverride ?? '',
         committedGuideNumberOverride: outputEntry?.guideNumberOverride ?? null,
-        effectiveGuideNumber: outputEntry?.guideNumberOverride || channel.guideNumber || '',
+        effectiveGuideNumber: draftEntry.guideNumberOverride || channel.guideNumber || '',
         guideDisplayLabel: guideDisplay.label,
         guideDisplaySource: guideDisplay.source,
         guideDisplayWarning: guideDisplay.warning,
@@ -3915,14 +4057,6 @@ const channelWorkflowRows = computed(() => {
       return (left.name || '').localeCompare(right.name || '');
     });
 });
-
-const channelWorkflowStats = computed(() => ({
-  totalChannels: state.canonicalChannels.length,
-  enabledChannels: channelWorkflowRows.value.filter(row => row.outputEnabled).length,
-  missingGuideChannels: channelWorkflowRows.value.filter(row => row.guideDisplayWarning).length,
-  multiSourceChannels: channelWorkflowRows.value.filter(row => row.sourceBindings.length > 1)
-    .length,
-}));
 
 const healthDetails = computed(() =>
   Array.isArray(health.value.details)
@@ -4437,6 +4571,13 @@ body {
 .login-form {
   display: grid;
   gap: 0.75rem;
+}
+
+.workspace-frame.channel-workspace { overflow: clip; }
+.mobile-section-picker { display: none; }
+.admin-tabs::part(mobile-picker) { display: none; }
+@media (max-width: 640px) {
+  .mobile-section-picker { display: grid; gap: 6px; padding: 12px 12px 0; }
 }
 
 .admin-tabs h3 {
