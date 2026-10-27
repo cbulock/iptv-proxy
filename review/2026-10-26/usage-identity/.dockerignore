@@ -1,0 +1,8 @@
+source/admin/node_modules
+source/test
+source/admin
+source/*.tar.gz
+*.tar.gz
+candidate-config
+candidate-data
+*.sqlite

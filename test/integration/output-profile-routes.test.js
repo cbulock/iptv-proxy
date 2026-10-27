@@ -304,6 +304,27 @@ describe('output profile routes', () => {
     });
   });
 
+  it('assigns an unbound discovered stream through the draft save and retains it after a rebuild', async () => {
+    const { data: { bindings } } = await axios.get(`${baseUrl}/api/canonical/bindings`);
+    const first = bindings[0];
+    const other = bindings.find(binding => binding.canonical.id !== first.canonical.id);
+    const { data: { bindings: guides } } = await axios.get(`${baseUrl}/api/canonical/guide-bindings`);
+    const otherGuide = guides.find(binding => binding.canonical.id === other.canonical.id);
+    const response = await axios.put(`${baseUrl}/api/output-profiles/default`, {
+      canonicalChannels: [{ id: first.canonical.id, preferredSourceChannelId: other.sourceChannel.id,
+        guideBinding: { sourceId: otherGuide.source.id, epgChannelId: otherGuide.epgChannelId } }],
+    });
+    expect(response.data.status).to.equal('saved');
+    const service = await import('../../libs/canonical-channel-service.js');
+    service.rebuildCanonicalChannels();
+    const updated = service.listChannelBindings().filter(binding => binding.canonical.id === first.canonical.id);
+    expect(updated.filter(binding => binding.isPreferredStream).map(binding => binding.sourceChannel.id))
+      .to.deep.equal([other.sourceChannel.id]);
+    expect(service.listCanonicalChannels()).to.have.lengthOf(2);
+    expect(service.listGuideBindings().find(binding => binding.canonical.id === first.canonical.id && binding.selected))
+      .to.include({ epgChannelId: otherGuide.epgChannelId }).and.have.nested.property('source.id', otherGuide.source.id);
+  });
+
   it('atomically saves profile metadata, canonical edits, and output entries', async () => {
     const entriesResponse = await axios.get(`${baseUrl}/api/output-profiles/default/entries`);
     const [first, second] = entriesResponse.data.channels;

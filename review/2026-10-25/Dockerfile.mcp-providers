@@ -1,0 +1,2 @@
+FROM bulock-iptv-proxy:deinterlace-20261025
+COPY source/server/mcp.js /usr/src/app/server/mcp.js

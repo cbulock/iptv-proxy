@@ -1,0 +1,60 @@
+vite v8.0.16 building client environment for production...
+[2K
+transforming...✓ 201 modules transformed.
+rendering chunks...
+[lightningcss minify] 'deep' is not recognized as a valid pseudo-class. Did you mean '::deep' (pseudo-element) or is this a typo?
+1341 |      padding: 18px;
+1342 |  }
+1343 |  .preview-toolbar :deep(cindor-select) {
+     |                         ^
+1344 |      flex: 1 1 220px;
+1345 |  }
+[lightningcss minify] 'deep' is not recognized as a valid pseudo-class. Did you mean '::deep' (pseudo-element) or is this a typo?
+1344 |      flex: 1 1 220px;
+1345 |  }
+1346 |  .preview-toolbar :deep(cindor-input) {
+     |                         ^
+1347 |      flex: 1 1 260px;
+1348 |  }
+[lightningcss minify] 'deep' is not recognized as a valid pseudo-class. Did you mean '::deep' (pseudo-element) or is this a typo?
+1369 |      width: 100%;
+1370 |  }
+1371 |  .preview-toolbar :deep(cindor-select),
+     |                         ^
+1372 |    .preview-toolbar :deep(cindor-input),
+1373 |    .preview-toolbar :deep(cindor-button) {
+[lightningcss minify] 'deep' is not recognized as a valid pseudo-class. Did you mean '::deep' (pseudo-element) or is this a typo?
+1370 |  }
+1371 |  .preview-toolbar :deep(cindor-select),
+1372 |    .preview-toolbar :deep(cindor-input),
+     |                           ^
+1373 |    .preview-toolbar :deep(cindor-button) {
+1374 |      width: 100%;
+[lightningcss minify] 'deep' is not recognized as a valid pseudo-class. Did you mean '::deep' (pseudo-element) or is this a typo?
+1371 |  .preview-toolbar :deep(cindor-select),
+1372 |    .preview-toolbar :deep(cindor-input),
+1373 |    .preview-toolbar :deep(cindor-button) {
+     |                           ^
+1374 |      width: 100%;
+1375 |  }
+[lightningcss minify] 'deep' is not recognized as a valid pseudo-class. Did you mean '::deep' (pseudo-element) or is this a typo?
+1377 |      width: 100%;
+1378 |  }
+1379 |  .pane-toolbar :deep(cindor-button) {
+     |                      ^
+1380 |      width: 100%;
+1381 |  }
+computing gzip size...
+review/2026-10-26/all-local/source/public/admin/index.html                                        0.62 kB │ gzip:   0.36 kB
+review/2026-10-26/all-local/source/public/admin/assets/PressStart2P-Regular-_wFEWmAB.woff2       12.51 kB
+review/2026-10-26/all-local/source/public/admin/assets/MonaSans-Variable-Pz49MTQZ.woff2          39.78 kB
+review/2026-10-26/all-local/source/public/admin/assets/JetBrainsMono-Variable-B9CIFXIH.woff2     40.40 kB
+review/2026-10-26/all-local/source/public/admin/assets/index.css                                 38.77 kB │ gzip:   8.19 kB
+review/2026-10-26/all-local/source/public/admin/assets/index.js                               1,411.50 kB │ gzip: 376.09 kB
+
+✓ built in 1.40s
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

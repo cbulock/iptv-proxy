@@ -1,0 +1,38 @@
+http:
+  routers:
+    iptv:
+      rule: Host(`iptv.bulock.house`)
+      service: bulock-iptv-gateway
+      observability:
+        accessLogs: false
+      tls:
+        certResolver: default
+    iptv-management:
+      rule: Host(`iptv.bulock.house`) && (PathPrefix(`/admin`) || PathPrefix(`/api/`))
+      priority: 100
+      middlewares: [private-admin]
+      service: iptv
+      tls:
+        certResolver: default
+    iptv-internal-status:
+      rule: Host(`iptv.bulock.house`) && PathPrefix(`/internal/`)
+      priority: 120
+      middlewares: [private-admin]
+      service: bulock-iptv-gateway
+      tls:
+        certResolver: default
+    iptv-mcp:
+      rule: Host(`iptv.bulock.house`) && (Path(`/mcp`) || PathPrefix(`/oauth/`) || PathPrefix(`/.well-known/`))
+      priority: 110
+      service: iptv
+      tls:
+        certResolver: default
+  services:
+    bulock-iptv-gateway:
+      loadBalancer:
+        servers:
+          - url: http://plex:3400
+    iptv:
+      loadBalancer:
+        servers:
+          - url: http://plex:34400

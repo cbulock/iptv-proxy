@@ -24,15 +24,53 @@ async function startServer(app) {
 }
 
 describe('Usage Route Integration', () => {
+  it('keeps two authenticated viewers behind the same IP separate and exposes their names', async () => {
+    const { server, baseUrl } = await startServer(makeApp());
+    const channelId = `usage-identity-${Date.now()}`;
+    const keys = [];
+    try {
+      keys.push(
+        await registerUsage({ ip: '10.0.0.1', channelId, userId: 'alice', userName: 'Alice' })
+      );
+      keys.push(await registerUsage({ ip: '10.0.0.1', channelId, userId: 'bob', userName: 'Bób' }));
+      const response = await axios.get(`${baseUrl}/api/usage/active`);
+      const entries = response.data.active.filter(entry => entry.channelId === channelId);
+      expect(keys[0]).not.to.equal(keys[1]);
+      expect(entries.map(entry => [entry.userId, entry.userName])).to.deep.equal([
+        ['alice', 'Alice'],
+        ['bob', 'Bób'],
+      ]);
+    } finally {
+      for (const key of keys) unregisterUsage(key);
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+
+  it('keeps a viewer active until both overlapping streams close', async () => {
+    const { server, baseUrl } = await startServer(makeApp());
+    const channelId = `usage-overlap-${Date.now()}`;
+    const first = await registerUsage({ ip: '10.0.0.1', channelId, userId: 'alice' });
+    const second = await registerUsage({ ip: '10.0.0.1', channelId, userId: 'alice' });
+    try {
+      unregisterUsage(first);
+      const response = await axios.get(`${baseUrl}/api/usage/active`);
+      expect(response.data.active.some(entry => entry.channelId === channelId)).to.equal(true);
+    } finally {
+      unregisterUsage(second);
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+
   it('deduplicates sessions per ip/channel and returns lastSeenAt', async () => {
     const { server, baseUrl } = await startServer(makeApp());
 
     const channelId = `usage-test-${Date.now()}`;
     let key1 = null;
+    let key2 = null;
     try {
       key1 = await registerUsage({ ip: '127.0.0.1', channelId });
       touchUsage(key1);
-      const key2 = await registerUsage({ ip: '127.0.0.1', channelId });
+      key2 = await registerUsage({ ip: '127.0.0.1', channelId });
       touchUsage(key2);
 
       const response = await axios.get(`${baseUrl}/api/usage/active`);
@@ -46,6 +84,7 @@ describe('Usage Route Integration', () => {
       expect(entries[0].lastSeenAt).to.be.a('string');
     } finally {
       if (key1) unregisterUsage(key1);
+      if (key2) unregisterUsage(key2);
       await new Promise(resolve => server.close(resolve));
     }
   });

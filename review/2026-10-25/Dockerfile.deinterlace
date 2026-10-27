@@ -1,0 +1,2 @@
+FROM bulock-iptv-proxy:channels-20261025
+COPY source/server/transcode.js source/server/mcp.js /usr/src/app/server/

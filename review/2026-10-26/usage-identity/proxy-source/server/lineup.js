@@ -1,0 +1,637 @@
+import axios from 'axios';
+import RateLimit from 'express-rate-limit';
+import { getProxiedImageUrl } from '../libs/proxy-image.js';
+import getBaseUrl from '../libs/getBaseUrl.js';
+import { loadAppConfigFromStore } from '../libs/app-settings-service.js';
+import { readUsageIdentity } from './usage.js';
+import { getChannels } from '../libs/channels-cache.js';
+import { asyncHandler, AppError } from './error-handler.js';
+import cacheManager from '../libs/cache-manager.js';
+import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
+import { getSourceChannelById } from '../libs/source-channel-resolver.js';
+import {
+  getOutputProfile,
+  getOutputProfileChannels,
+  hasOutputProfileEntries,
+} from '../libs/output-profile-service.js';
+
+// Rate limiter for public playlist endpoints
+const lineupLimiter = RateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // limit each IP to 60 requests per minute
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
+});
+
+// M3U and JSON lineup caches
+let m3uCache = null;
+let jsonCache = null;
+
+// Cache the most-recently-served HLS manifest response URL for each channel.
+// When a channel's configured URL redirects to a different origin (e.g., http://host:8000 →
+// https://host via a reverse proxy), HLS segment URLs are resolved against the redirected
+// URL. This cache lets the ?upstream= origin validator accept those segment URLs even though
+// they don't share an origin with channel.original_url.
+const hlsManifestOriginCache = new Map();
+
+function invalidateCaches() {
+  if (m3uCache) m3uCache.clear();
+  if (jsonCache) jsonCache.clear();
+}
+
+function isLikelyHlsPlaylist(contentType = '', upstreamUrl = '') {
+  const normalizedContentType = String(contentType).toLowerCase();
+
+  // Explicit HLS content types are authoritative — always treat as playlist.
+  if (
+    normalizedContentType.includes('application/vnd.apple.mpegurl') ||
+    normalizedContentType.includes('application/x-mpegurl') ||
+    normalizedContentType.includes('audio/mpegurl') ||
+    normalizedContentType.includes('audio/x-mpegurl')
+  ) {
+    return true;
+  }
+
+  // Explicit non-HLS media content types are authoritative — never buffer as playlist.
+  // This prevents hanging when an HDHomeRun device returns raw MPEG-TS (video/mp2t) with
+  // HTTP 200 instead of 503 when HLS is requested but unsupported.
+  if (normalizedContentType.startsWith('video/') || normalizedContentType.startsWith('audio/')) {
+    return false;
+  }
+
+  // When content-type is absent or generic (e.g. application/octet-stream), fall back to
+  // URL-based hints to detect playlists requested with ?streamMode=hls or a .m3u8 path.
+  try {
+    const url = new URL(upstreamUrl);
+    if (url.pathname.toLowerCase().endsWith('.m3u8')) return true;
+    if (String(url.searchParams.get('streamMode') || '').toLowerCase() === 'hls') return true;
+  } catch (_err) {
+    return false;
+  }
+
+  return false;
+}
+
+async function readStreamToUtf8(stream) {
+  const chunks = [];
+  let totalBytes = 0;
+  const maxBytes = 1 * 1024 * 1024; // 1 MB — no valid HLS playlist exceeds this
+  for await (const chunk of stream) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buf.length;
+    if (totalBytes > maxBytes) {
+      // Stream is too large to be a text playlist; abort to avoid buffering a continuous feed.
+      throw new Error('Response exceeds maximum playlist size (1 MB); not an HLS playlist');
+    }
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function rewriteUriToProxy(uri, playlistUrl, req, source, name) {
+  const trimmed = String(uri || '').trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith('#')) return trimmed;
+  if (/^(data|blob):/i.test(trimmed)) return trimmed;
+
+  let resolvedUrl;
+  try {
+    resolvedUrl = new URL(trimmed, playlistUrl).toString();
+  } catch (_err) {
+    return trimmed;
+  }
+
+  const baseUrl = getBaseUrl(req);
+  const sourcePart = encodeURIComponent(source || 'unknown');
+  const namePart = encodeURIComponent(name || 'unknown');
+  return `${baseUrl}/stream/${sourcePart}/${namePart}?upstream=${encodeURIComponent(resolvedUrl)}`;
+}
+
+function getStreamUrl(baseUrl, channel) {
+  if (channel?.sourceChannelId) {
+    return `${baseUrl}/stream/channel/${encodeURIComponent(channel.sourceChannelId)}`;
+  }
+  return `${baseUrl}/stream/${encodeURIComponent(channel.source || 'unknown')}/${encodeURIComponent(channel.streamName || channel.name)}`;
+}
+
+function rewriteHlsPlaylist(body, playlistUrl, req, source, name) {
+  const lines = String(body || '').split('\n');
+  const rewritten = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+
+    if (trimmed.startsWith('#')) {
+      return line.replace(/URI="([^"]+)"/g, (_match, uri) => {
+        const rewrittenUri = rewriteUriToProxy(uri, playlistUrl, req, source, name);
+        return `URI="${rewrittenUri}"`;
+      });
+    }
+
+    return rewriteUriToProxy(trimmed, playlistUrl, req, source, name);
+  });
+
+  return rewritten.join('\n');
+}
+
+function resolveGuideNumberForLineup(channel) {
+  // Always prefer an explicitly set guideNumber (for example from the channel
+  // map's "number" field or an output-profile override).
+  if (channel?.guideNumber) {
+    return channel.guideNumber;
+  }
+  // HDHomeRun tuning numbers like 10.1 are source-local values, not reliable
+  // IPTV guide numbers. Do not synthesize a guide number for them when none
+  // has been explicitly assigned.
+  if (channel?.hdhomerun) {
+    return '';
+  }
+  return channel?.tvg_id || channel?.name;
+}
+
+function resolveGuideNumberForM3U(channel) {
+  const guideNumber = String(channel?.guideNumber || '').trim();
+  if (/^\d+$/.test(guideNumber)) {
+    return guideNumber;
+  }
+
+  return '';
+}
+
+function isChannelMapped(channel, map, mapKeys) {
+  const name = channel?.name || '';
+  const tvgId = channel?.tvg_id || '';
+
+  if (mapKeys.has(name)) return true;
+  if (tvgId && mapKeys.has(tvgId)) return true;
+
+  if (tvgId) {
+    for (const value of Object.values(map || {})) {
+      if (value && value.tvg_id === tvgId) return true;
+    }
+  }
+
+  return false;
+}
+
+function loadPublishedChannels(includeUnmapped) {
+  if (includeUnmapped) {
+    return getChannels();
+  }
+
+  const outputChannels = getOutputProfileChannels();
+  // Once the default profile has entries, it is the source of truth even when
+  // none are currently publishable.  In particular, falling back here would
+  // republish mapped source channels after an operator disables every entry or
+  // clears every effective guide number.  Keep the legacy mapping fallback
+  // only for installations where no profile entries have been initialized.
+  if (outputChannels.length > 0 || hasOutputProfileEntries()) {
+    return outputChannels;
+  }
+
+  const channelMap = loadChannelMapFromStore();
+  const mapKeys = new Set(Object.keys(channelMap));
+  return getChannels().filter(channel => isChannelMapped(channel, channelMap, mapKeys));
+}
+
+function loadProfileChannelsOrThrow(slug) {
+  const profile = getOutputProfile(slug);
+  if (!profile || !profile.enabled) {
+    throw new AppError('Output profile not found', 404);
+  }
+
+  return getOutputProfileChannels(slug);
+}
+
+function parseBooleanQueryParam(value) {
+  if (value === undefined || value === null) return false;
+  const normalized = String(value).trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+}
+
+/**
+ * Check that overrideUrlString uses HTTP(S) and shares the same origin
+ * (protocol + hostname + port) as channelUrlString.
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+function isSameOriginHttpUrl(overrideUrlString, channelUrlString) {
+  const defaultPorts = { 'http:': '80', 'https:': '443' };
+  const normalizePort = url => url.port || defaultPorts[url.protocol];
+
+  let overrideUrl;
+  let channelUrl;
+  try {
+    overrideUrl = new URL(overrideUrlString);
+    channelUrl = new URL(channelUrlString);
+  } catch (_err) {
+    return { ok: false, reason: 'parse-error' };
+  }
+
+  // Only allow HTTP(S) schemes for both URLs.
+  if (!defaultPorts[overrideUrl.protocol] || !defaultPorts[channelUrl.protocol]) {
+    return { ok: false, reason: 'invalid-protocol' };
+  }
+
+  const sameOrigin =
+    overrideUrl.protocol === channelUrl.protocol &&
+    overrideUrl.hostname === channelUrl.hostname &&
+    normalizePort(overrideUrl) === normalizePort(channelUrl);
+
+  return sameOrigin ? { ok: true } : { ok: false, reason: 'origin-mismatch' };
+}
+
+export function setupLineupRoutes(app, config, usageHelpers = {}) {
+  // Initialize lineup caches with TTL from config (default: 1 hour)
+  const appConfig = loadAppConfigFromStore();
+  const m3uTTL = (appConfig.cache?.m3u_ttl ?? 3600) * 1000; // Convert seconds to milliseconds
+  m3uCache = cacheManager.createCache('m3u', m3uTTL);
+  jsonCache = cacheManager.createCache('lineup-json', m3uTTL);
+  console.log(`Lineup caches initialized with TTL: ${m3uTTL / 1000}s`);
+
+  const {
+    registerUsage = async () => undefined,
+    touchUsage = () => undefined,
+    unregisterUsage = () => undefined,
+  } = usageHelpers;
+  const loadChannels = () => getChannels();
+  const handleLineupJson = asyncHandler(async (req, res) => {
+    const profileSlug = req.params.slug ? String(req.params.slug).trim() : '';
+    const includeUnmapped = profileSlug
+      ? false
+      : parseBooleanQueryParam(req.query.include_unmapped ?? req.query.includeUnmapped);
+    const cacheKey = `${req.protocol}://${req.get('host')}|path:${req.path}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
+
+    const cached = jsonCache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const channels = profileSlug
+      ? loadProfileChannelsOrThrow(profileSlug)
+      : loadPublishedChannels(includeUnmapped);
+
+    if (!Array.isArray(channels)) {
+      throw new AppError('Invalid channels data structure', 500);
+    }
+
+    const baseUrl = getBaseUrl(req);
+    const lineup = channels
+      .filter(channel => channel && channel.name)
+      .map(channel => ({
+        GuideNumber: resolveGuideNumberForLineup(channel),
+        GuideName: channel.name,
+        URL: getStreamUrl(baseUrl, channel),
+      }));
+
+    jsonCache.set(cacheKey, lineup);
+    res.json(lineup);
+  });
+
+  app.get('/lineup.json', lineupLimiter, handleLineupJson);
+  app.get('/profiles/:slug/lineup.json', lineupLimiter, handleLineupJson);
+
+  const handleLineupM3u = asyncHandler(async (req, res) => {
+    const profileSlug = req.params.slug ? String(req.params.slug).trim() : '';
+    const filterSource = req.query.source ? String(req.query.source) : null;
+    const filterGroup = req.query.group ? String(req.query.group) : null;
+    const includeUnmapped = profileSlug
+      ? false
+      : parseBooleanQueryParam(req.query.include_unmapped ?? req.query.includeUnmapped);
+    const cacheKey = `${req.protocol}://${req.get('host')}|path:${req.path}|source:${filterSource || ''}|group:${filterGroup || ''}|include_unmapped:${includeUnmapped ? '1' : '0'}`;
+
+    const cached = m3uCache.get(cacheKey);
+    if (cached) {
+      res.set('Content-Type', 'application/x-mpegURL');
+      return res.send(cached);
+    }
+
+    let channels = profileSlug
+      ? loadProfileChannelsOrThrow(profileSlug)
+      : loadPublishedChannels(includeUnmapped);
+
+    if (!Array.isArray(channels)) {
+      throw new AppError('Invalid channels data structure', 500);
+    }
+
+    if (filterSource) {
+      channels = channels.filter(ch => ch && ch.source === filterSource);
+    } else if (filterGroup) {
+      channels = channels.filter(ch => ch && ch.source === filterGroup);
+    }
+
+    channels = channels.filter(ch => ch && ch.name && ch.source);
+
+    const tvgIdMap = new Map();
+    const baseUrl = getBaseUrl(req);
+    const epgUrl = profileSlug
+      ? `${baseUrl}/profiles/${encodeURIComponent(profileSlug)}/xmltv.xml`
+      : `${baseUrl}/xmltv.xml`;
+    let output = `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`;
+
+    for (const channel of channels) {
+      try {
+        let tvgId = channel.tvg_id || '';
+        const originalTvgId = tvgId;
+
+        if (tvgIdMap.has(tvgId)) {
+          let i = 1;
+          while (tvgIdMap.has(`${originalTvgId}_${i}`)) i++;
+          tvgId = `${originalTvgId}_${i}`;
+        }
+        if (tvgId) tvgIdMap.set(tvgId, true);
+
+        const tvgName = channel.name || '';
+        const tvgLogo = channel.logo
+          ? getProxiedImageUrl(channel.logo, channel.source || 'unknown', req)
+          : '';
+        const tvgChno = resolveGuideNumberForM3U(channel);
+        const groupTitle = channel.source || '';
+        const streamUrl = getStreamUrl(baseUrl, channel);
+
+        output += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${tvgLogo}" group-title="${groupTitle}"`;
+        if (tvgChno) {
+          output += ` tvg-chno="${tvgChno}"`;
+        }
+        output += `,${tvgName}\n`;
+        output += `${streamUrl}\n`;
+      } catch (channelErr) {
+        console.warn(`[lineup.m3u] Skipping invalid channel: ${channelErr.message}`);
+      }
+    }
+
+    m3uCache.set(cacheKey, output);
+    res.set('Content-Type', 'application/x-mpegURL');
+    res.send(output);
+  });
+
+  app.get('/lineup.m3u', lineupLimiter, handleLineupM3u);
+  app.get('/profiles/:slug/lineup.m3u', lineupLimiter, handleLineupM3u);
+
+  app.all('/stream/:source/:name', async (req, res) => {
+    let { source, name } = req.params;
+    const upstreamOverride = req.query.upstream ? String(req.query.upstream) : null;
+    const channels = loadChannels();
+
+    let channel = channels.find(c => c.source === source && c.name === name);
+    if (source === 'channel') {
+      channel = getSourceChannelById(name);
+      if (channel) {
+        source = channel.source;
+        name = channel.name;
+      }
+    }
+
+    if (!channel) return res.status(404).send('Channel not found');
+
+    // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
+    // HTTP(S) origin (protocol + hostname + port) as the channel's configured upstream URL.
+    // We also accept the origin of the last-known HLS manifest response URL for this channel
+    // (see hlsManifestOriginCache) to handle cases where channel.original_url redirects to a
+    // different origin (e.g., http://host:8000 → https://host via a reverse proxy).
+    if (upstreamOverride) {
+      let result = isSameOriginHttpUrl(upstreamOverride, channel.original_url);
+
+      // When the origin doesn't match the configured URL, fall back to the cached redirect
+      // target. Only attempt this for origin-mismatch (not parse/protocol errors).
+      if (!result.ok && result.reason === 'origin-mismatch') {
+        const cachedResponseUrl = hlsManifestOriginCache.get(`${source}/${name}`);
+        if (cachedResponseUrl) {
+          result = isSameOriginHttpUrl(upstreamOverride, cachedResponseUrl);
+        }
+      }
+
+      if (!result.ok) {
+        if (result.reason === 'parse-error') {
+          return res.status(400).send('Invalid upstream URL');
+        }
+        if (result.reason === 'invalid-protocol') {
+          return res.status(403).send('Upstream URL protocol not allowed');
+        }
+        // origin-mismatch or any other reason
+        return res.status(403).send('Upstream URL not allowed');
+      }
+
+      // Additional SSRF hardening: ensure the override uses a permitted scheme.
+      if (!isSafePublicHttpUrl(upstreamOverride)) {
+        return res.status(403).send('Upstream URL not allowed');
+      }
+    }
+
+    let upstreamUrl = upstreamOverride || channel.original_url;
+
+    // When the client explicitly requests HLS mode (e.g. browser preview with
+    // ?streamMode=hls) and the channel comes from an HDHomeRun tuner, ask the
+    // device to transcode the over-the-air MPEG-TS to an HLS stream.  Without
+    // this, OTA broadcasts typically use MPEG-2 video and AC-3 audio — codecs
+    // that browser MSE does not support — so the player receives data but cannot
+    // decode any frames.  Do not apply this for ?upstream= segment requests;
+    // those are already resolved segment URLs that must be fetched as-is.
+    const requestedHlsMode =
+      !upstreamOverride &&
+      Boolean(channel.hdhomerun) &&
+      String(req.query.streamMode || '').toLowerCase() === 'hls';
+
+    if (requestedHlsMode) {
+      try {
+        const hdUrl = new URL(upstreamUrl);
+        hdUrl.searchParams.set('streamMode', 'hls');
+        upstreamUrl = hdUrl.toString();
+      } catch (_err) {
+        // URL parse error; proceed with original URL without modification
+        console.warn('[stream] %s/%s: could not append ?streamMode=hls to upstream URL: %s', source, name, channel.original_url);
+      }
+    }
+
+    const startTime = Date.now();
+    console.info('[stream] %s/%s -> %s', source, name, upstreamUrl);
+
+    if (req.method === 'HEAD') {
+      try {
+        const response = await axios.head(upstreamUrl, { timeout: 5000 });
+        res.set(response.headers);
+        res.status(response.status || 200).end();
+        console.info('[stream] %s/%s head ok in %dms', source, name, Date.now() - startTime);
+      } catch (err) {
+        console.warn('[stream] head failed %s/%s: %s', source, name, err.message, {
+          status: err.response?.status,
+          code: err.code,
+        });
+        res.status(502).end();
+      }
+      return;
+    }
+
+    if (req.method !== 'GET') {
+      return res.sendStatus(405);
+    }
+
+    const channelId = channel.guideNumber || channel.tvg_id || channel.name;
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+    const userAgent = req.headers['user-agent'] || '';
+    const identity = readUsageIdentity(req);
+    let usageKey;
+    let usageInterval;
+    let upstreamBody;
+    let cleanedUp = false;
+    const upstreamRequest = new AbortController();
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      upstreamRequest.abort();
+      // axios does not automatically tear down a fulfilled response body when the
+      // downstream client disappears. Destroy it so a paused live stream does not
+      // continue to occupy an upstream tuner/provider connection.
+      const upstreamSocket = upstreamBody?.socket;
+      if (upstreamBody && !upstreamBody.destroyed) upstreamBody.destroy();
+      // Explicitly tear down the response socket too. Some HTTP agents retain
+      // a socket after destroying only the readable response wrapper.
+      upstreamSocket?.destroy();
+      if (usageInterval) clearInterval(usageInterval);
+      usageInterval = null;
+      if (usageKey) unregisterUsage(usageKey);
+      usageKey = null;
+    };
+    const abortForDisconnectedClient = () => {
+      if (!res.writableEnded) cleanup();
+    };
+    req.on('aborted', cleanup);
+    res.on('close', abortForDisconnectedClient);
+    res.on('error', cleanup);
+    const touchViewer = async () => {
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity });
+      touchUsage(usageKey);
+    };
+    const registerPersistentViewer = async () => {
+      if (usageKey) return;
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity });
+      usageInterval = setInterval(() => touchUsage(usageKey), 10000);
+      res.on('finish', cleanup);
+    };
+
+    const handleStreamResponse = async (response, resolvedUrl, isUpstreamOverride) => {
+      upstreamBody = response.data;
+      if (cleanedUp) {
+        const upstreamSocket = upstreamBody.socket;
+        if (!upstreamBody.destroyed) upstreamBody.destroy();
+        upstreamSocket?.destroy();
+        return;
+      }
+      const responseUrl = response.request?.res?.responseUrl || resolvedUrl;
+      const contentType = response.headers?.['content-type'] || '';
+      // Determine whether the upstream response is an HLS playlist:
+      //
+      // • requestedHlsMode (HDHomeRun + client sent ?streamMode=hls): check only the
+      //   Content-Type header — never URL hints.  We appended ?streamMode=hls to the
+      //   upstream URL, so isLikelyHlsPlaylist's URL-based heuristic would always fire,
+      //   even when older firmware returns raw MPEG-TS at that URL and hits the 1 MB cap.
+      //
+      // • All other cases (including default HDHomeRun pass-through): preserve the
+      //   existing !channel.hdhomerun guard that bypasses HLS detection entirely for
+      //   HDHomeRun channels, preventing readStreamToUtf8 from buffering a continuous
+      //   MPEG-TS feed when firmware redirects to an .m3u8-named URL.
+      const isHlsResponse = requestedHlsMode
+        // Content-type only (empty URL disables the URL-hint path inside isLikelyHlsPlaylist).
+        // URL hints are intentionally skipped here: we appended ?streamMode=hls to the
+        // upstream URL, so those hints would always match regardless of the actual format.
+        ? isLikelyHlsPlaylist(contentType, '')
+        : !channel.hdhomerun && isLikelyHlsPlaylist(contentType, responseUrl);
+
+      console.info(
+        '[stream] %s/%s upstream status=%d content-type="%s" hdhomerun=%s requestedHlsMode=%s isHlsResponse=%s',
+        source,
+        name,
+        response.status,
+        contentType || '(empty)',
+        Boolean(channel.hdhomerun),
+        requestedHlsMode,
+        isHlsResponse
+      );
+
+      if (isHlsResponse) {
+        // HLS playlist/key/segment requests are short-lived; keep session alive via touch + idle TTL.
+        await touchViewer();
+        const playlistBody = await readStreamToUtf8(response.data);
+        const rewrittenBody = rewriteHlsPlaylist(playlistBody, responseUrl, req, source, name);
+        const headers = { ...response.headers };
+        delete headers['content-length'];
+        delete headers['transfer-encoding'];
+
+        // Remember the effective origin of this manifest so that segment ?upstream= requests
+        // can be validated against it.  This is necessary when channel.original_url redirects
+        // to a different origin (e.g., http://host:8000 → https://host via a reverse proxy):
+        // the rewritten segment URLs will carry the redirected origin, not original_url's.
+        if (!isUpstreamOverride) {
+          hlsManifestOriginCache.set(`${source}/${name}`, responseUrl);
+        }
+
+        res.set(headers);
+        res.set('content-type', 'application/x-mpegURL');
+        res.send(rewrittenBody);
+        console.info(
+          '[stream] %s/%s playlist rewritten in %dms',
+          source,
+          name,
+          Date.now() - startTime
+        );
+        return;
+      }
+
+      if (isUpstreamOverride) {
+        await touchViewer();
+      } else {
+        // Non-HLS primary streaming response: unregister immediately on disconnect.
+        await registerPersistentViewer();
+      }
+
+      response.data.on('error', err => {
+        console.warn('[stream] upstream error %s/%s: %s', source, name, err.message);
+        if (!res.destroyed) res.destroy(err);
+      });
+
+      res.set(response.headers);
+      response.data.pipe(res);
+      console.info('[stream] %s/%s ready in %dms', source, name, Date.now() - startTime);
+    };
+
+    try {
+      // When an ?upstream= override is in use, disable redirects to prevent SSRF via open
+      // redirects: the origin check above validates the initial URL but can't guard against
+      // a server-side redirect to a different host.
+      const axiosOptions = {
+        responseType: 'stream',
+        timeout: 15000,
+        signal: upstreamRequest.signal,
+        ...(upstreamOverride ? { maxRedirects: 0 } : {}),
+      };
+      const response = await axios.get(upstreamUrl, axiosOptions);
+
+      await handleStreamResponse(response, upstreamUrl, !!upstreamOverride);
+    } catch (err) {
+      cleanup();
+      if (res.destroyed || res.writableEnded) return;
+      console.warn('[stream] failed %s/%s: %s', source, name, err.message, {
+        status: err.response?.status,
+        code: err.code,
+      });
+      res.status(502).send('Failed to fetch stream');
+    }
+  });
+}
+
+function isSafePublicHttpUrl(urlString) {
+  let url;
+  try {
+    url = new URL(urlString);
+  } catch {
+    return false;
+  }
+
+  const protocol = url.protocol.toLowerCase();
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    return false;
+  }
+
+  return true;
+}
+
+// Export cache invalidation function
+export { invalidateCaches as invalidateLineupCaches };

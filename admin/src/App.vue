@@ -871,6 +871,8 @@ import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
 import AppSettingsPane from './components/AppSettingsPane.vue';
 import ChannelsPane from './components/ChannelsPane.vue';
+import { buildChannelSourceOptions } from './utils/channel-source-options.js';
+import { getProviderTypeOptions } from './utils/provider-type-options.js';
 import SourcesPane from './components/SourcesPane.vue';
 import { restoreChannelDrafts, resolveChannelDraftGuard, saveChannelDrafts } from './utils/channel-workflow.js';
 import {
@@ -2152,8 +2154,10 @@ async function loadUsage() {
     // Normalize and sort by startedAt desc
     state.activeUsage = list
       .map(u => ({
-        key: `${u.ip}|${u.channelId}`,
+        key: JSON.stringify(u.userId ? ['user', u.userId, u.ip, u.channelId] : ['ip', u.ip, u.channelId]),
         ip: u.ip,
+        userName: u.userName || '',
+        userId: u.userId || '',
         channelId: u.channelId,
         name: u.name || '',
         tvg_id: u.tvg_id || '',
@@ -2593,12 +2597,20 @@ async function saveOutputProfileChanges() {
             channel.customNameDraft = channel.customName || '';
           }
           if (row.preferredStreamDirty) {
+            if (!state.channelBindings.some(binding => binding.canonical?.id === row.id && binding.sourceChannel?.id === row.preferredSourceChannelId)) {
+              const choice = state.channelBindings.find(binding => binding.sourceChannel?.id === row.preferredSourceChannelId);
+              if (choice) state.channelBindings.push({ ...choice, canonical: { id: row.id }, bindingType: 'manual' });
+            }
             state.channelBindings.filter(binding => binding.canonical?.id === row.id).forEach(binding => {
               binding.isPreferredStream = binding.sourceChannel?.id === row.preferredSourceChannelId;
             });
           }
           if (row.guideBindingDirty) {
             const next = parseGuideBindingValue(row.selectedGuideBindingValue);
+            if (!state.guideBindings.some(binding => binding.canonical?.id === row.id && binding.source?.id === next.sourceId)) {
+              const choice = state.guideBindings.find(binding => binding.source?.id === next.sourceId);
+              if (choice) state.guideBindings.push({ ...choice, canonical: { id: row.id }, epgChannelId: next.epgChannelId });
+            }
             state.guideBindings.filter(binding => binding.canonical?.id === row.id).forEach(binding => {
               binding.selected = binding.source?.id === next.sourceId;
               if (binding.selected) binding.epgChannelId = next.epgChannelId;
@@ -3891,6 +3903,8 @@ function isOutputProfileEntryDirty(channelId, outputEntry) {
   );
 }
 
+const channelSourceChoices = computed(() => buildChannelSourceOptions('', state.channelBindings, state.guideBindings));
+
 const channelWorkflowRows = computed(() => {
   const bindingsByCanonicalId = new Map();
   const guideBindingsByCanonicalId = new Map();
@@ -3919,15 +3933,8 @@ const channelWorkflowRows = computed(() => {
   return state.canonicalChannels
     .map(channel => {
       const sourceBindings = bindingsByCanonicalId.get(channel.id) || [];
-      const guideBindingOptions = (guideBindingsByCanonicalId.get(channel.id) || []).map(
-        binding => ({
-          label: `${binding.source?.name || 'Unknown source'} - ${binding.epgChannelId || 'no EPG id'}`,
-          value: JSON.stringify({
-            sourceId: binding.source?.id || '',
-            epgChannelId: binding.epgChannelId || '',
-          }),
-        })
-      );
+      const sourceOptions = channelSourceChoices.value;
+      const guideBindingOptions = sourceOptions.guides;
       const selectedGuideBinding = (guideBindingsByCanonicalId.get(channel.id) || []).find(
         binding => binding.selected
       );
@@ -4004,15 +4011,11 @@ const channelWorkflowRows = computed(() => {
         sourceGuideReferencesSummary: sourceGuideReferences.join(', '),
         preferredSourceChannelId: getDraftPreferredStreamSourceChannelId(channel.id) || null,
         committedPreferredSourceChannelId: preferredBinding?.sourceChannel?.id || null,
-        preferredStreamOptions: sortedBindings.map(binding => ({
-          label: `${binding.sourceChannel?.source || 'Unknown'} - ${binding.sourceChannel?.name || 'Unnamed channel'}${
-            binding.sourceChannel?.sourceGuideNumber || binding.sourceChannel?.guideNumber
-              ? ` (${binding.sourceChannel?.sourceGuideNumber || binding.sourceChannel?.guideNumber})`
-              : ''
-          }`,
-          value: binding.sourceChannel?.id || '',
-        })),
+        preferredStreamOptions: sourceOptions.streams,
         guideBindingOptions,
+        boundGuideValues: (guideBindingsByCanonicalId.get(channel.id) || []).map(binding => JSON.stringify({
+          sourceId: binding.source?.id || '', epgChannelId: binding.epgChannelId || '',
+        })),
         selectedGuideBindingValue: getDraftGuideBindingValue(channel.id) || null,
         committedGuideBindingValue: selectedGuideBinding
           ? JSON.stringify({
@@ -4106,6 +4109,8 @@ const formattedHealthUpdated = computed(() => {
 });
 
 const usageColumns = [
+  { label: 'Viewer', key: 'userName', sortable: true },
+  { label: 'User ID', key: 'userId', sortable: true },
   { label: 'IP', key: 'ip', sortable: true },
   { label: 'Channel ID', key: 'channelId', sortable: true },
   { label: 'Name', key: 'name', sortable: true },
@@ -4167,10 +4172,7 @@ const providerColumns = [
     key: 'type',
     editor: {
       type: 'select',
-      options: [
-        { label: 'M3U', value: 'm3u' },
-        { label: 'HDHomeRun', value: 'hdhomerun' },
-      ],
+      options: getProviderTypeOptions,
     },
   },
   {

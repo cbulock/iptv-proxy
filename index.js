@@ -6,6 +6,7 @@ import path from 'path';
 import crypto from 'crypto';
 import yaml from 'yaml';
 import session from 'express-session';
+import SQLiteSessionStore from './libs/sqlite-session-store.js';
 import RateLimit from 'express-rate-limit';
 import { initConfig } from './server/init-config.js';
 import { loadConfig } from './libs/config-loader.js';
@@ -93,14 +94,12 @@ const sessionSecret = (() => {
   return newSecret;
 })();
 
-// NOTE: The default MemoryStore is used for sessions.
-// This is intentional for single-instance deployments but means:
-//   - Sessions are lost on server restart (unless session_secret is set and a persistent store is used)
-//   - Not suitable for multi-process / clustered deployments
-// For production, configure a persistent session store (e.g. connect-redis, connect-mongo).
+// Persist sessions alongside the rest of the application data so restarts
+// retain authentication and CSRF state until the existing cookie expires.
 app.use(
   session({
     secret: sessionSecret,
+    store: new SQLiteSessionStore(),
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -162,7 +161,10 @@ const adminDevOrigin = `http://${adminDevHost}:${adminDevPort}`;
 function buildAdminDevRedirectUrl(req) {
   const originalUrl = req.originalUrl || '/admin';
   const normalizedPath = originalUrl === '/admin.html' ? '/admin/' : originalUrl;
-  return new URL(normalizedPath === '/admin' ? '/admin/' : normalizedPath, adminDevOrigin).toString();
+  return new URL(
+    normalizedPath === '/admin' ? '/admin/' : normalizedPath,
+    adminDevOrigin
+  ).toString();
 }
 
 function sendAdminEntryHtml(req, res) {
@@ -320,7 +322,7 @@ app.use(backupRouter); // Config backup/restore routes
 imageProxyRoute(app);
 setupHDHRRoutes(app, config);
 setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
-setupTranscodeRoutes(app);
+setupTranscodeRoutes(app, { registerUsage, touchUsage, unregisterUsage });
 setupStreamProbeRoutes(app);
 await setupEPGRoutes(app);
 setupLiveTvRoutes(app);

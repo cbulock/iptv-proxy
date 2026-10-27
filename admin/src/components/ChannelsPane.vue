@@ -215,7 +215,7 @@ Clear filters
             <div class="mobile-source">{{ sourceLabel(row) }}</div>
           </td>
           <td class="source-cell">
-            <span>{{ sourceLabel(row) }}</span><small v-if="row.preferredStreamOptions.length > 1">{{ row.preferredStreamOptions.length }} sources available</small>
+            <span>{{ sourceLabel(row) }}</span><small v-if="row.sourceBindings.length > 1">{{ row.sourceBindings.length }} bound streams</small>
           </td>
           <td class="edit-cell">
             <CindorButton
@@ -252,6 +252,7 @@ Discard
 
     <CindorDialog
       v-model:open="editorOpen"
+      class="channel-editor-dialog"
       modal
       aria-labelledby="channel-editor-title"
       aria-describedby="channel-editor-draft-copy"
@@ -264,6 +265,9 @@ Discard
             <p class="eyebrow">CHANNEL SETTINGS</p>
             <h2 id="channel-editor-title">{{ displayName(activeRow) }}</h2>
           </div>
+          <button type="button" class="editor-close" aria-label="Close channel settings" @click="closeEditor">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
         </header>
         <p id="channel-editor-draft-copy" class="help">
           Changes are kept as a draft until you save.
@@ -325,18 +329,18 @@ Use default number
           <label class="editor-field"><span>Stream source</span><CindorSelect
               :model-value="activeRow.preferredSourceChannelId || ''"
               :value.attr="activeRow.preferredSourceChannelId || ''"
-              :disabled="busy || !activeRow.preferredStreamOptions.length"
+              :disabled="busy || !activeStreamOptions.length"
               aria-label="Stream source"
               @update:model-value="value => updatePreferredStream(activeRow.id, value)"
               ><option value="" disabled>
                 {{
-                  activeRow.preferredStreamOptions.length
+                  activeStreamOptions.length
                     ? 'Choose a stream'
                     : 'No stream available'
                 }}
               </option>
               <option
-                v-for="option in activeRow.preferredStreamOptions"
+                v-for="option in activeStreamOptions"
                 :key="option.value"
                 :value="option.value"
               >
@@ -344,35 +348,35 @@ Use default number
               </option></CindorSelect></label>
           <p class="help">
             {{
-              activeRow.preferredStreamOptions.length === 1
+              activeStreamOptions.length === 1
                 ? 'One stream source is available.'
-                : 'Choose the source you prefer for playback.'
+                : 'Choose a discovered stream for playback. Current channel matches appear first.'
             }}
           </p>
           <label class="editor-field"><span>TV guide source</span><CindorSelect
               :model-value="activeRow.selectedGuideBindingValue || ''"
               :value.attr="activeRow.selectedGuideBindingValue || ''"
-              :disabled="busy || !activeRow.guideBindingOptions.length"
+              :disabled="busy || !activeGuideOptions.length"
               aria-label="TV guide source"
               aria-describedby="editor-guide-help"
               @update:model-value="value => updateGuideBinding(activeRow.id, value)"
               ><option value="" disabled>
                 {{
-                  activeRow.guideBindingOptions.length
+                  activeGuideOptions.length
                     ? 'Choose a TV guide'
                     : 'No TV guide available'
                 }}
               </option>
               <option
-                v-for="option in activeRow.guideBindingOptions"
+                v-for="option in activeGuideOptions"
                 :key="option.value"
                 :value="option.value"
               >
                 {{ option.label }}
               </option></CindorSelect></label>
           <p id="editor-guide-help" class="help">
-            Selects programme information, not the channel number. A selection does not guarantee
-            schedule coverage.
+            Choose a discovered guide reference. Current channel matches appear first. This selects
+            programme information, not the channel number, and does not guarantee schedule coverage.
           </p>
         </section>
         <details class="technical-details">
@@ -530,13 +534,25 @@ const filteredRows = computed(() =>
   )
 );
 const activeRow = computed(() => enrichedRows.value.find(row => row.id === editorId.value));
+// Reorder shared option references only for the open editor.
+const activeStreamOptions = computed(() => {
+  const bound = new Set(activeRow.value?.sourceBindings.map(binding => binding.sourceChannel?.id));
+  return (activeRow.value?.preferredStreamOptions || []).slice().sort((a, b) =>
+    Number(bound.has(b.value)) - Number(bound.has(a.value)));
+});
+const activeGuideOptions = computed(() => {
+  const bound = new Set(activeRow.value?.boundGuideValues);
+  return (activeRow.value?.guideBindingOptions || []).slice().sort((a, b) =>
+    Number(bound.has(b.value)) - Number(bound.has(a.value)));
+});
+const streamLabels = computed(() => new Map((props.rows[0]?.preferredStreamOptions || []).map(option => [option.value, option.label])));
 const changedCount = computed(() => props.rows.filter(row => row.hasDraftChanges).length);
 const review = computed(() =>
   buildChannelChangeReview(props.rows, props.selectedProfile || {}, props.savedProfile)
 );
 const displayName = row => row.customNameDraft?.trim() || row.baseName || row.name;
 const sourceLabel = row =>
-  row.preferredStreamOptions.find(option => option.value === row.preferredSourceChannelId)?.label ||
+  streamLabels.value.get(row.preferredSourceChannelId) ||
   (row.preferredStreamOptions.length ? 'Choose a stream' : 'No stream available');
 function clearFilters() {
   search.value = '';
@@ -596,6 +612,37 @@ watch(activeRow, row => {
 </script>
 
 <style scoped>
+.channel-editor-dialog::part(close-button) {
+  display: none;
+}
+.editor-close {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  background: var(--surface);
+  cursor: pointer;
+}
+.editor-close:hover {
+  background: var(--bg-subtle);
+}
+.editor-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.editor-close svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
 .channels-pane {
   padding: 24px 28px;
   color: var(--fg);

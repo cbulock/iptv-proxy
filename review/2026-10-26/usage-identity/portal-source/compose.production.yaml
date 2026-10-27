@@ -1,0 +1,33 @@
+services:
+  portal:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/portal.sqlite
+      IPTV_GATEWAY_INTERNAL_URL: http://iptv-gateway:3400
+      HOST: 0.0.0.0
+      PORT: 3000
+    volumes:
+      - ./data:/data
+    ports:
+      - "10.0.0.110:3300:3000"
+  iptv-viewer:
+    build: ${IPTV_VIEWER_BUILD_CONTEXT:-../iptv-web}
+    restart: unless-stopped
+  iptv-gateway:
+    build: ./integrations/iptv
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORTAL_INTERNAL_URL: http://portal:3000
+      IPTV_VIEWER_URL: http://iptv-viewer:3000
+      IPTV_UPSTREAM_URL: http://10.0.0.110:34400
+      PORT: 3400
+    ports:
+      - "10.0.0.110:3400:3400"
+    depends_on:
+      portal:
+        condition: service_healthy
+      iptv-viewer:
+        condition: service_started

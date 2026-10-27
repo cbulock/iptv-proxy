@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import RateLimit from 'express-rate-limit';
 import { getChannels } from '../libs/channels-cache.js';
 import { getSourceChannelById } from '../libs/source-channel-resolver.js';
+import { readUsageIdentity } from './usage.js';
 
 // Rate limiter for the transcoding endpoint — each ffmpeg process consumes significant
 // CPU and network resources, so keep the per-IP limit stricter than other endpoints.
@@ -54,6 +55,10 @@ export function setupTranscodeRoutes(app, dependencies = {}) {
   const spawnWorker = dependencies.spawn || spawn;
   const loadChannels = dependencies.getChannels || getChannels;
   const maxWorkers = dependencies.maxWorkers || MAX_ACTIVE_WORKERS;
+  const registerUsage = dependencies.registerUsage || (async () => null);
+  const touchUsage = dependencies.touchUsage || (() => {});
+  const unregisterUsage = dependencies.unregisterUsage || (() => {});
+  const usageHeartbeatMs = dependencies.usageHeartbeatMs || 10000;
   app.get('/transcode/:source/:name', transcodeLimiter, (req, res) => {
     let { source, name } = req.params;
     const channels = loadChannels();
@@ -76,12 +81,10 @@ export function setupTranscodeRoutes(app, dependencies = {}) {
     }
 
     if (activeWorkers.size >= maxWorkers) {
-      return res
-        .status(503)
-        .json({
-          error: 'Transcoding capacity is currently exhausted. Please try again later.',
-          code: 'TRANSCODE_CAPACITY',
-        });
+      return res.status(503).json({
+        error: 'Transcoding capacity is currently exhausted. Please try again later.',
+        code: 'TRANSCODE_CAPACITY',
+      });
     }
 
     console.info('[transcode] Starting %s/%s', source, name);
@@ -89,6 +92,9 @@ export function setupTranscodeRoutes(app, dependencies = {}) {
     // Transcode the upstream stream to H.264/AAC in MPEG-TS format.
     // -preset ultrafast and -tune zerolatency minimise encoder latency for live streams.
     // -pix_fmt yuv420p ensures 8-bit 4:2:0 output required by browser MSE decoders.
+    // Deinterlace flagged interlaced frames before encoding so combing is not
+    // baked into H.264. One frame per field preserves 59.94 Hz broadcast motion;
+    // automatic field order follows the decoder, and progressive frames pass through.
     // -ac 2 downmixes to stereo so all browsers can decode the AAC track; HDHomeRun
     //   OTA broadcasts often carry AC-3 5.1 which would otherwise be re-encoded as
     //   6-channel AAC — a format rejected by some browser MSE implementations.
@@ -98,6 +104,8 @@ export function setupTranscodeRoutes(app, dependencies = {}) {
       'error',
       '-i',
       upstreamUrl,
+      '-vf',
+      'bwdif=mode=send_field:parity=auto:deint=interlaced',
       '-c:v',
       'libx264',
       '-preset',
@@ -150,6 +158,17 @@ export function setupTranscodeRoutes(app, dependencies = {}) {
     let stopping = false;
     let idleTimer;
     let forceKillTimer;
+    let usageKeyPromise;
+    let usageInterval;
+    let usageReleased = false;
+    const releaseUsage = () => {
+      if (usageReleased) return;
+      usageReleased = true;
+      clearInterval(usageInterval);
+      usageKeyPromise?.then(key => {
+        if (key) unregisterUsage(key);
+      });
+    };
 
     const stopWorker = () => {
       if (closed || exited || stopping) return;
@@ -179,6 +198,7 @@ export function setupTranscodeRoutes(app, dependencies = {}) {
       clearTimeout(idleTimer);
       clearTimeout(forceKillTimer);
       activeWorkers.delete(ffmpegProcess);
+      releaseUsage();
     };
     const fail = (status, error, code) => {
       if (res.writableEnded || res.destroyed) return;
@@ -218,6 +238,29 @@ export function setupTranscodeRoutes(app, dependencies = {}) {
     ffmpegProcess.stderr.on('error', () => {});
     ffmpegProcess.stdout.on('data', chunk => {
       if (!res.writable || res.writableEnded || res.destroyed || stopping) return;
+      if (!usageKeyPromise) {
+        const identity = readUsageIdentity(req);
+        usageKeyPromise = Promise.resolve()
+          .then(() =>
+            registerUsage({
+              ip: String(req.ip || req.socket?.remoteAddress || ''),
+              channelId: String(channel.guideNumber || channel.tvg_id || channel.name),
+              userAgent: req.headers['user-agent'] || '',
+              ...identity,
+            })
+          )
+          .then(key => {
+            if (key && !usageReleased) {
+              usageInterval = setInterval(() => touchUsage(key), usageHeartbeatMs);
+              usageInterval.unref?.();
+            }
+            return key;
+          })
+          .catch(err => {
+            console.warn('[transcode] usage registration failed: %s', err.message);
+            return null;
+          });
+      }
       responseStarted = true;
       clearTimeout(startupTimer);
       resetIdleTimer();
@@ -241,6 +284,9 @@ export function setupTranscodeRoutes(app, dependencies = {}) {
     });
     // IncomingMessage.close can mean that a GET request has finished arriving.
     // ServerResponse.close is the downstream playback connection lifetime.
-    res.on('close', stopWorker);
+    res.on('close', () => {
+      stopWorker();
+      releaseUsage();
+    });
   });
 }

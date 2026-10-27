@@ -207,6 +207,17 @@ const MIGRATIONS = [
       ALTER TABLE canonical_channels ADD COLUMN custom_name TEXT;
     `,
   },
+  {
+    id: '006-admin-sessions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS admin_sessions (
+        sid TEXT PRIMARY KEY,
+        data_json TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
+    `,
+  },
 ];
 
 let database = null;

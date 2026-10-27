@@ -45,6 +45,7 @@ describe('database foundation', () => {
     );
 
     expect(Array.from(tables)).to.include.members([
+      'admin_sessions',
       'app_settings',
       'canonical_channels',
       'channel_bindings',
@@ -67,7 +68,7 @@ describe('database foundation', () => {
     initDatabase({ filename: dbPath });
 
     const row = get('SELECT COUNT(*) AS count FROM schema_migrations');
-    expect(row.count).to.equal(5);
+    expect(row.count).to.equal(6);
   });
 
   it('supports the shared run/get helpers for future repositories', () => {

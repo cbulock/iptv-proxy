@@ -3,6 +3,7 @@ import RateLimit from 'express-rate-limit';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
 import { loadAppConfigFromStore } from '../libs/app-settings-service.js';
+import { readUsageIdentity } from './usage.js';
 import { getChannels } from '../libs/channels-cache.js';
 import { asyncHandler, AppError } from './error-handler.js';
 import cacheManager from '../libs/cache-manager.js';
@@ -466,6 +467,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     const channelId = channel.guideNumber || channel.tvg_id || channel.name;
     const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
     const userAgent = req.headers['user-agent'] || '';
+    const identity = readUsageIdentity(req);
     let usageKey;
     let usageInterval;
     let upstreamBody;
@@ -495,12 +497,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     res.on('close', abortForDisconnectedClient);
     res.on('error', cleanup);
     const touchViewer = async () => {
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent });
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity });
       touchUsage(usageKey);
     };
     const registerPersistentViewer = async () => {
       if (usageKey) return;
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent });
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity });
       usageInterval = setInterval(() => touchUsage(usageKey), 10000);
       res.on('finish', cleanup);
     };

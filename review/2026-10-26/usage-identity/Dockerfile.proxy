@@ -1,0 +1,7 @@
+FROM bulock-iptv-proxy:all-local-20261026
+WORKDIR /usr/src/app
+COPY source/index.js ./index.js
+COPY source/libs ./libs
+COPY source/server ./server
+COPY source/scripts ./scripts
+COPY source/public ./public

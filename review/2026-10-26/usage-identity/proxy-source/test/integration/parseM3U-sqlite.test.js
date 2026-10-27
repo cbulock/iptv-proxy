@@ -1,0 +1,327 @@
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, it } from 'mocha';
+import { expect } from 'chai';
+import nock from 'nock';
+
+describe('parseAll SQLite persistence', () => {
+  let configDir;
+  let dataDir;
+  let parseM3UModule;
+  let databaseModule;
+
+  beforeEach(async () => {
+    configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-parse-config-'));
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-parse-data-'));
+
+    process.env.CONFIG_PATH = configDir;
+    process.env.DATA_PATH = dataDir;
+
+    await fs.writeFile(
+      path.join(configDir, 'providers.yaml'),
+      [
+        'providers:',
+        '  - name: Test IPTV',
+        '    url: "http://parser.example/playlist.m3u"',
+        '    type: "m3u"',
+      ].join('\n'),
+      'utf8'
+    );
+    await fs.writeFile(path.join(configDir, 'channel-map.yaml'), '{}\n', 'utf8');
+
+    parseM3UModule = await import(`../../scripts/parseM3U.js?test=${Date.now()}`);
+    databaseModule = await import('../../libs/database.js');
+  });
+
+  afterEach(async () => {
+    nock.cleanAll();
+    parseM3UModule.setStatusCallback(null);
+    databaseModule.closeDatabase();
+    delete process.env.CONFIG_PATH;
+    delete process.env.DATA_PATH;
+    delete process.env.SOURCE_FETCH_TIMEOUT_MS;
+    await fs.rm(configDir, { recursive: true, force: true });
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  it('persists discovered source channels and a successful sync run', async () => {
+    nock('http://parser.example')
+      .get('/playlist.m3u')
+      .reply(
+        200,
+        [
+          '#EXTM3U',
+          '#EXTINF:-1 tvg-id="test.1" tvg-chno="101" tvg-logo="http://logos.example/one.png" group-title="News",Channel One',
+          'http://streams.example/one.m3u8',
+          '#EXTINF:-1 tvg-id="test.2" tvg-chno="202" group-title="Sports",Channel Two',
+          'http://streams.example/two.m3u8',
+        ].join('\n'),
+        { 'Content-Type': 'application/x-mpegurl' }
+      );
+
+    const count = await parseM3UModule.parseAll();
+    expect(count).to.equal(2);
+
+    const source = databaseModule.get('SELECT id, name FROM sources WHERE name = ?', ['Test IPTV']);
+    expect(source).to.not.equal(undefined);
+
+    const discovered = databaseModule.all(
+      'SELECT name, tvg_id, guide_number, group_name, stream_url FROM source_channels WHERE source_id = ? ORDER BY name ASC',
+      [source.id]
+    );
+    expect(discovered).to.deep.equal([
+      {
+        name: 'Channel One',
+        tvg_id: 'test.1',
+        guide_number: '101',
+        group_name: 'News',
+        stream_url: 'http://streams.example/one.m3u8',
+      },
+      {
+        name: 'Channel Two',
+        tvg_id: 'test.2',
+        guide_number: '202',
+        group_name: 'Sports',
+        stream_url: 'http://streams.example/two.m3u8',
+      },
+    ]);
+
+    // The snapshot feeds playback consumers (including MCP), so it must carry
+    // the durable source_channels id rather than requiring callers to rebuild
+    // a route from editable source/name strings.
+    const snapshot = JSON.parse(
+      databaseModule.get('SELECT channels_json FROM channel_snapshots WHERE id = 1').channels_json
+    );
+    const sourceIdsByName = new Map(
+      databaseModule
+        .all('SELECT id, name FROM source_channels WHERE source_id = ?', [source.id])
+        .map(row => [row.name, row.id])
+    );
+    expect(snapshot).to.have.lengthOf(2);
+    for (const channel of snapshot) {
+      expect(channel.sourceChannelId).to.equal(sourceIdsByName.get(channel.name));
+    }
+
+    const syncRun = databaseModule.get(
+      'SELECT kind, status, error FROM source_sync_runs WHERE source_id = ? ORDER BY started_at DESC LIMIT 1',
+      [source.id]
+    );
+    expect(syncRun).to.deep.equal({
+      kind: 'channels',
+      status: 'success',
+      error: null,
+    });
+  });
+
+  it('does not promote HDHomeRun tuning numbers into guide_number', async () => {
+    await fs.writeFile(
+      path.join(configDir, 'providers.yaml'),
+      [
+        'providers:',
+        '  - name: OTA',
+        '    url: "http://hdhr.example"',
+        '    type: "hdhomerun"',
+      ].join('\n'),
+      'utf8'
+    );
+
+    nock('http://hdhr.example')
+      .get('/discover.json')
+      .reply(200, {
+        DeviceID: '12345678',
+        BaseURL: 'http://hdhr.example',
+        ModelNumber: 'HDHR5',
+      });
+    nock('http://hdhr.example')
+      .get('/lineup.json')
+      .reply(200, [
+        {
+          GuideName: 'WLNS-TV',
+          GuideNumber: '6.1',
+          URL: 'http://hdhr.example/auto/v6.1',
+        },
+      ]);
+
+    const count = await parseM3UModule.parseAll();
+    expect(count).to.equal(1);
+
+    const source = databaseModule.get('SELECT id FROM sources WHERE name = ?', ['OTA']);
+    const discovered = databaseModule.get(
+      'SELECT name, guide_number, raw_json FROM source_channels WHERE source_id = ?',
+      [source.id]
+    );
+
+    expect(discovered.name).to.equal('WLNS-TV');
+    expect(discovered.guide_number).to.equal(null);
+    expect(JSON.parse(discovered.raw_json)).to.include({
+      sourceGuideNumber: '6.1',
+    });
+  });
+
+  for (const stalledEndpoint of ['discover.json', 'lineup.json']) {
+    it(`keeps cached tuner channels available when HDHomeRun ${stalledEndpoint} stalls`, async () => {
+      await fs.writeFile(
+        path.join(configDir, 'providers.yaml'),
+        [
+          'providers:',
+          '  - name: Healthy IPTV',
+          '    url: "http://healthy.example/playlist.m3u"',
+          '    type: "m3u"',
+          '  - name: Stalled OTA',
+          '    url: "http://stalled-hdhr.example"',
+          '    type: "hdhomerun"',
+        ].join('\n'),
+        'utf8'
+      );
+      const snapshotModule = await import('../../libs/channel-snapshot-service.js');
+      snapshotModule.replaceChannelSnapshot([
+        {
+          name: 'Cached OTA',
+          source: 'Stalled OTA',
+          original_url: 'http://stalled-hdhr.example/auto/v7.1',
+          url: '/stream/Stalled%20OTA/Cached%20OTA',
+        },
+      ]);
+
+      const statuses = [];
+      parseM3UModule.setStatusCallback((source, status) => statuses.push({ source, status }));
+      process.env.SOURCE_FETCH_TIMEOUT_MS = '50';
+
+      nock('http://healthy.example')
+        .get('/playlist.m3u')
+        .reply(200, '#EXTM3U\n#EXTINF:-1,Healthy\nhttp://streams.example/healthy.m3u8');
+      const discoveryMock = nock('http://stalled-hdhr.example').get('/discover.json');
+      if (stalledEndpoint === 'discover.json') {
+        discoveryMock.delayConnection(1000);
+      }
+      discoveryMock.reply(200, {
+        DeviceID: '12345678',
+        BaseURL: 'http://stalled-hdhr.example',
+        ModelNumber: 'HDHR5',
+      });
+
+      if (stalledEndpoint === 'lineup.json') {
+        nock('http://stalled-hdhr.example')
+          .get('/lineup.json')
+          .delayConnection(1000)
+          .reply(200, []);
+      }
+
+      const startedAt = Date.now();
+      const count = await parseM3UModule.parseAll();
+
+      expect(Date.now() - startedAt).to.be.lessThan(700);
+      expect(count).to.equal(2);
+      expect(snapshotModule.loadChannelSnapshot().map(channel => channel.name)).to.have.members([
+        'Healthy',
+        'Cached OTA',
+      ]);
+      expect(statuses).to.deep.include({ source: 'Healthy IPTV', status: 'success' });
+      expect(statuses).to.deep.include({ source: 'Stalled OTA', status: 'error' });
+
+      const stalledSource = databaseModule.get('SELECT id FROM sources WHERE name = ?', ['Stalled OTA']);
+      const syncRun = databaseModule.get(
+        'SELECT status FROM source_sync_runs WHERE source_id = ? ORDER BY started_at DESC LIMIT 1',
+        [stalledSource.id]
+      );
+      expect(syncRun).to.deep.equal({ status: 'failed' });
+    });
+  }
+
+  it('treats a direct HLS manifest as a single discovered channel', async () => {
+    await fs.writeFile(
+      path.join(configDir, 'providers.yaml'),
+      [
+        'providers:',
+        '  - name: NAS Stream',
+        '    url: "http://nas6:8081/hls/stream.m3u8"',
+        '    type: "m3u"',
+      ].join('\n'),
+      'utf8'
+    );
+
+    nock('http://nas6:8081')
+      .get('/hls/stream.m3u8')
+      .reply(
+        200,
+        [
+          '#EXTM3U',
+          '#EXT-X-VERSION:3',
+          '#EXT-X-TARGETDURATION:6',
+          '#EXTINF:6.006,',
+          'segment000.ts',
+          '#EXTINF:6.006,',
+          'segment001.ts',
+          '#EXT-X-ENDLIST',
+        ].join('\n'),
+        { 'Content-Type': 'application/vnd.apple.mpegurl' }
+      );
+
+    const count = await parseM3UModule.parseAll();
+    expect(count).to.equal(1);
+
+    const source = databaseModule.get('SELECT id, name FROM sources WHERE name = ?', ['NAS Stream']);
+    expect(source).to.not.equal(undefined);
+
+    const discovered = databaseModule.get(
+      'SELECT name, tvg_id, guide_number, stream_url FROM source_channels WHERE source_id = ?',
+      [source.id]
+    );
+    expect(discovered).to.deep.equal({
+      name: 'NAS Stream',
+      tvg_id: null,
+      guide_number: null,
+      stream_url: 'http://nas6:8081/hls/stream.m3u8',
+    });
+  });
+
+  it('treats a titled direct HLS manifest as a single discovered channel', async () => {
+    await fs.writeFile(
+      path.join(configDir, 'providers.yaml'),
+      [
+        'providers:',
+        '  - name: NAS Titled Stream',
+        '    url: "http://nas6:8081/hls/titled-stream.m3u8"',
+        '    type: "m3u"',
+      ].join('\n'),
+      'utf8'
+    );
+
+    nock('http://nas6:8081')
+      .get('/hls/titled-stream.m3u8')
+      .reply(
+        200,
+        [
+          '#EXTM3U',
+          '#EXT-X-VERSION:3',
+          '#EXT-X-TARGETDURATION:6',
+          '#EXTINF:6.006,Breaking News Segment',
+          'segment000.ts',
+          '#EXTINF:6.006,Another Segment',
+          'segment001.ts',
+          '#EXT-X-ENDLIST',
+        ].join('\n'),
+        { 'Content-Type': 'application/vnd.apple.mpegurl' }
+      );
+
+    const count = await parseM3UModule.parseAll();
+    expect(count).to.equal(1);
+
+    const source = databaseModule.get('SELECT id, name FROM sources WHERE name = ?', [
+      'NAS Titled Stream',
+    ]);
+    expect(source).to.not.equal(undefined);
+
+    const discovered = databaseModule.get(
+      'SELECT name, tvg_id, guide_number, stream_url FROM source_channels WHERE source_id = ?',
+      [source.id]
+    );
+    expect(discovered).to.deep.equal({
+      name: 'NAS Titled Stream',
+      tvg_id: null,
+      guide_number: null,
+      stream_url: 'http://nas6:8081/hls/titled-stream.m3u8',
+    });
+  });
+});

@@ -1,9 +1,11 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import { loadChannelSnapshot } from '../libs/channel-snapshot-service.js';
 import { requireAuth } from './auth.js';
 
 const router = express.Router();
-const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, userAgent, client, startedAt, lastSeen }
+const ACTIVE = new Map(); // key: viewer identity or IP plus channel
+const ACTIVE_REFERENCES = new Map(); // number of overlapping stream requests per key
 // Short grace period to smooth HLS segment request gaps.
 const ACTIVE_IDLE_TTL_MS = 45 * 1000;
 // Ring buffer for recently-completed stream sessions.
@@ -52,17 +54,48 @@ function normalizeIp(ip) {
   return first;
 }
 
-export async function registerUsage({ ip, channelId, userAgent = '' }) {
+function decodeIdentityHeader(value, maxLength) {
+  if (typeof value !== 'string' || value.length > maxLength * 4) return null;
+  try {
+    const decoded = decodeURIComponent(value).trim();
+    const hasControlCharacter = Array.from(decoded).some(character => {
+      const code = character.codePointAt(0);
+      return code <= 31 || code === 127;
+    });
+    return decoded.length <= maxLength && !hasControlCharacter ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readUsageIdentity(req, secret = process.env.IPTV_USAGE_IDENTITY_SECRET) {
+  if (typeof secret !== 'string' || !secret) return null;
+  const supplied = req.headers['x-iptv-identity-secret'];
+  if (typeof supplied !== 'string') return null;
+  const actual = Buffer.from(supplied);
+  const expected = Buffer.from(secret);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+  const userId = decodeIdentityHeader(req.headers['x-iptv-user-id'], 256);
+  const userNameHeader = req.headers['x-iptv-user-name'];
+  const userName = userNameHeader === undefined ? '' : decodeIdentityHeader(userNameHeader, 256);
+  return userId && userName !== null ? { userId, userName } : null;
+}
+
+export async function registerUsage({ ip, channelId, userAgent = '', userId = '', userName = '' }) {
   if (!channelsCache.length) await loadChannels();
   const meta = findChannelMeta(channelId);
   const now = new Date().toISOString();
   const normalizedIp = normalizeIp(ip);
-  const key = `${normalizedIp}|${channelId}`;
+  const key = JSON.stringify(
+    userId ? ['user', userId, normalizedIp, channelId] : ['ip', normalizedIp, channelId]
+  );
   const existing = ACTIVE.get(key);
   if (existing) {
+    ACTIVE_REFERENCES.set(key, (ACTIVE_REFERENCES.get(key) || 1) + 1);
     existing.lastSeen = now;
     if (!existing.name && meta.name) existing.name = meta.name;
     if (!existing.tvg_id && meta.tvg_id) existing.tvg_id = meta.tvg_id;
+    if (userName) existing.userName = userName;
     if (!existing.userAgent && userAgent) {
       existing.userAgent = userAgent;
       existing.client = parseClientName(userAgent);
@@ -73,12 +106,15 @@ export async function registerUsage({ ip, channelId, userAgent = '' }) {
   ACTIVE.set(key, {
     ip: normalizedIp,
     channelId,
+    userId,
+    userName,
     ...meta,
     userAgent,
     client,
     startedAt: now,
     lastSeen: now,
   });
+  ACTIVE_REFERENCES.set(key, 1);
   return key;
 }
 
@@ -90,6 +126,11 @@ export function touchUsage(key) {
 export function unregisterUsage(key) {
   const entry = ACTIVE.get(key);
   if (entry) {
+    const references = ACTIVE_REFERENCES.get(key) || 1;
+    if (references > 1) {
+      ACTIVE_REFERENCES.set(key, references - 1);
+      return;
+    }
     const endedAt = new Date().toISOString();
     const durationSeconds = Math.round(
       (new Date(endedAt).getTime() - new Date(entry.startedAt).getTime()) / 1000
@@ -98,13 +139,17 @@ export function unregisterUsage(key) {
     if (HISTORY.length > HISTORY_MAX) HISTORY.shift();
   }
   ACTIVE.delete(key);
+  ACTIVE_REFERENCES.delete(key);
 }
 
 router.get('/api/usage/active', requireAuth, (req, res) => {
   // prune entries idle beyond grace window
   const cutoff = Date.now() - ACTIVE_IDLE_TTL_MS;
   for (const [k, v] of ACTIVE.entries()) {
-    if (new Date(v.lastSeen).getTime() < cutoff) ACTIVE.delete(k);
+    if (new Date(v.lastSeen).getTime() < cutoff) {
+      ACTIVE.delete(k);
+      ACTIVE_REFERENCES.delete(k);
+    }
   }
   const list = Array.from(ACTIVE.values()).map(entry => ({
     ...entry,

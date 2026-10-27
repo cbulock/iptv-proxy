@@ -22,14 +22,17 @@ const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === 'true';
 import authRouter from '../../server/auth-routes.js';
 import { invalidateAuthCache } from '../../server/auth.js';
 import { csrfMiddleware } from '../../server/csrf.js';
-import { closeDatabase } from '../../libs/database.js';
+import { closeDatabase, initDatabase } from '../../libs/database.js';
+import SQLiteSessionStore from '../../libs/sqlite-session-store.js';
 
-function buildApp() {
+function buildApp({ persistent = false } = {}) {
+  if (persistent) initDatabase();
   const app = express();
   app.use(express.json());
   app.use(
     session({
       secret: 'test-secret-for-auth-routes',
+      ...(persistent ? { store: new SQLiteSessionStore() } : {}),
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -163,6 +166,46 @@ describe('Auth Routes Integration', () => {
   // ── GET /api/auth/session ──────────────────────────────────────────────────
 
   describe('GET /api/auth/session', () => {
+    it('accepts the same login cookie and CSRF token after a server and database restart', async () => {
+      await stopServer(server);
+      ({ server, baseUrl } = await startServer(buildApp({ persistent: true })));
+      await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      const login = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+
+      await stopServer(server);
+      closeDatabase();
+      invalidateAuthCache();
+      ({ server, baseUrl } = await startServer(buildApp({ persistent: true })));
+      try {
+        const restored = await axios.get(`${baseUrl}/api/auth/session`, {
+          headers: cookieHeader(login),
+        });
+        expect(restored.data.authenticated).to.equal(true);
+        const csrf = await axios.get(`${baseUrl}/api/auth/csrf-token`, {
+          headers: cookieHeader(login),
+        });
+        expect(csrf.data.csrfToken).to.equal(login.csrfToken);
+        const logout = await axios.post(
+          `${baseUrl}/api/auth/logout`,
+          {},
+          {
+            headers: cookieHeader(login),
+          }
+        );
+        expect(logout.data.status).to.equal('logged_out');
+        await stopServer(server);
+        closeDatabase();
+        ({ server, baseUrl } = await startServer(buildApp({ persistent: true })));
+        const loggedOut = await axios.get(`${baseUrl}/api/auth/session`, {
+          headers: cookieHeader(login),
+        });
+        expect(loggedOut.data.authenticated).to.equal(false);
+      } finally {
+        await stopServer(server);
+        ({ server, baseUrl } = await startServer(buildApp()));
+      }
+    });
+
     it('returns authenticated: false when no session exists', async () => {
       const res = await axios.get(`${baseUrl}/api/auth/session`);
       expect(res.status).to.equal(200);

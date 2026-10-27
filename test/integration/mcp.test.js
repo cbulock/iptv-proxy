@@ -183,6 +183,8 @@ describe('MCP Route Integration', () => {
       'get_published_channels',
       'get_published_guide',
       'list_providers',
+      'create_provider',
+      'update_provider',
       'list_canonical_channels',
       'list_channel_bindings',
       'list_guide_bindings',
@@ -213,6 +215,7 @@ describe('MCP Route Integration', () => {
     expect(channelData.channels).to.be.an('array');
     for (const channel of channelData.channels) {
       expect(channel.streamUrl).to.match(/^\/stream\//);
+      expect(channel.transcodeUrl).to.match(/^\/transcode\//);
       expect(channel).not.to.have.property('original_url');
     }
     const guideResult = await mcpPost(baseUrl, 'tools/call', {
@@ -239,6 +242,7 @@ describe('MCP Route Integration', () => {
     expect(payload.data).to.have.property('recommendedEntryTool', 'diagnose_agent_readiness');
     expect(payload.data.phases).to.be.an('array').that.is.not.empty;
     expect(payload.data.toolGroups.overview).to.include('get_status');
+    expect(payload.data.adminOnlyEndpoints).to.include('/api/usage/active');
   });
 
   it('diagnose_agent_readiness returns a readiness summary', async () => {
@@ -317,6 +321,140 @@ describe('MCP Route Integration', () => {
     expect(providers).to.have.lengthOf(2);
     expect(providers[0]).to.have.all.keys('id', 'name', 'type', 'hasEpg', 'enabled');
     expect(providers.map(p => p.name)).to.include.members(['TestProvider', 'OtherProvider']);
+  });
+
+  it('provider tools create a LAN stream with EPG and update by stable ID without changing other sources', async () => {
+    const { listSources, replaceProvidersConfig } = await import('../../libs/source-service.js');
+    const before = listSources();
+    try {
+      const created = await mcpPost(baseUrl, 'tools/call', {
+        name: 'create_provider',
+        arguments: {
+          name: 'New Live Channel',
+          url: 'http://192.168.1.20/live.m3u8',
+          epg: 'http://guide.lan/guide.xml',
+        },
+      });
+      const payload = expectToolSuccess(created.msg, 'create_provider');
+      const provider = payload.data;
+      expect(provider).to.include({ name: 'New Live Channel', type: 'm3u', hasEpg: true });
+      expect(provider).not.to.have.property('url');
+      expect(provider).not.to.have.property('epg');
+      expect(payload.sideEffects.join(' ')).to.include('not reloaded');
+      expect(payload.nextSuggestedTools).to.include('reload_channels');
+      expect(listSources().filter(p => p.id !== provider.id)).to.deep.equal(before);
+      const updated = await mcpPost(baseUrl, 'tools/call', {
+        name: 'update_provider',
+        arguments: { provider_id: provider.id, name: 'Renamed Channel', epg: '' },
+      });
+      expect(expectToolSuccess(updated.msg, 'update_provider').data).to.include({
+        id: provider.id,
+        name: 'Renamed Channel',
+        hasEpg: false,
+      });
+      expect(expectToolSuccess(updated.msg, 'update_provider').nextSuggestedTools).to.include(
+        'reload_epg'
+      );
+      expect(listSources().find(p => p.id === provider.id)).to.include({
+        url: 'http://192.168.1.20/live.m3u8',
+        epg: '',
+      });
+      const exported = await fs.readFile(path.join(tmpConfigDir, 'providers.yaml'), 'utf8');
+      expect(exported).to.include('Renamed Channel');
+      expect(listSources().filter(p => p.id !== provider.id)).to.deep.equal(before);
+    } finally {
+      replaceProvidersConfig({ providers: before });
+    }
+  });
+
+  it('provider updates preserve a disabled source and accept HDHomeRun, HTTPS, and file URLs without returning secrets', async () => {
+    const { listSources, replaceProvidersConfig } = await import('../../libs/source-service.js');
+    const before = listSources();
+    try {
+      replaceProvidersConfig({
+        providers: before.map((provider, index) =>
+          index === 0 ? { ...provider, enabled: false } : provider
+        ),
+      });
+      const updated = await mcpPost(baseUrl, 'tools/call', {
+        name: 'update_provider',
+        arguments: {
+          provider_id: before[0].id,
+          type: 'hdhomerun',
+          url: 'http://tuner.local',
+          epg: 'file:///config/guide.xml',
+        },
+      });
+      expect(expectToolSuccess(updated.msg, 'update_provider').data).to.include({
+        id: before[0].id,
+        enabled: false,
+        type: 'hdhomerun',
+        hasEpg: true,
+      });
+      expect(listSources().find(p => p.id === before[0].id)).to.include({
+        url: 'http://tuner.local',
+        epg: 'file:///config/guide.xml',
+      });
+      const created = await mcpPost(baseUrl, 'tools/call', {
+        name: 'create_provider',
+        arguments: {
+          name: 'Private URL',
+          url: 'https://user:password@example.com/private-token/live.m3u8?key=secret',
+          epg: 'https://example.com/secret-guide.xml?key=secret',
+        },
+      });
+      expectToolSuccess(created.msg, 'create_provider');
+      expect(JSON.stringify(created.msg)).not.to.match(
+        /password|private-token|key=secret|secret-guide/
+      );
+      const fileProvider = await mcpPost(baseUrl, 'tools/call', {
+        name: 'create_provider',
+        arguments: { name: 'Local playlist', url: 'file:///config/local.m3u' },
+      });
+      expectToolSuccess(fileProvider.msg, 'create_provider');
+    } finally {
+      replaceProvidersConfig({ providers: before });
+    }
+  });
+
+  it('provider tools reject duplicate names, missing IDs, empty updates, and unsupported URL schemes without mutation', async () => {
+    const { listSources } = await import('../../libs/source-service.js');
+    const before = listSources();
+    const cases = [
+      [
+        'create_provider',
+        { name: before[0].name, url: 'http://tuner.local/live.m3u8' },
+        'provider-name-conflict',
+      ],
+      [
+        'update_provider',
+        { provider_id: before[0].id, name: before[1].name },
+        'provider-name-conflict',
+      ],
+      ['update_provider', { provider_id: 'missing', name: 'Missing' }, 'provider-not-found'],
+      ['update_provider', { provider_id: before[0].id }, 'empty-provider-update'],
+      [
+        'create_provider',
+        { name: before[0].name.toUpperCase(), url: 'http://tuner.local/live.m3u8' },
+        'provider-name-conflict',
+      ],
+    ];
+    for (const [name, args, code] of cases) {
+      const { msg } = await mcpPost(baseUrl, 'tools/call', { name, arguments: args });
+      expect(expectToolError(msg, name).error.code).to.equal(code);
+    }
+    for (const args of [
+      { name: 'Bad', url: 'javascript:alert(1)' },
+      { name: 'Bad', url: 'https://example.com/live.m3u8', epg: 'ftp://example.com/guide.xml' },
+      { name: '   ', url: 'https://example.com/live.m3u8' },
+    ]) {
+      const { msg } = await mcpPost(baseUrl, 'tools/call', {
+        name: 'create_provider',
+        arguments: args,
+      });
+      expect(msg.result.isError).to.equal(true);
+    }
+    expect(listSources()).to.deep.equal(before);
   });
 
   it('list_canonical_channels returns canonical channel rows', async () => {
@@ -438,6 +576,42 @@ describe('MCP Route Integration', () => {
     expect(payload.error.message).to.include('Canonical channel not found');
   });
 
+  it('assigns discovered streams and previously unbound guide providers through MCP', async () => {
+    const service = await import('../../libs/canonical-channel-service.js');
+    const { getDatabase } = await import('../../libs/database.js');
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO sources (id, name, type, epg_url, created_at, updated_at)
+      VALUES ('editor-test-provider', 'Editor fixture', 'm3u', NULL, ?, ?)` ).run(now, now);
+    for (const id of ['editor-one', 'editor-two']) {
+      db.prepare(`INSERT INTO source_channels (id, source_id, name, stream_url, last_seen_at)
+        VALUES (?, 'editor-test-provider', ?, ?, ?)` ).run(id, id, `http://fixture.example/${id}`, now);
+    }
+    service.rebuildCanonicalChannels();
+    const bindings = service.listChannelBindings().filter(binding => binding.sourceChannel.id.startsWith('editor-'));
+    const first = bindings[0];
+    const other = bindings.find(binding => binding.canonical.id !== first.canonical.id);
+    const stream = await mcpPost(baseUrl, 'tools/call', {
+      name: 'set_canonical_channel_preferred_stream',
+      arguments: { canonical_id: first.canonical.id, source_channel_id: other.sourceChannel.id },
+    });
+    expect(expectToolSuccess(stream.msg, 'set_canonical_channel_preferred_stream').data)
+      .to.include({ isPreferredStream: true, bindingType: 'manual' });
+    const provider = { id: 'editor-test-provider' };
+    getDatabase().prepare('UPDATE sources SET epg_url = ? WHERE id = ?').run('http://guide.example/test.xml', provider.id);
+    const guide = await mcpPost(baseUrl, 'tools/call', {
+      name: 'set_canonical_channel_guide_binding',
+      arguments: { canonical_id: first.canonical.id, source_id: provider.id, epg_channel_id: 'guide.news' },
+    });
+    expect(expectToolSuccess(guide.msg, 'set_canonical_channel_guide_binding').data)
+      .to.include({ selected: true, epgChannelId: 'guide.news' });
+    service.rebuildCanonicalChannels();
+    expect(service.listChannelBindings().find(binding => binding.canonical.id === first.canonical.id && binding.isPreferredStream).sourceChannel.id)
+      .to.equal(other.sourceChannel.id);
+    expect(service.listGuideBindings().find(binding => binding.canonical.id === first.canonical.id && binding.selected).epgChannelId)
+      .to.equal('guide.news');
+  });
+
   it('set_canonical_channel_preferred_stream returns an error for an unknown channel', async () => {
     const { msg } = await mcpPost(baseUrl, 'tools/call', {
       name: 'set_canonical_channel_preferred_stream',
@@ -497,5 +671,51 @@ describe('MCP Route Integration', () => {
     });
     const payload = expectToolError(msg, 'get_guide');
     expect(payload.error.message).to.include('EPG data is not available');
+  });
+
+  it('reload_channels refreshes the in-memory channel lookup for a newly created direct stream', async () => {
+    const { listSources, replaceProvidersConfig } = await import('../../libs/source-service.js');
+    const { getChannels, invalidateCache } = await import('../../libs/channels-cache.js');
+    const { replaceChannelSnapshot } = await import('../../libs/channel-snapshot-service.js');
+    const before = listSources();
+    const snapshot = getChannels();
+    const upstream = express();
+    upstream.get('/live.m3u8', (_req, res) =>
+      res
+        .type('application/vnd.apple.mpegurl')
+        .send('#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nsegment.ts\n')
+    );
+    const fixture = await startServer(upstream);
+    try {
+      // Keep this test offline and avoid fetching the placeholder providers.
+      replaceProvidersConfig({ providers: [] });
+      const created = await mcpPost(baseUrl, 'tools/call', {
+        name: 'create_provider',
+        arguments: {
+          name: 'Direct Stream',
+          url: `${fixture.baseUrl}/live.m3u8`,
+          epg: 'http://guide.local/guide.xml',
+        },
+      });
+      expectToolSuccess(created.msg, 'create_provider');
+      const reloaded = await mcpPost(baseUrl, 'tools/call', {
+        name: 'reload_channels',
+        arguments: {},
+      });
+      expectToolSuccess(reloaded.msg, 'reload_channels');
+      const listed = await mcpPost(baseUrl, 'tools/call', {
+        name: 'list_channels',
+        arguments: { source: 'Direct Stream' },
+      });
+      expect(expectToolSuccess(listed.msg, 'list_channels').data.map(c => c.name)).to.deep.equal([
+        'Direct Stream',
+      ]);
+      expect(getChannels().map(c => c.name)).to.deep.equal(['Direct Stream']);
+    } finally {
+      await new Promise(resolve => fixture.server.close(resolve));
+      replaceProvidersConfig({ providers: before });
+      replaceChannelSnapshot(snapshot);
+      await invalidateCache();
+    }
   });
 });
