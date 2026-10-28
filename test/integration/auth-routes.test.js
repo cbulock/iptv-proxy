@@ -24,22 +24,20 @@ import { invalidateAuthCache } from '../../server/auth.js';
 import { csrfMiddleware } from '../../server/csrf.js';
 import { closeDatabase, initDatabase } from '../../libs/database.js';
 import SQLiteSessionStore from '../../libs/sqlite-session-store.js';
+import { adminSessionOptions } from '../../libs/admin-session-config.js';
 
 function buildApp({ persistent = false } = {}) {
   if (persistent) initDatabase();
   const app = express();
   app.use(express.json());
   app.use(
-    session({
-      secret: 'test-secret-for-auth-routes',
-      ...(persistent ? { store: new SQLiteSessionStore() } : {}),
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        secure: SESSION_COOKIE_SECURE, // can be enabled via env for HTTPS
-        maxAge: 8 * 60 * 60 * 1000,
-      },
-    })
+    session(
+      adminSessionOptions(
+        'test-secret-for-auth-routes',
+        persistent ? new SQLiteSessionStore() : undefined,
+        SESSION_COOKIE_SECURE
+      )
+    )
   );
   // lgtm[js/missing-csrf-middleware] - csrfMiddleware (server/csrf.js) provides CSRF protection
   app.use(csrfMiddleware); // lgtm[js/missing-csrf-middleware]
@@ -166,6 +164,34 @@ describe('Auth Routes Integration', () => {
   // ── GET /api/auth/session ──────────────────────────────────────────────────
 
   describe('GET /api/auth/session', () => {
+    it('keeps a login cookie for 30 days and renews it on authenticated activity', async () => {
+      await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+      const login = await axios.post(`${baseUrl}/api/auth/login`, {
+        username: 'admin',
+        password: 'password123',
+      });
+      const initialCookie = login.headers['set-cookie'][0];
+      const initialExpiry = new Date(initialCookie.match(/Expires=([^;]+)/i)?.[1]).getTime();
+      expect(initialExpiry - Date.now()).to.be.within(
+        29 * 24 * 60 * 60 * 1000,
+        30 * 24 * 60 * 60 * 1000
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 1100));
+      const renewed = await axios.get(`${baseUrl}/api/auth/session`, {
+        headers: { Cookie: initialCookie.split(';')[0] },
+      });
+      expect(renewed.data.authenticated).to.equal(true);
+      expect(renewed.headers['set-cookie']).to.be.an('array').with.length.greaterThan(0);
+      const renewedExpiry = new Date(
+        renewed.headers['set-cookie'][0].match(/Expires=([^;]+)/i)?.[1]
+      ).getTime();
+      expect(renewedExpiry).to.be.greaterThan(initialExpiry);
+      expect(Date.parse(renewed.data.expiresAt)).to.be.greaterThan(
+        Date.parse(login.data.expiresAt)
+      );
+    });
+
     it('accepts the same login cookie and CSRF token after a server and database restart', async () => {
       await stopServer(server);
       ({ server, baseUrl } = await startServer(buildApp({ persistent: true })));

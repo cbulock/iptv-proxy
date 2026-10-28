@@ -1337,7 +1337,7 @@ function createMcpServer() {
  *
  * Endpoint: POST /mcp
  * Uses the MCP Streamable HTTP transport in stateless mode.
- * Auth is enforced via requireAuth (respects whether auth is enabled in the SQLite-backed app config).
+ * Auth is enforced via requireMcpBearerAuth (respects whether auth is enabled in the SQLite-backed app config).
  *
  * @param {import('express').Application} app
  */

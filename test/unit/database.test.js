@@ -54,6 +54,7 @@ describe('database foundation', () => {
       'imports_exports',
       'oauth_access_tokens',
       'oauth_authorization_codes',
+      'oauth_refresh_tokens',
       'output_profile_channels',
       'output_profiles',
       'schema_migrations',
@@ -68,7 +69,7 @@ describe('database foundation', () => {
     initDatabase({ filename: dbPath });
 
     const row = get('SELECT COUNT(*) AS count FROM schema_migrations');
-    expect(row.count).to.equal(6);
+    expect(row.count).to.equal(7);
   });
 
   it('supports the shared run/get helpers for future repositories', () => {

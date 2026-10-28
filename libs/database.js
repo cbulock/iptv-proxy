@@ -218,6 +218,24 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
     `,
   },
+  {
+    id: '007-oauth-refresh-tokens',
+    sql: `
+      CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+        token_hash TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        username TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_client_id
+        ON oauth_refresh_tokens(client_id);
+      CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires_at
+        ON oauth_refresh_tokens(expires_at);
+    `,
+  },
 ];
 
 let database = null;

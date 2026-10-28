@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import yaml from 'yaml';
 import session from 'express-session';
 import SQLiteSessionStore from './libs/sqlite-session-store.js';
+import { adminSessionOptions } from './libs/admin-session-config.js';
 import RateLimit from 'express-rate-limit';
 import { initConfig } from './server/init-config.js';
 import { loadConfig } from './libs/config-loader.js';
@@ -96,21 +97,7 @@ const sessionSecret = (() => {
 
 // Persist sessions alongside the rest of the application data so restarts
 // retain authentication and CSRF state until the existing cookie expires.
-app.use(
-  session({
-    secret: sessionSecret,
-    store: new SQLiteSessionStore(),
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: 'lax',
-      // Use secure cookies only when behind HTTPS (trust proxy is already set)
-      secure: 'auto',
-      maxAge: 8 * 60 * 60 * 1000, // 8 hours
-    },
-  })
-);
+app.use(session(adminSessionOptions(sessionSecret, new SQLiteSessionStore())));
 
 // CSRF protection for all mutating API requests (POST, PUT, DELETE, PATCH)
 // Exempt: login, setup, status, session, and csrf-token endpoints (pre-auth)

@@ -111,6 +111,9 @@ The server currently supports:
 - PKCE (`S256` and `plain`)
 - public clients (`token_endpoint_auth_method: none`)
 - opaque bearer access tokens for the `mcp` scope
+- rotating refresh tokens that keep the client authorized for 30 days after its last successful refresh
+
+Access tokens retain their configured lifetime (one hour by default). The token response now includes a `refresh_token`. OAuth clients that support refresh tokens can exchange it for a new access token and replacement refresh token without opening the login page. Each refresh token can be used only once. If the client does not refresh for 30 days, is disabled, loses its `mcp` scope, or the token is revoked, authorization must start again. Existing grants need one new authorization to receive a refresh token.
 
 ### OAuth configuration
 
@@ -168,6 +171,16 @@ curl http://localhost:34400/.well-known/oauth-authorization-server
 curl -X POST http://localhost:34400/oauth/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=authorization_code&client_id=chatgpt&code=YOUR_CODE&redirect_uri=https%3A%2F%2Fchat.openai.com%2Faip%2Foauth%2Fcallback&code_verifier=YOUR_CODE_VERIFIER"
+```
+
+### Renew MCP access
+
+Use the latest refresh token returned by `/oauth/token`:
+
+```bash
+curl -X POST http://localhost:34400/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=refresh_token&client_id=chatgpt&refresh_token=YOUR_LATEST_REFRESH_TOKEN"
 ```
 
 ### Ask the MCP interface how to operate
@@ -323,7 +336,7 @@ admin_auth:
   ```
 - Minimum length is 32 characters. Shorter values are ignored and a new secret is auto-generated
 - If writing to `app.yaml` fails (e.g., read-only filesystem), a warning is logged and a per-process random secret is used — existing session cookies will be invalidated on each restart because the signing key changes
-- Admin sessions (including login and CSRF state) are stored in `data/iptv-proxy.sqlite`, or the directory set by `DATA_PATH`. Keep this database and `app.yaml` on persistent storage so login survives server restarts and container replacements. Sessions retain the existing eight-hour cookie lifetime; logout removes the saved session. Sessions lost before this update require one new login.
+- Admin sessions (including login and CSRF state) are stored in `data/iptv-proxy.sqlite`, or the directory set by `DATA_PATH`. Keep this database and `app.yaml` on persistent storage so login survives server restarts and container replacements. Login lasts for 30 days since the last authenticated request; each request renews the browser cookie and saved session expiry. An open admin tab checks the session every minute and keeps it active. Logout removes the saved session. Existing eight-hour cookies retain their original expiry until the user signs in again.
 
 **Password Hashing:**
 
