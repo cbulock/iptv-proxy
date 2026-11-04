@@ -45,6 +45,8 @@ export default [
   },
   {
     ignores: [
+      // Archived review snapshots include generated bundles and separate projects.
+      'review/',
       'node_modules/',
       'public/',
       'data/',

@@ -127,10 +127,14 @@ describe('canonical model routes', () => {
 
     expect(bindingsResponse.data.bindings).to.have.lengthOf(2);
     expect(
-      bindingsResponse.data.bindings.every(binding => binding.canonical.name === 'Canonical Channel')
+      bindingsResponse.data.bindings.every(
+        binding => binding.canonical.name === 'Canonical Channel'
+      )
     ).to.equal(true);
     expect(guideBindingsResponse.data.bindings).to.have.lengthOf(2);
-    expect(guideBindingsResponse.data.bindings.filter(binding => binding.selected)).to.have.lengthOf(1);
+    expect(
+      guideBindingsResponse.data.bindings.filter(binding => binding.selected)
+    ).to.have.lengthOf(1);
   });
 
   it('returns discovered channels even when no channel-map entries exist', async () => {
@@ -166,9 +170,29 @@ describe('canonical model routes', () => {
       'Source Two',
     ]);
     expect(bindingsResponse.data.bindings).to.have.lengthOf(2);
-    expect(bindingsResponse.data.bindings.every(binding => binding.bindingType === 'source')).to.equal(
-      true
+    expect(
+      bindingsResponse.data.bindings.every(binding => binding.bindingType === 'source')
+    ).to.equal(true);
+    expect(bindingsResponse.data.bindings.map(binding => binding.resolutionState)).to.deep.equal([
+      'discovered',
+      'discovered',
+    ]);
+
+    const channelMapService = await import('../../libs/channel-map-service.js');
+    channelMapService.replaceChannelMap({
+      'Source One': { name: 'Source One' },
+      'Source Two': { name: 'Source Two' },
+    });
+    const canonicalService = await import('../../libs/canonical-channel-service.js');
+    canonicalService.rebuildCanonicalChannels();
+
+    const remapped = await axios.get(`${baseUrl}/api/canonical/bindings`);
+    expect(remapped.data.bindings.map(binding => binding.id)).to.have.members(
+      bindingsResponse.data.bindings.map(binding => binding.id)
     );
+    for (const binding of remapped.data.bindings) {
+      expect(binding).to.include({ bindingType: 'mapping', resolutionState: 'resolved' });
+    }
   });
 
   it('rebuilds stale canonical data on read when source channels already exist', async () => {
@@ -225,7 +249,9 @@ describe('canonical model routes', () => {
     expect(updateResponse.data).to.include({ status: 'saved' });
     expect(updateResponse.data.channel).to.include({ id: canonicalChannel.id, published: false });
 
-    const unchangedOutputResponse = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    const unchangedOutputResponse = await axios.get(
+      `${baseUrl}/api/output-profiles/default/channels`
+    );
     expect(unchangedOutputResponse.data.channels).to.have.lengthOf(1);
 
     nock('http://canonical-routes.example')
@@ -254,7 +280,9 @@ describe('canonical model routes', () => {
       published: false,
     });
 
-    const reloadedProfileResponse = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    const reloadedProfileResponse = await axios.get(
+      `${baseUrl}/api/output-profiles/default/channels`
+    );
     expect(reloadedProfileResponse.data.channels).to.have.lengthOf(1);
   });
 
@@ -262,9 +290,12 @@ describe('canonical model routes', () => {
     const channelsResponse = await axios.get(`${baseUrl}/api/canonical/channels`);
     const canonicalChannel = channelsResponse.data.channels[0];
 
-    const updateResponse = await axios.patch(`${baseUrl}/api/canonical/channels/${canonicalChannel.id}`, {
-      customName: 'Custom Channel Name',
-    });
+    const updateResponse = await axios.patch(
+      `${baseUrl}/api/canonical/channels/${canonicalChannel.id}`,
+      {
+        customName: 'Custom Channel Name',
+      }
+    );
     expect(updateResponse.data).to.include({ status: 'saved' });
     expect(updateResponse.data.channel).to.include({
       id: canonicalChannel.id,
@@ -273,7 +304,9 @@ describe('canonical model routes', () => {
       customName: 'Custom Channel Name',
     });
 
-    const updatedProfileResponse = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    const updatedProfileResponse = await axios.get(
+      `${baseUrl}/api/output-profiles/default/channels`
+    );
     expect(updatedProfileResponse.data.channels).to.have.lengthOf(1);
     expect(updatedProfileResponse.data.channels[0].name).to.equal('Custom Channel Name');
     expect(updatedProfileResponse.data.channels[0].streamName).to.not.equal('Custom Channel Name');
@@ -309,7 +342,9 @@ describe('canonical model routes', () => {
   it('updates the preferred stream and preserves it across a reload', async () => {
     const bindingsResponse = await axios.get(`${baseUrl}/api/canonical/bindings`);
     const canonicalId = bindingsResponse.data.bindings[0].canonical.id;
-    const initiallyPreferred = bindingsResponse.data.bindings.find(binding => binding.isPreferredStream);
+    const initiallyPreferred = bindingsResponse.data.bindings.find(
+      binding => binding.isPreferredStream
+    );
     const nextPreferred = bindingsResponse.data.bindings.find(
       binding => binding.sourceChannel.id !== initiallyPreferred.sourceChannel.id
     );
@@ -322,9 +357,13 @@ describe('canonical model routes', () => {
     expect(updateResponse.data.binding.sourceChannel.id).to.equal(nextPreferred.sourceChannel.id);
     expect(updateResponse.data.binding.isPreferredStream).to.equal(true);
 
-    const updatedProfileResponse = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    const updatedProfileResponse = await axios.get(
+      `${baseUrl}/api/output-profiles/default/channels`
+    );
     expect(updatedProfileResponse.data.channels).to.have.lengthOf(1);
-    expect(updatedProfileResponse.data.channels[0].source).to.equal(nextPreferred.sourceChannel.source);
+    expect(updatedProfileResponse.data.channels[0].source).to.equal(
+      nextPreferred.sourceChannel.source
+    );
 
     nock('http://canonical-routes.example')
       .get('/one.m3u')
@@ -351,9 +390,13 @@ describe('canonical model routes', () => {
     );
     expect(reloadedPreferred.sourceChannel.id).to.equal(nextPreferred.sourceChannel.id);
 
-    const reloadedProfileResponse = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    const reloadedProfileResponse = await axios.get(
+      `${baseUrl}/api/output-profiles/default/channels`
+    );
     expect(reloadedProfileResponse.data.channels).to.have.lengthOf(1);
-    expect(reloadedProfileResponse.data.channels[0].source).to.equal(nextPreferred.sourceChannel.source);
+    expect(reloadedProfileResponse.data.channels[0].source).to.equal(
+      nextPreferred.sourceChannel.source
+    );
   });
 
   it('updates the guide binding and preserves it across a reload', async () => {
@@ -477,11 +520,13 @@ describe('canonical model routes', () => {
         axios.get(`${baseUrl}/api/output-profiles/default/entries`),
       ]);
 
-    expect(reloadedChannels.data.channels).to.deep.include({
+    expect(reloadedChannels.data.channels).to.have.lengthOf(1);
+    expect(reloadedChannels.data.channels[0]).to.include({
       id: canonicalChannel.id,
       name: 'My Saved Channel',
       baseName: 'Renamed Mapping',
       customName: 'My Saved Channel',
+      tvg_id: 'renamed.mapping',
       guideNumber: '909',
       published: false,
     });
@@ -495,7 +540,8 @@ describe('canonical model routes', () => {
         binding => binding.canonical.id === canonicalChannel.id && binding.selected
       )
     ).to.include({ epgChannelId: 'my.saved.guide' });
-    expect(reloadedProfileEntries.data.entries).to.deep.include({
+    expect(reloadedProfileEntries.data.channels).to.have.lengthOf(1);
+    expect(reloadedProfileEntries.data.channels[0]).to.deep.include({
       position: 9,
       guideNumberOverride: '909',
       enabled: true,
