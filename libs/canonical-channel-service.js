@@ -290,12 +290,20 @@ export function rebuildCanonicalChannels() {
         source_channel_id: sourceChannel.id,
         canonical_channel_id: canonicalId,
         binding_type:
-          existingBinding?.binding_type || (resolution.matched ? 'mapping' : 'source'),
+          existingBinding?.binding_type === 'manual'
+            ? 'manual'
+            : resolution.matched
+              ? 'mapping'
+              : 'source',
         priority: existingBinding?.priority || 0,
         is_preferred_stream: existingBinding?.is_preferred_stream || 0,
         confidence: existingBinding?.confidence ?? 1,
         resolution_state:
-          existingBinding?.resolution_state || (resolution.matched ? 'resolved' : 'discovered'),
+          existingBinding?.binding_type === 'manual'
+            ? existingBinding.resolution_state
+            : resolution.matched
+              ? 'resolved'
+              : 'discovered',
       });
 
       const defaultGuideBindingId = pickGuideBindingId(canonicalChannel, hydrated);
@@ -319,14 +327,28 @@ export function rebuildCanonicalChannels() {
   const retainedIds = new Set(canonicalRows.map(row => row.id));
   const sourceIds = new Set(sourceChannels.map(row => row.id));
   for (const binding of existingBindingRows) {
-    if (binding.binding_type !== 'manual' || !retainedIds.has(binding.canonical_channel_id) ||
-        !sourceIds.has(binding.source_channel_id)) continue;
-    if (!bindingRows.some(row => row.canonical_channel_id === binding.canonical_channel_id &&
-        row.source_channel_id === binding.source_channel_id)) bindingRows.push(binding);
+    if (
+      binding.binding_type !== 'manual' ||
+      !retainedIds.has(binding.canonical_channel_id) ||
+      !sourceIds.has(binding.source_channel_id)
+    )
+      continue;
+    if (
+      !bindingRows.some(
+        row =>
+          row.canonical_channel_id === binding.canonical_channel_id &&
+          row.source_channel_id === binding.source_channel_id
+      )
+    )
+      bindingRows.push(binding);
   }
   for (const [key, binding] of existingGuideBindingsByKey) {
-    if (!seenGuideBindings.has(key) && retainedIds.has(binding.canonical_channel_id) &&
-        epgEnabledSourceIds.has(binding.source_id)) guideBindingRows.push(binding);
+    if (
+      !seenGuideBindings.has(key) &&
+      retainedIds.has(binding.canonical_channel_id) &&
+      epgEnabledSourceIds.has(binding.source_id)
+    )
+      guideBindingRows.push(binding);
   }
 
   const bindingRowsByCanonical = new Map();
@@ -628,7 +650,9 @@ export function setCanonicalChannelPreferredStream(canonicalId, sourceChannelId)
   ensureDatabaseReady();
 
   const db = getDatabase();
-  const canonicalExists = db.prepare('SELECT id FROM canonical_channels WHERE id = ?').get(canonicalId);
+  const canonicalExists = db
+    .prepare('SELECT id FROM canonical_channels WHERE id = ?')
+    .get(canonicalId);
   if (!canonicalExists) {
     return { error: 'canonical-not-found' };
   }
@@ -649,9 +673,12 @@ export function setCanonicalChannelPreferredStream(canonicalId, sourceChannelId)
   }
 
   const applyUpdate = transaction(() => {
-    if (!binding) db.prepare(`INSERT INTO channel_bindings
+    if (!binding)
+      db.prepare(
+        `INSERT INTO channel_bindings
       (id, source_channel_id, canonical_channel_id, binding_type, priority, is_preferred_stream, confidence, resolution_state)
-      VALUES (?, ?, ?, 'manual', 0, 0, 1, 'resolved')`).run(crypto.randomUUID(), sourceChannelId, canonicalId);
+      VALUES (?, ?, ?, 'manual', 0, 0, 1, 'resolved')`
+      ).run(crypto.randomUUID(), sourceChannelId, canonicalId);
     db.prepare(
       `UPDATE channel_bindings
           SET is_preferred_stream = CASE WHEN source_channel_id = ? THEN 1 ELSE 0 END
@@ -670,7 +697,9 @@ export function setCanonicalChannelGuideBinding(canonicalId, sourceId, epgChanne
   ensureDatabaseReady();
 
   const db = getDatabase();
-  const canonicalExists = db.prepare('SELECT id FROM canonical_channels WHERE id = ?').get(canonicalId);
+  const canonicalExists = db
+    .prepare('SELECT id FROM canonical_channels WHERE id = ?')
+    .get(canonicalId);
   if (!canonicalExists) {
     return { error: 'canonical-not-found' };
   }
@@ -685,16 +714,22 @@ export function setCanonicalChannelGuideBinding(canonicalId, sourceId, epgChanne
     .get(canonicalId, sourceId);
 
   if (!binding) {
-    if (!db.prepare("SELECT id FROM sources WHERE id = ? AND TRIM(COALESCE(epg_url, '')) != ''").get(sourceId)) {
+    if (
+      !db
+        .prepare("SELECT id FROM sources WHERE id = ? AND TRIM(COALESCE(epg_url, '')) != ''")
+        .get(sourceId)
+    ) {
       return { error: 'guide-binding-not-found' };
     }
   }
   if (!String(epgChannelId || '').trim()) return { error: 'guide-binding-not-found' };
 
   const applyUpdate = transaction(() => {
-    if (!binding) db.prepare(`INSERT INTO guide_bindings
-      (id, canonical_channel_id, source_id, epg_channel_id, priority) VALUES (?, ?, ?, ?, 1)`)
-      .run(crypto.randomUUID(), canonicalId, sourceId, epgChannelId);
+    if (!binding)
+      db.prepare(
+        `INSERT INTO guide_bindings
+      (id, canonical_channel_id, source_id, epg_channel_id, priority) VALUES (?, ?, ?, ?, 1)`
+      ).run(crypto.randomUUID(), canonicalId, sourceId, epgChannelId);
     db.prepare(
       `UPDATE guide_bindings
           SET epg_channel_id = CASE WHEN source_id = ? THEN ? ELSE epg_channel_id END,

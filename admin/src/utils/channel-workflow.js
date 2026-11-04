@@ -124,9 +124,9 @@ export function restoreChannelDrafts(state, savedProfile, savedEntries) {
         channel.id,
         binding
           ? JSON.stringify({
-            sourceId: binding.source?.id || '',
-            epgChannelId: binding.epgChannelId || '',
-          })
+              sourceId: binding.source?.id || '',
+              epgChannelId: binding.epgChannelId || '',
+            })
           : '',
       ];
     })

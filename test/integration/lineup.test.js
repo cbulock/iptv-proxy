@@ -203,11 +203,9 @@ describe('Lineup Route Integration', () => {
     nock('http://antenna.example')
       .get('/auto/v6.1')
       .query({ streamMode: 'hls' })
-      .reply(
-        200,
-        '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/auto/v6.1/hls/seg000001.ts\n',
-        { 'Content-Type': 'application/vnd.apple.mpegurl' }
-      );
+      .reply(200, '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/auto/v6.1/hls/seg000001.ts\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
 
     const playlistResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?streamMode=hls`);
     expect(playlistResponse.status).to.equal(200);
@@ -226,7 +224,7 @@ describe('Lineup Route Integration', () => {
       .reply(200, 'mpegts-fallback', { 'Content-Type': 'video/mp2t' });
 
     const streamResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?streamMode=hls`, {
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
     });
 
     expect(streamResponse.status).to.equal(200);

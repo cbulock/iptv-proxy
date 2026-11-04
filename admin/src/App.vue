@@ -23,7 +23,11 @@
         </p>
         <CindorForm
           :aria-busy="savingSetup ? 'true' : undefined"
-          :aria-describedby="setupError ? 'setup-modal-copy setup-modal-note setup-password-help setup-error' : 'setup-modal-copy setup-modal-note setup-password-help'"
+          :aria-describedby="
+            setupError
+              ? 'setup-modal-copy setup-modal-note setup-password-help setup-error'
+              : 'setup-modal-copy setup-modal-note setup-password-help'
+          "
         >
           <CindorFormField label="Username">
             <CindorInput
@@ -45,8 +49,8 @@
             />
           </CindorFormField>
           <CindorFormField label="Confirm Password">
-          <CindorPasswordInput
-            v-model="setupForm.confirm"
+            <CindorPasswordInput
+              v-model="setupForm.confirm"
               name="confirm-password"
               autocomplete="new-password"
               placeholder="Repeat password"
@@ -55,8 +59,14 @@
             />
           </CindorFormField>
         </CindorForm>
-        <div v-if="setupError" id="setup-error" class="setup-error" role="alert">{{ setupError }}</div>
-        <CindorButton :disabled="savingSetup" :aria-busy="savingSetup ? 'true' : undefined" @click="submitSetup">
+        <div v-if="setupError" id="setup-error" class="setup-error" role="alert">
+          {{ setupError }}
+        </div>
+        <CindorButton
+          :disabled="savingSetup"
+          :aria-busy="savingSetup ? 'true' : undefined"
+          @click="submitSetup"
+        >
           {{ savingSetup ? 'Saving...' : 'Save Credentials' }}
         </CindorButton>
       </div>
@@ -105,7 +115,11 @@
               </p>
               <form
                 class="login-form"
-                :aria-describedby="loginError ? 'login-copy login-helper-copy login-error' : 'login-copy login-helper-copy'"
+                :aria-describedby="
+                  loginError
+                    ? 'login-copy login-helper-copy login-error'
+                    : 'login-copy login-helper-copy'
+                "
                 :aria-busy="loggingIn ? 'true' : undefined"
                 @submit.prevent="submitLogin"
               >
@@ -128,8 +142,14 @@
                     />
                   </CindorFormField>
                 </CindorForm>
-                <div v-if="loginError" id="login-error" class="setup-error" role="alert">{{ loginError }}</div>
-                <CindorButton type="submit" :disabled="loggingIn" :aria-busy="loggingIn ? 'true' : undefined">
+                <div v-if="loginError" id="login-error" class="setup-error" role="alert">
+                  {{ loginError }}
+                </div>
+                <CindorButton
+                  type="submit"
+                  :disabled="loggingIn"
+                  :aria-busy="loggingIn ? 'true' : undefined"
+                >
                   {{ loggingIn ? 'Signing In...' : 'Sign In' }}
                 </CindorButton>
               </form>
@@ -171,7 +191,8 @@
               <span class="status-banner-label">{{ statusOk ? 'Status' : 'Error' }}</span>
               <span class="status-banner-message">{{ status }}</span>
             </div>
-            <label class="mobile-section-picker"><span>Section</span>
+            <label class="mobile-section-picker"
+              ><span>Section</span>
               <CindorSelect v-model="tab" :value.attr="tab" aria-label="Section">
                 <option value="app">{{ appTabLabel }}</option>
                 <option value="providers">{{ providersTabLabel }}</option>
@@ -184,383 +205,500 @@
               </CindorSelect>
             </label>
             <CindorTabs v-model:value="tab" class="admin-tabs">
-            <CindorTabPanel value="app" :label="appTabLabel">
-              <app-settings-pane
-                :app-base-url="app.base_url"
-                :oauth-issuer="app.oauth.issuer"
-                :oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds"
-                :oauth-access-token-ttl="app.oauth.access_token_ttl_seconds"
-                :oauth-clients="app.oauth.clients"
-                :auth-configured="authConfigured"
-                :password-current="passwordForm.current"
-                :password-new="passwordForm.newPass"
-                :password-confirm="passwordForm.confirm"
-                :saving-app="savingApp"
-                :saving-password="savingPassword"
-                :confirm-remove-client="confirmRemoveOAuthClient"
-                :save-app="saveApp"
-                :change-password="changePassword"
-                @update:app-base-url="app.base_url = $event"
-                @update:oauth-issuer="app.oauth.issuer = $event"
-                @update:oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds = $event"
-                @update:oauth-access-token-ttl="app.oauth.access_token_ttl_seconds = $event"
-                @update:oauth-clients="app.oauth.clients = $event"
-                @update:password-current="passwordForm.current = $event"
-                @update:password-new="passwordForm.newPass = $event"
-                @update:password-confirm="passwordForm.confirm = $event"
-              />
-            </CindorTabPanel>
-
-            <CindorTabPanel value="providers" :label="providersTabLabel">
-              <sources-pane
-                :providers="providers"
-                :epg-validation="epgValidation"
-                :provider-validation="providerValidation"
-                :provider-columns="providerColumns"
-                :providers-can-save="providersCanSave"
-                :saving-providers="savingProviders || channelActionsBusy"
-                :loading-e-p-g-validation="loadingEPGValidation"
-                :add-provider="addProvider"
-                :save-providers="saveProviders"
-                :load-e-p-g-validation="loadEPGValidation"
-                @cell-edit="handleProviderCellEdit"
-                @row-action="handleProviderRowAction"
-              />
-            </CindorTabPanel>
-
-            <CindorTabPanel value="channels" :label="channelsTabLabel">
-              <channels-pane
-                :profiles="outputProfiles"
-                :selected-profile-slug="selectedOutputProfileSlug"
-                :selected-profile="selectedOutputProfile"
-                :rows="channelWorkflowRows"
-                :loading="channelWorkflowsLoading"
-                :saving-profile="savingOutputProfile"
-                :reloading-channels="reloadingChannels"
-                :reloading-e-p-g="reloadingEPG"
-                :profile-dirty="profileDirty"
-                :saved-profile="savedOutputProfileDraft"
-                :actions-busy="channelActionsBusy"
-                :snapshot-invalid="channelSnapshotInvalid"
-                :load-error="channelLoadError"
-                :save-error="channelSaveError"
-                :profile-endpoint-info="selectedOutputProfileEndpointInfo"
-                :change-selected-profile="changeSelectedOutputProfile"
-                :refresh-channels="refreshChannelView"
-                :reload-channels="reloadChannels"
-                :reload-e-p-g="reloadEPG"
-                :save-profile-changes="saveOutputProfileChanges"
-                :discard-changes="discardChannelChanges"
-                :open-sources="() => state.tab = 'providers'"
-                :create-profile="createOutputProfile"
-                :duplicate-profile="duplicateOutputProfile"
-                :delete-profile="deleteSelectedOutputProfile"
-                :update-profile-name="updateSelectedOutputProfileName"
-                :update-profile-enabled="updateSelectedOutputProfileEnabled"
-                :update-canonical-name-draft="updateCanonicalChannelNameDraft"
-                :save-canonical-name="saveCanonicalChannelName"
-                :update-preferred-stream="updatePreferredStream"
-                :update-guide-binding="updateGuideBinding"
-                :update-output-enabled="updateOutputEnabled"
-                :update-guide-number-override-input="updateGuideNumberOverrideDraft"
-                :commit-guide-number-override="commitGuideNumberOverride"
-              />
-            </CindorTabPanel>
-
-            <CindorTabPanel value="preview" label="Preview">
-              <CindorStack
-                class="preview-toolbar"
-                direction="horizontal"
-                align="center"
-                wrap
-                gap="sm"
-                role="group"
-                aria-label="Preview actions"
-              >
-                <CindorSelect
-                  v-model="previewProfileSlug"
-                  class="preview-profile-select"
-                  :disabled="!outputProfiles.length"
-                  aria-label="Preview output profile"
-                  :aria-describedby="previewChannels.length ? 'preview-toolbar-summary preview-table-summary' : 'preview-toolbar-summary'"
-                  @update:model-value="changePreviewProfile"
-                >
-                  <option value="" disabled>Select preview profile</option>
-                  <option v-for="profile in outputProfiles" :key="profile.slug" :value="profile.slug">
-                    {{ profile.name }}
-                  </option>
-                </CindorSelect>
-                <CindorInput
-                  v-model="previewSearch"
-                  class="preview-search-input"
-                  placeholder="Search channels by name, group, or tvg-id…"
-                  aria-label="Search preview channels"
-                  :aria-describedby="previewChannels.length ? 'preview-toolbar-summary preview-table-summary' : 'preview-toolbar-summary'"
+              <CindorTabPanel value="app" :label="appTabLabel">
+                <app-settings-pane
+                  :app-base-url="app.base_url"
+                  :oauth-issuer="app.oauth.issuer"
+                  :oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds"
+                  :oauth-access-token-ttl="app.oauth.access_token_ttl_seconds"
+                  :oauth-clients="app.oauth.clients"
+                  :auth-configured="authConfigured"
+                  :password-current="passwordForm.current"
+                  :password-new="passwordForm.newPass"
+                  :password-confirm="passwordForm.confirm"
+                  :saving-app="savingApp"
+                  :saving-password="savingPassword"
+                  :confirm-remove-client="confirmRemoveOAuthClient"
+                  :save-app="saveApp"
+                  :change-password="changePassword"
+                  @update:app-base-url="app.base_url = $event"
+                  @update:oauth-issuer="app.oauth.issuer = $event"
+                  @update:oauth-authorization-code-ttl="
+                    app.oauth.authorization_code_ttl_seconds = $event
+                  "
+                  @update:oauth-access-token-ttl="app.oauth.access_token_ttl_seconds = $event"
+                  @update:oauth-clients="app.oauth.clients = $event"
+                  @update:password-current="passwordForm.current = $event"
+                  @update:password-new="passwordForm.newPass = $event"
+                  @update:password-confirm="passwordForm.confirm = $event"
                 />
-                <CindorButton
-                  variant="ghost"
-                  :disabled="loadingPreviewChannels"
-                  :aria-busy="loadingPreviewChannels ? 'true' : undefined"
-                  :aria-describedby="previewChannels.length ? 'preview-toolbar-summary preview-table-summary' : 'preview-toolbar-summary'"
-                  @click="loadPreviewChannels"
+              </CindorTabPanel>
+
+              <CindorTabPanel value="providers" :label="providersTabLabel">
+                <sources-pane
+                  :providers="providers"
+                  :epg-validation="epgValidation"
+                  :provider-validation="providerValidation"
+                  :provider-columns="providerColumns"
+                  :providers-can-save="providersCanSave"
+                  :saving-providers="savingProviders || channelActionsBusy"
+                  :loading-e-p-g-validation="loadingEPGValidation"
+                  :add-provider="addProvider"
+                  :save-providers="saveProviders"
+                  :load-e-p-g-validation="loadEPGValidation"
+                  @cell-edit="handleProviderCellEdit"
+                  @row-action="handleProviderRowAction"
+                />
+              </CindorTabPanel>
+
+              <CindorTabPanel value="channels" :label="channelsTabLabel">
+                <channels-pane
+                  :profiles="outputProfiles"
+                  :selected-profile-slug="selectedOutputProfileSlug"
+                  :selected-profile="selectedOutputProfile"
+                  :rows="channelWorkflowRows"
+                  :loading="channelWorkflowsLoading"
+                  :saving-profile="savingOutputProfile"
+                  :reloading-channels="reloadingChannels"
+                  :reloading-e-p-g="reloadingEPG"
+                  :profile-dirty="profileDirty"
+                  :saved-profile="savedOutputProfileDraft"
+                  :actions-busy="channelActionsBusy"
+                  :snapshot-invalid="channelSnapshotInvalid"
+                  :load-error="channelLoadError"
+                  :save-error="channelSaveError"
+                  :profile-endpoint-info="selectedOutputProfileEndpointInfo"
+                  :change-selected-profile="changeSelectedOutputProfile"
+                  :refresh-channels="refreshChannelView"
+                  :reload-channels="reloadChannels"
+                  :reload-e-p-g="reloadEPG"
+                  :save-profile-changes="saveOutputProfileChanges"
+                  :discard-changes="discardChannelChanges"
+                  :open-sources="() => (state.tab = 'providers')"
+                  :create-profile="createOutputProfile"
+                  :duplicate-profile="duplicateOutputProfile"
+                  :delete-profile="deleteSelectedOutputProfile"
+                  :update-profile-name="updateSelectedOutputProfileName"
+                  :update-profile-enabled="updateSelectedOutputProfileEnabled"
+                  :update-canonical-name-draft="updateCanonicalChannelNameDraft"
+                  :save-canonical-name="saveCanonicalChannelName"
+                  :update-preferred-stream="updatePreferredStream"
+                  :update-guide-binding="updateGuideBinding"
+                  :update-output-enabled="updateOutputEnabled"
+                  :update-guide-number-override-input="updateGuideNumberOverrideDraft"
+                  :commit-guide-number-override="commitGuideNumberOverride"
+                />
+              </CindorTabPanel>
+
+              <CindorTabPanel value="preview" label="Preview">
+                <CindorStack
+                  class="preview-toolbar"
+                  direction="horizontal"
+                  align="center"
+                  wrap
+                  gap="sm"
+                  role="group"
+                  aria-label="Preview actions"
                 >
-                  {{ loadingPreviewChannels ? 'Loading…' : 'Refresh' }}
-                </CindorButton>
-                <span class="toolbar-count" role="status" aria-live="polite" aria-atomic="true">
-                  {{ filteredPreviewChannels.length }} channel{{
-                    filteredPreviewChannels.length !== 1 ? 's' : ''
-                  }}
-                </span>
-              </CindorStack>
-              <div id="preview-toolbar-summary" class="tab-meta-copy" role="status" aria-live="polite">
-                Choose an output profile, filter the lineup, then refresh to inspect playable preview channels.
-              </div>
-              <div
-                v-if="loadingPreviewChannels && !previewChannels.length"
-                class="tab-empty-state"
-                role="status"
-                aria-live="polite"
-              >
-                Loading channels…
-              </div>
-              <div v-else-if="!previewChannels.length" class="tab-empty-state" role="status" aria-live="polite">
-                No channels loaded for this profile yet. Save sources, reload channels, then refresh
-                this preview.
-              </div>
-              <div
-                v-else
-                class="table-scroll-shell"
-                role="region"
-                aria-labelledby="preview-table-title"
-                aria-describedby="preview-table-summary"
-              >
-                <div id="preview-table-title" class="sr-only">Preview channels table</div>
-                <div id="preview-table-summary" class="tab-meta-copy" role="status" aria-live="polite">
-                  Showing {{ filteredPreviewChannels.length }} of {{ previewChannels.length }} preview channel{{
-                    previewChannels.length === 1 ? '' : 's'
+                  <CindorSelect
+                    v-model="previewProfileSlug"
+                    class="preview-profile-select"
+                    :disabled="!outputProfiles.length"
+                    aria-label="Preview output profile"
+                    :aria-describedby="
+                      previewChannels.length
+                        ? 'preview-toolbar-summary preview-table-summary'
+                        : 'preview-toolbar-summary'
+                    "
+                    @update:model-value="changePreviewProfile"
+                  >
+                    <option value="" disabled>Select preview profile</option>
+                    <option
+                      v-for="profile in outputProfiles"
+                      :key="profile.slug"
+                      :value="profile.slug"
+                    >
+                      {{ profile.name }}
+                    </option>
+                  </CindorSelect>
+                  <CindorInput
+                    v-model="previewSearch"
+                    class="preview-search-input"
+                    placeholder="Search channels by name, group, or tvg-id…"
+                    aria-label="Search preview channels"
+                    :aria-describedby="
+                      previewChannels.length
+                        ? 'preview-toolbar-summary preview-table-summary'
+                        : 'preview-toolbar-summary'
+                    "
+                  />
+                  <CindorButton
+                    variant="ghost"
+                    :disabled="loadingPreviewChannels"
+                    :aria-busy="loadingPreviewChannels ? 'true' : undefined"
+                    :aria-describedby="
+                      previewChannels.length
+                        ? 'preview-toolbar-summary preview-table-summary'
+                        : 'preview-toolbar-summary'
+                    "
+                    @click="loadPreviewChannels"
+                  >
+                    {{ loadingPreviewChannels ? 'Loading…' : 'Refresh' }}
+                  </CindorButton>
+                  <span class="toolbar-count" role="status" aria-live="polite" aria-atomic="true">
+                    {{ filteredPreviewChannels.length }} channel{{
+                      filteredPreviewChannels.length !== 1 ? 's' : ''
+                    }}
+                  </span>
+                </CindorStack>
+                <div
+                  id="preview-toolbar-summary"
+                  class="tab-meta-copy"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Choose an output profile, filter the lineup, then refresh to inspect playable
+                  preview channels.
+                </div>
+                <div
+                  v-if="loadingPreviewChannels && !previewChannels.length"
+                  class="tab-empty-state"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Loading channels…
+                </div>
+                <div
+                  v-else-if="!previewChannels.length"
+                  class="tab-empty-state"
+                  role="status"
+                  aria-live="polite"
+                >
+                  No channels loaded for this profile yet. Save sources, reload channels, then
+                  refresh this preview.
+                </div>
+                <div
+                  v-else
+                  class="table-scroll-shell"
+                  role="region"
+                  aria-labelledby="preview-table-title"
+                  aria-describedby="preview-table-summary"
+                >
+                  <div id="preview-table-title" class="sr-only">Preview channels table</div>
+                  <div
+                    id="preview-table-summary"
+                    class="tab-meta-copy"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    Showing {{ filteredPreviewChannels.length }} of
+                    {{ previewChannels.length }} preview channel{{
+                      previewChannels.length === 1 ? '' : 's'
+                    }}.
+                  </div>
+                  <CindorDataTable
+                    row-id-key="previewKey"
+                    density="compact"
+                    :columns="previewColumns"
+                    :rows="previewTableRows"
+                    @row-action="handlePreviewRowAction"
+                  />
+                </div>
+              </CindorTabPanel>
+
+              <CindorTabPanel value="health" label="Health">
+                <CindorStack
+                  class="pane-toolbar"
+                  direction="horizontal"
+                  align="center"
+                  wrap
+                  gap="sm"
+                  role="group"
+                  aria-label="Health actions"
+                >
+                  <CindorButton
+                    :disabled="loadingHealth"
+                    :aria-busy="loadingHealth ? 'true' : undefined"
+                    :aria-describedby="
+                      healthDetails.length
+                        ? formattedHealthUpdated
+                          ? 'health-updated-summary health-count-summary'
+                          : 'health-count-summary'
+                        : 'health-empty-summary'
+                    "
+                    @click="loadHealth"
+                  >
+                    {{ loadingHealth ? 'Loading...' : 'Refresh Status' }}
+                  </CindorButton>
+                  <CindorButton
+                    variant="ghost"
+                    :disabled="runningHealth"
+                    :aria-busy="runningHealth ? 'true' : undefined"
+                    :aria-describedby="
+                      healthDetails.length
+                        ? formattedHealthUpdated
+                          ? 'health-updated-summary health-count-summary'
+                          : 'health-count-summary'
+                        : 'health-empty-summary'
+                    "
+                    @click="runHealth"
+                  >
+                    {{ runningHealth ? 'Running...' : 'Run Health Check' }}
+                  </CindorButton>
+                </CindorStack>
+                <div
+                  id="health-updated-summary"
+                  v-if="formattedHealthUpdated"
+                  class="tab-meta-copy"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Last updated: {{ formattedHealthUpdated }}
+                </div>
+                <div
+                  id="health-count-summary"
+                  v-if="healthDetails.length"
+                  class="tab-meta-copy"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Showing {{ healthDetails.length }} health result{{
+                    healthDetails.length === 1 ? '' : 's'
                   }}.
                 </div>
-                <CindorDataTable
-                  row-id-key="previewKey"
-                  density="compact"
-                  :columns="previewColumns"
-                  :rows="previewTableRows"
-                  @row-action="handlePreviewRowAction"
-                />
-              </div>
-            </CindorTabPanel>
-
-            <CindorTabPanel value="health" label="Health">
-              <CindorStack
-                class="pane-toolbar"
-                direction="horizontal"
-                align="center"
-                wrap
-                gap="sm"
-                role="group"
-                aria-label="Health actions"
-              >
-                <CindorButton
-                  :disabled="loadingHealth"
-                  :aria-busy="loadingHealth ? 'true' : undefined"
+                <div
+                  v-if="healthDetails.length"
+                  class="table-scroll-shell"
+                  role="region"
+                  aria-label="Health results table"
                   :aria-describedby="
-                    healthDetails.length
-                      ? formattedHealthUpdated
-                        ? 'health-updated-summary health-count-summary'
-                        : 'health-count-summary'
-                      : 'health-empty-summary'
+                    formattedHealthUpdated
+                      ? 'health-updated-summary health-count-summary'
+                      : 'health-count-summary'
                   "
-                  @click="loadHealth"
                 >
-                  {{ loadingHealth ? 'Loading...' : 'Refresh Status' }}
-                </CindorButton>
-                <CindorButton
-                  variant="ghost"
-                  :disabled="runningHealth"
-                  :aria-busy="runningHealth ? 'true' : undefined"
-                  :aria-describedby="
-                    healthDetails.length
-                      ? formattedHealthUpdated
-                        ? 'health-updated-summary health-count-summary'
-                        : 'health-count-summary'
-                      : 'health-empty-summary'
-                  "
-                  @click="runHealth"
+                  <CindorDataTable
+                    row-id-key="id"
+                    density="compact"
+                    :columns="healthColumns"
+                    :rows="healthDetails"
+                  />
+                </div>
+                <div
+                  id="health-empty-summary"
+                  v-else
+                  class="tab-empty-copy"
+                  role="status"
+                  aria-live="polite"
                 >
-                  {{ runningHealth ? 'Running...' : 'Run Health Check' }}
-                </CindorButton>
-              </CindorStack>
-              <div id="health-updated-summary" v-if="formattedHealthUpdated" class="tab-meta-copy" role="status" aria-live="polite">
-                Last updated: {{ formattedHealthUpdated }}
-              </div>
-              <div id="health-count-summary" v-if="healthDetails.length" class="tab-meta-copy" role="status" aria-live="polite">
-                Showing {{ healthDetails.length }} health result{{ healthDetails.length === 1 ? '' : 's' }}.
-              </div>
-              <div
-                v-if="healthDetails.length"
-                class="table-scroll-shell"
-                role="region"
-                aria-label="Health results table"
-                :aria-describedby="formattedHealthUpdated ? 'health-updated-summary health-count-summary' : 'health-count-summary'"
-              >
-                <CindorDataTable
-                  row-id-key="id"
-                  density="compact"
-                  :columns="healthColumns"
-                  :rows="healthDetails"
-                />
-              </div>
-              <div id="health-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
-                No health data yet. Run a health check after your sources and channels are configured.
-              </div>
-            </CindorTabPanel>
+                  No health data yet. Run a health check after your sources and channels are
+                  configured.
+                </div>
+              </CindorTabPanel>
 
-            <CindorTabPanel value="usage" :label="usageTabLabel">
-              <CindorStack
-                class="pane-toolbar"
-                direction="horizontal"
-                align="center"
-                wrap
-                gap="sm"
-                role="group"
-                aria-label="Usage actions"
-              >
-                <CindorButton
-                  :disabled="loadingUsage"
-                  :aria-busy="loadingUsage ? 'true' : undefined"
-                  :aria-describedby="activeUsage.length ? 'usage-count-summary' : 'usage-empty-summary'"
-                  @click="loadUsage"
+              <CindorTabPanel value="usage" :label="usageTabLabel">
+                <CindorStack
+                  class="pane-toolbar"
+                  direction="horizontal"
+                  align="center"
+                  wrap
+                  gap="sm"
+                  role="group"
+                  aria-label="Usage actions"
                 >
-                  {{ loadingUsage ? 'Loading...' : 'Refresh' }}
-                </CindorButton>
-              </CindorStack>
-              <div
-                v-if="activeUsage.length"
-                class="table-scroll-shell"
-                role="region"
-                aria-label="Active usage table"
-                aria-describedby="usage-count-summary"
-              >
-                <div id="usage-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
-                  Showing {{ activeUsage.length }} active viewer{{ activeUsage.length === 1 ? '' : 's' }}.
+                  <CindorButton
+                    :disabled="loadingUsage"
+                    :aria-busy="loadingUsage ? 'true' : undefined"
+                    :aria-describedby="
+                      activeUsage.length ? 'usage-count-summary' : 'usage-empty-summary'
+                    "
+                    @click="loadUsage"
+                  >
+                    {{ loadingUsage ? 'Loading...' : 'Refresh' }}
+                  </CindorButton>
+                </CindorStack>
+                <div
+                  v-if="activeUsage.length"
+                  class="table-scroll-shell"
+                  role="region"
+                  aria-label="Active usage table"
+                  aria-describedby="usage-count-summary"
+                >
+                  <div
+                    id="usage-count-summary"
+                    class="tab-meta-copy"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    Showing {{ activeUsage.length }} active viewer{{
+                      activeUsage.length === 1 ? '' : 's'
+                    }}.
+                  </div>
+                  <CindorDataTable
+                    row-id-key="key"
+                    density="compact"
+                    :columns="usageColumns"
+                    :rows="activeUsage"
+                  />
                 </div>
-                <CindorDataTable
-                  row-id-key="key"
-                  density="compact"
-                  :columns="usageColumns"
-                  :rows="activeUsage"
-                />
-              </div>
-              <div id="usage-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">No active viewers detected.</div>
-              <h3 class="usage-history-heading">Playback history</h3>
-              <div
-                v-if="usageHistory.length"
-                class="table-scroll-shell"
-                role="region"
-                aria-label="Playback history table"
-                aria-describedby="usage-history-summary"
-              >
-                <div id="usage-history-summary" class="tab-meta-copy" role="status" aria-live="polite">
-                  Showing {{ usageHistory.length }} recent completed playback session{{ usageHistory.length === 1 ? '' : 's' }}.
+                <div
+                  id="usage-empty-summary"
+                  v-else
+                  class="tab-empty-copy"
+                  role="status"
+                  aria-live="polite"
+                >
+                  No active viewers detected.
                 </div>
-                <CindorDataTable row-id-key="id" density="compact" :columns="usageHistoryColumns" :rows="usageHistory" />
-              </div>
-              <div v-else class="tab-empty-copy" role="status" aria-live="polite">No completed playback yet.</div>
-            </CindorTabPanel>
+                <h3 class="usage-history-heading">Playback history</h3>
+                <div
+                  v-if="usageHistory.length"
+                  class="table-scroll-shell"
+                  role="region"
+                  aria-label="Playback history table"
+                  aria-describedby="usage-history-summary"
+                >
+                  <div
+                    id="usage-history-summary"
+                    class="tab-meta-copy"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    Showing {{ usageHistory.length }} recent completed playback session{{
+                      usageHistory.length === 1 ? '' : 's'
+                    }}.
+                  </div>
+                  <CindorDataTable
+                    row-id-key="id"
+                    density="compact"
+                    :columns="usageHistoryColumns"
+                    :rows="usageHistory"
+                  />
+                </div>
+                <div v-else class="tab-empty-copy" role="status" aria-live="polite">
+                  No completed playback yet.
+                </div>
+              </CindorTabPanel>
 
-            <CindorTabPanel value="tasks" label="Tasks">
-              <CindorStack
-                class="pane-toolbar"
-                direction="horizontal"
-                align="center"
-                wrap
-                gap="sm"
-                role="group"
-                aria-label="Task actions"
-              >
-                <CindorButton
-                  :disabled="loadingTasks"
-                  :aria-busy="loadingTasks ? 'true' : undefined"
-                  :aria-describedby="tasks.length ? 'tasks-count-summary' : 'tasks-empty-summary'"
-                  @click="loadTasks"
+              <CindorTabPanel value="tasks" label="Tasks">
+                <CindorStack
+                  class="pane-toolbar"
+                  direction="horizontal"
+                  align="center"
+                  wrap
+                  gap="sm"
+                  role="group"
+                  aria-label="Task actions"
                 >
-                  {{ loadingTasks ? 'Loading...' : 'Refresh' }}
-                </CindorButton>
-              </CindorStack>
-              <div
-                v-if="tasks.length"
-                class="table-scroll-shell"
-                role="region"
-                aria-label="Scheduled tasks table"
-                aria-describedby="tasks-count-summary"
-              >
-                <div id="tasks-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
-                  Showing {{ tasks.length }} scheduled task{{ tasks.length === 1 ? '' : 's' }}.
+                  <CindorButton
+                    :disabled="loadingTasks"
+                    :aria-busy="loadingTasks ? 'true' : undefined"
+                    :aria-describedby="tasks.length ? 'tasks-count-summary' : 'tasks-empty-summary'"
+                    @click="loadTasks"
+                  >
+                    {{ loadingTasks ? 'Loading...' : 'Refresh' }}
+                  </CindorButton>
+                </CindorStack>
+                <div
+                  v-if="tasks.length"
+                  class="table-scroll-shell"
+                  role="region"
+                  aria-label="Scheduled tasks table"
+                  aria-describedby="tasks-count-summary"
+                >
+                  <div
+                    id="tasks-count-summary"
+                    class="tab-meta-copy"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    Showing {{ tasks.length }} scheduled task{{ tasks.length === 1 ? '' : 's' }}.
+                  </div>
+                  <CindorDataTable
+                    row-id-key="name"
+                    density="compact"
+                    :columns="taskColumns"
+                    :rows="tasks"
+                    @row-action="handleTaskRowAction"
+                  />
                 </div>
-                <CindorDataTable
-                  row-id-key="name"
-                  density="compact"
-                  :columns="taskColumns"
-                  :rows="tasks"
-                  @row-action="handleTaskRowAction"
-                />
-              </div>
-              <div id="tasks-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
-                No scheduled tasks found. Configure background refresh jobs in app settings if you
-                want automatic channel or EPG updates.
-              </div>
-            </CindorTabPanel>
+                <div
+                  id="tasks-empty-summary"
+                  v-else
+                  class="tab-empty-copy"
+                  role="status"
+                  aria-live="polite"
+                >
+                  No scheduled tasks found. Configure background refresh jobs in app settings if you
+                  want automatic channel or EPG updates.
+                </div>
+              </CindorTabPanel>
 
-            <CindorTabPanel value="backups" label="Backups">
-              <CindorStack
-                class="pane-toolbar"
-                direction="horizontal"
-                align="center"
-                wrap
-                gap="sm"
-                role="group"
-                aria-label="Backup actions"
-              >
-                <CindorButton
-                  :disabled="creatingBackup"
-                  :aria-busy="creatingBackup ? 'true' : undefined"
-                  :aria-describedby="backups.length ? 'backups-count-summary' : 'backups-empty-summary'"
-                  @click="createBackup"
+              <CindorTabPanel value="backups" label="Backups">
+                <CindorStack
+                  class="pane-toolbar"
+                  direction="horizontal"
+                  align="center"
+                  wrap
+                  gap="sm"
+                  role="group"
+                  aria-label="Backup actions"
                 >
-                  {{ creatingBackup ? 'Creating...' : 'Create Backup' }}
-                </CindorButton>
-                <CindorButton
-                  variant="ghost"
-                  :disabled="loadingBackups"
-                  :aria-busy="loadingBackups ? 'true' : undefined"
-                  :aria-describedby="backups.length ? 'backups-count-summary' : 'backups-empty-summary'"
-                  @click="loadBackups"
+                  <CindorButton
+                    :disabled="creatingBackup"
+                    :aria-busy="creatingBackup ? 'true' : undefined"
+                    :aria-describedby="
+                      backups.length ? 'backups-count-summary' : 'backups-empty-summary'
+                    "
+                    @click="createBackup"
+                  >
+                    {{ creatingBackup ? 'Creating...' : 'Create Backup' }}
+                  </CindorButton>
+                  <CindorButton
+                    variant="ghost"
+                    :disabled="loadingBackups"
+                    :aria-busy="loadingBackups ? 'true' : undefined"
+                    :aria-describedby="
+                      backups.length ? 'backups-count-summary' : 'backups-empty-summary'
+                    "
+                    @click="loadBackups"
+                  >
+                    {{ loadingBackups ? 'Loading...' : 'Refresh' }}
+                  </CindorButton>
+                </CindorStack>
+                <div
+                  v-if="backups.length"
+                  class="table-scroll-shell"
+                  role="region"
+                  aria-label="Backups table"
+                  aria-describedby="backups-count-summary"
                 >
-                  {{ loadingBackups ? 'Loading...' : 'Refresh' }}
-                </CindorButton>
-              </CindorStack>
-              <div
-                v-if="backups.length"
-                class="table-scroll-shell"
-                role="region"
-                aria-label="Backups table"
-                aria-describedby="backups-count-summary"
-              >
-                <div id="backups-count-summary" class="tab-meta-copy" role="status" aria-live="polite">
-                  Showing {{ backups.length }} backup{{ backups.length === 1 ? '' : 's' }}.
+                  <div
+                    id="backups-count-summary"
+                    class="tab-meta-copy"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    Showing {{ backups.length }} backup{{ backups.length === 1 ? '' : 's' }}.
+                  </div>
+                  <CindorDataTable
+                    row-id-key="name"
+                    density="compact"
+                    :columns="backupColumns"
+                    :rows="backups"
+                    @row-action="handleBackupRowAction"
+                  />
                 </div>
-                <CindorDataTable
-                  row-id-key="name"
-                  density="compact"
-                  :columns="backupColumns"
-                  :rows="backups"
-                  @row-action="handleBackupRowAction"
-                />
-              </div>
-              <div id="backups-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
-                No backups yet. Click "Create Backup" to save the current config.
-              </div>
-            </CindorTabPanel>
+                <div
+                  id="backups-empty-summary"
+                  v-else
+                  class="tab-empty-copy"
+                  role="status"
+                  aria-live="polite"
+                >
+                  No backups yet. Click "Create Backup" to save the current config.
+                </div>
+              </CindorTabPanel>
             </CindorTabs>
           </div>
         </main>
@@ -590,7 +728,11 @@
           >
             <div aria-hidden="true" class="preview-player-error-icon">⚠️</div>
             <div class="preview-player-error-text">{{ state.playerError }}</div>
-            <div class="preview-player-error-actions" role="group" aria-label="Preview recovery actions">
+            <div
+              class="preview-player-error-actions"
+              role="group"
+              aria-label="Preview recovery actions"
+            >
               <CindorButton
                 v-if="showTranscodeButton"
                 class="compact-button preview-player-error-action"
@@ -630,10 +772,12 @@
             aria-label="Open stream URL in a new tab"
             aria-describedby="preview-stream-url-value preview-stream-url-summary"
             class="dialog-link"
-            >Open ↗</a>
+            >Open ↗</a
+          >
         </div>
         <div id="preview-stream-url-summary" class="sr-only">
-          Copy this stream URL or open it directly in another player for the selected preview channel.
+          Copy this stream URL or open it directly in another player for the selected preview
+          channel.
         </div>
 
         <div v-if="state.playerDebug" class="debug-panel">
@@ -642,7 +786,11 @@
             class="debug-toggle"
             :aria-expanded="state.showPlayerDebug"
             aria-controls="preview-stream-debug-panel"
-            :aria-describedby="state.showPlayerDebug ? 'preview-stream-debug-summary' : 'preview-debug-toggle-summary'"
+            :aria-describedby="
+              state.showPlayerDebug
+                ? 'preview-stream-debug-summary'
+                : 'preview-debug-toggle-summary'
+            "
             @click="state.showPlayerDebug = !state.showPlayerDebug"
           >
             <span class="debug-toggle-label">
@@ -655,8 +803,14 @@
               state.showPlayerDebug ? '▲ hide' : '▼ show'
             }}</span>
           </button>
-          <div id="preview-debug-toggle-summary" class="guide-state-copy" role="status" aria-live="polite">
-            Show player diagnostics, probe results, and recent playback events for the current stream.
+          <div
+            id="preview-debug-toggle-summary"
+            class="guide-state-copy"
+            role="status"
+            aria-live="polite"
+          >
+            Show player diagnostics, probe results, and recent playback events for the current
+            stream.
           </div>
           <div
             v-if="state.showPlayerDebug"
@@ -667,8 +821,15 @@
             aria-describedby="preview-stream-debug-summary"
           >
             <div id="preview-stream-debug-title" class="sr-only">Stream debug details</div>
-            <div id="preview-stream-debug-summary" class="guide-state-copy" role="status" aria-live="polite">
-              Showing {{ previewDebugFieldCount }} debug field{{ previewDebugFieldCount === 1 ? '' : 's' }}
+            <div
+              id="preview-stream-debug-summary"
+              class="guide-state-copy"
+              role="status"
+              aria-live="polite"
+            >
+              Showing {{ previewDebugFieldCount }} debug field{{
+                previewDebugFieldCount === 1 ? '' : 's'
+              }}
               and {{ previewDebugEventCount }} event{{ previewDebugEventCount === 1 ? '' : 's' }}.
             </div>
             <div class="debug-grid" role="list" aria-label="Stream debug fields">
@@ -687,20 +848,22 @@
               <div class="debug-grid-item" role="listitem">
                 <span class="debug-grid-label">Probe result</span>
                 <code class="debug-code">{{
-                  state.playerDebug.probeResult ? JSON.stringify(state.playerDebug.probeResult) : '(pending)'
+                  state.playerDebug.probeResult
+                    ? JSON.stringify(state.playerDebug.probeResult)
+                    : '(pending)'
                 }}</code>
               </div>
               <template v-if="state.playerDebug.hlsError">
                 <div class="debug-grid-item" role="listitem">
                   <span class="debug-grid-label">HLS.js error</span>
-                  <code class="debug-code">{{
-                    JSON.stringify(state.playerDebug.hlsError)
-                  }}</code>
+                  <code class="debug-code">{{ JSON.stringify(state.playerDebug.hlsError) }}</code>
                 </div>
               </template>
             </div>
             <div id="preview-debug-events-label" class="debug-events-label">Events:</div>
-            <pre class="debug-pre" role="log" aria-labelledby="preview-debug-events-label">{{ state.playerDebug.events.join('\n') }}</pre>
+            <pre class="debug-pre" role="log" aria-labelledby="preview-debug-events-label">{{
+              state.playerDebug.events.join('\n')
+            }}</pre>
             <div class="debug-actions">
               <CindorButton
                 class="compact-button"
@@ -728,26 +891,47 @@
           :aria-busy="loadingGuide ? 'true' : undefined"
         >
           <div id="preview-guide-title" class="guide-title-text">Guide</div>
-          <div id="preview-guide-loading-summary" v-if="loadingGuide" class="guide-state-copy" role="status" aria-live="polite">Loading guide data…</div>
-          <div id="preview-guide-empty-summary" v-else-if="!previewGuide.length" class="guide-state-copy empty" role="status" aria-live="polite">
+          <div
+            id="preview-guide-loading-summary"
+            v-if="loadingGuide"
+            class="guide-state-copy"
+            role="status"
+            aria-live="polite"
+          >
+            Loading guide data…
+          </div>
+          <div
+            id="preview-guide-empty-summary"
+            v-else-if="!previewGuide.length"
+            class="guide-state-copy empty"
+            role="status"
+            aria-live="polite"
+          >
             No guide data available for this channel.
           </div>
           <div v-else class="guide-list-wrapper">
-            <div id="preview-guide-count-summary" class="guide-state-copy" role="status" aria-live="polite">
-              Showing {{ previewGuide.length }} upcoming programme{{ previewGuide.length === 1 ? '' : 's' }}.
+            <div
+              id="preview-guide-count-summary"
+              class="guide-state-copy"
+              role="status"
+              aria-live="polite"
+            >
+              Showing {{ previewGuide.length }} upcoming programme{{
+                previewGuide.length === 1 ? '' : 's'
+              }}.
             </div>
             <div class="guide-list" role="list" aria-label="Guide programmes">
-            <div v-for="(prog, idx) in previewGuide" :key="idx" class="guide-row" role="listitem">
-              <span class="guide-time">
-                {{ formatXMLTVTime(prog.start) }}
-              </span>
-              <div class="guide-entry">
-                <div class="guide-program-title">{{ prog.title }}</div>
-                <div v-if="prog.desc" class="guide-description">
-                  {{ prog.desc }}
+              <div v-for="(prog, idx) in previewGuide" :key="idx" class="guide-row" role="listitem">
+                <span class="guide-time">
+                  {{ formatXMLTVTime(prog.start) }}
+                </span>
+                <div class="guide-entry">
+                  <div class="guide-program-title">{{ prog.title }}</div>
+                  <div v-if="prog.desc" class="guide-description">
+                    {{ prog.desc }}
+                  </div>
                 </div>
               </div>
-            </div>
             </div>
           </div>
         </div>
@@ -764,10 +948,16 @@
     >
       <div class="dialog-body">
         <h2 id="channel-draft-title">Unsaved channel changes</h2>
-        <p id="channel-draft-copy">Save or discard your changes before {{ channelDraftDialog.action }}.</p>
+        <p id="channel-draft-copy">
+          Save or discard your changes before {{ channelDraftDialog.action }}.
+        </p>
         <CindorStack direction="horizontal" gap="sm" wrap>
-          <CindorButton variant="ghost" @click="resolveChannelDraftDialog('cancel')">Cancel</CindorButton>
-          <CindorButton variant="ghost" @click="resolveChannelDraftDialog('discard')">Discard and continue</CindorButton>
+          <CindorButton variant="ghost" @click="resolveChannelDraftDialog('cancel')"
+            >Cancel</CindorButton
+          >
+          <CindorButton variant="ghost" @click="resolveChannelDraftDialog('discard')"
+            >Discard and continue</CindorButton
+          >
           <CindorButton @click="resolveChannelDraftDialog('save')">Save and continue</CindorButton>
         </CindorStack>
       </div>
@@ -784,7 +974,14 @@
       <div class="dialog-body">
         <div id="confirm-dialog-title" class="dialog-title">{{ confirmDialog.title }}</div>
         <div id="confirm-dialog-copy" class="dialog-copy">{{ confirmDialog.content }}</div>
-        <CindorStack direction="horizontal" justify="end" gap="sm" wrap role="group" aria-label="Confirmation actions">
+        <CindorStack
+          direction="horizontal"
+          justify="end"
+          gap="sm"
+          wrap
+          role="group"
+          aria-label="Confirmation actions"
+        >
           <CindorButton variant="ghost" @click="resolveConfirmDialog(false)">
             {{ confirmDialog.negativeText }}
           </CindorButton>
@@ -866,7 +1063,14 @@
         >
           {{ textPromptDialog.error }}
         </div>
-        <CindorStack direction="horizontal" justify="end" gap="sm" wrap role="group" aria-label="Prompt actions">
+        <CindorStack
+          direction="horizontal"
+          justify="end"
+          gap="sm"
+          wrap
+          role="group"
+          aria-label="Prompt actions"
+        >
           <CindorButton type="button" variant="ghost" @click="resolveTextPromptDialog(null)">
             {{ textPromptDialog.negativeText }}
           </CindorButton>
@@ -888,7 +1092,11 @@ import ChannelsPane from './components/ChannelsPane.vue';
 import { buildChannelSourceOptions } from './utils/channel-source-options.js';
 import { getProviderTypeOptions } from './utils/provider-type-options.js';
 import SourcesPane from './components/SourcesPane.vue';
-import { restoreChannelDrafts, resolveChannelDraftGuard, saveChannelDrafts } from './utils/channel-workflow.js';
+import {
+  restoreChannelDrafts,
+  resolveChannelDraftGuard,
+  saveChannelDrafts,
+} from './utils/channel-workflow.js';
 import {
   cloneAppDraft,
   cloneOutputProfileDraftState,
@@ -1084,7 +1292,8 @@ function getPostLoginRedirect() {
     return DEFAULT_ADMIN_ROUTE;
   }
 
-  const redirect = new URLSearchParams(window.location.search).get('redirect') || DEFAULT_ADMIN_ROUTE;
+  const redirect =
+    new URLSearchParams(window.location.search).get('redirect') || DEFAULT_ADMIN_ROUTE;
   const safeRedirect =
     redirect.startsWith('/') &&
     !redirect.startsWith('//') &&
@@ -1098,7 +1307,17 @@ function getPostLoginRedirect() {
 
 function redirectToAdmin(target = DEFAULT_ADMIN_ROUTE) {
   if (typeof window !== 'undefined') {
-    window.location.replace(target);
+    try {
+      // Parse first: browsers normalize backslashes and control characters in URLs.
+      const url = new URL(target, window.location.origin);
+      if (url.origin === window.location.origin) {
+        window.location.replace(url.href);
+        return;
+      }
+    } catch {
+      // Malformed destinations use the same safe fallback as external origins.
+    }
+    window.location.replace(DEFAULT_ADMIN_ROUTE);
   }
 }
 
@@ -1229,7 +1448,9 @@ function resolveTextPromptDialog(value) {
 
 function submitTextPromptDialog() {
   const validationMessage =
-    typeof textPromptDialog.validate === 'function' ? textPromptDialog.validate(textPromptDialog.value) : '';
+    typeof textPromptDialog.validate === 'function'
+      ? textPromptDialog.validate(textPromptDialog.value)
+      : '';
   if (validationMessage) {
     textPromptDialog.error = validationMessage;
     return;
@@ -1342,9 +1563,16 @@ const channelActionPending = ref(false);
 const channelSnapshotInvalid = ref(false);
 const pendingOutputProfileSlug = ref('');
 const channelDraftDialog = reactive({ open: false, action: '', resolve: null });
-const channelActionsBusy = computed(() => channelActionPending.value || state.savingOutputProfile ||
-  state.loadingChannelAuthoring || state.loadingOutputProfileEntries || state.reloadingChannels ||
-  state.reloadingEPG || state.savingProviders);
+const channelActionsBusy = computed(
+  () =>
+    channelActionPending.value ||
+    state.savingOutputProfile ||
+    state.loadingChannelAuthoring ||
+    state.loadingOutputProfileEntries ||
+    state.reloadingChannels ||
+    state.reloadingEPG ||
+    state.savingProviders
+);
 
 function resolveChannelDraftDialog(choice) {
   const resolve = channelDraftDialog.resolve;
@@ -1365,25 +1593,38 @@ async function guardChannelAction(action) {
   try {
     return await resolveChannelDraftGuard({
       isDirty: () => profileDirty.value,
-      prompt: () => new Promise(resolve => {
-        channelDraftDialog.action = action;
-        channelDraftDialog.resolve = resolve;
-        channelDraftDialog.open = true;
-      }),
+      prompt: () =>
+        new Promise(resolve => {
+          channelDraftDialog.action = action;
+          channelDraftDialog.resolve = resolve;
+          channelDraftDialog.open = true;
+        }),
       save: saveOutputProfileChanges,
       discard: resetChannelChanges,
     });
-  } finally { channelActionPending.value = false; }
+  } finally {
+    channelActionPending.value = false;
+  }
 }
 
 async function discardChannelChanges() {
   if (channelActionsBusy.value || !profileDirty.value) return;
   channelActionPending.value = true;
   try {
-    if (await openConfirmDialog({ title: 'Discard channel changes?', content: 'Restore all channel and lineup settings to their last saved values.', positiveText: 'Discard changes', negativeText: 'Keep editing', tone: 'warning' })) {
+    if (
+      await openConfirmDialog({
+        title: 'Discard channel changes?',
+        content: 'Restore all channel and lineup settings to their last saved values.',
+        positiveText: 'Discard changes',
+        negativeText: 'Keep editing',
+        tone: 'warning',
+      })
+    ) {
       resetChannelChanges();
     }
-  } finally { channelActionPending.value = false; }
+  } finally {
+    channelActionPending.value = false;
+  }
 }
 
 async function refreshChannelView() {
@@ -1466,28 +1707,29 @@ function buildAppConfigPayload(appConfig = {}) {
 
   const oauthClients = Array.isArray(oauth?.clients)
     ? oauth.clients
-      .map(client => {
-        const clientId = String(client?.client_id || '').trim();
-        const clientName = String(client?.client_name || '').trim();
-        const scope = String(client?.scope ?? 'mcp').trim() || 'mcp';
-        const redirectUris = String(client?.redirectUrisText || '')
-          .split(/\r?\n/)
-          .map(uri => uri.trim())
-          .filter(Boolean);
-        const isCompletelyBlank = !clientId && !clientName && !String(client?.redirectUrisText || '').trim();
+        .map(client => {
+          const clientId = String(client?.client_id || '').trim();
+          const clientName = String(client?.client_name || '').trim();
+          const scope = String(client?.scope ?? 'mcp').trim() || 'mcp';
+          const redirectUris = String(client?.redirectUrisText || '')
+            .split(/\r?\n/)
+            .map(uri => uri.trim())
+            .filter(Boolean);
+          const isCompletelyBlank =
+            !clientId && !clientName && !String(client?.redirectUrisText || '').trim();
 
-        if (isCompletelyBlank) {
-          return null;
-        }
+          if (isCompletelyBlank) {
+            return null;
+          }
 
-        return {
-          client_id: clientId,
-          client_name: clientName,
-          redirect_uris: redirectUris,
-          scope,
-        };
-      })
-      .filter(Boolean)
+          return {
+            client_id: clientId,
+            client_name: clientName,
+            redirect_uris: redirectUris,
+            scope,
+          };
+        })
+        .filter(Boolean)
     : [];
 
   const oauthIssuer = String(oauth?.issuer || '').trim();
@@ -1516,7 +1758,9 @@ function buildAppConfigPayload(appConfig = {}) {
 }
 
 function getSelectedOutputProfileRecord() {
-  return state.outputProfiles.find(profile => profile.slug === state.selectedOutputProfileSlug) || null;
+  return (
+    state.outputProfiles.find(profile => profile.slug === state.selectedOutputProfileSlug) || null
+  );
 }
 
 function resetSelectedOutputProfileDraft() {
@@ -1548,9 +1792,9 @@ function getCommittedGuideBindingValue(channelId) {
 
   return selectedBinding
     ? JSON.stringify({
-      sourceId: selectedBinding.source?.id || '',
-      epgChannelId: selectedBinding.epgChannelId || '',
-    })
+        sourceId: selectedBinding.source?.id || '',
+        epgChannelId: selectedBinding.epgChannelId || '',
+      })
     : '';
 }
 
@@ -1614,11 +1858,11 @@ function persistDraftSnapshot() {
       providers: providersDirty.value ? cloneProvidersDraft(state.providers) : null,
       channels: profileDirty.value
         ? cloneOutputProfileDraftState({
-          selectedOutputProfileSlug: state.selectedOutputProfileSlug,
-          outputProfileDraft: state.outputProfileDraft,
-          outputProfileEntries: state.outputProfileEntries,
-          channelDrafts: buildCurrentChannelWorkflowDrafts(),
-        })
+            selectedOutputProfileSlug: state.selectedOutputProfileSlug,
+            outputProfileDraft: state.outputProfileDraft,
+            outputProfileEntries: state.outputProfileEntries,
+            channelDrafts: buildCurrentChannelWorkflowDrafts(),
+          })
         : null,
     },
   };
@@ -1658,7 +1902,9 @@ async function restorePersistedDraftSnapshot() {
     return;
   }
 
-  if (!state.outputProfiles.some(profile => profile.slug === storedChannels.selectedOutputProfileSlug)) {
+  if (
+    !state.outputProfiles.some(profile => profile.slug === storedChannels.selectedOutputProfileSlug)
+  ) {
     return;
   }
 
@@ -1719,7 +1965,7 @@ async function restorePersistedDraftSnapshot() {
       customNameDraft:
         typeof storedDraft.customNameDraft === 'string'
           ? storedDraft.customNameDraft
-          : channel.customNameDraft ?? channel.customName ?? '',
+          : (channel.customNameDraft ?? channel.customName ?? ''),
     };
   });
 
@@ -1871,17 +2117,21 @@ async function loadChannelAuthoringData() {
     const profiles = Array.isArray(profilesJson?.profiles) ? profilesJson.profiles : [];
     const desiredProfileSlug = pendingOutputProfileSlug.value || state.selectedOutputProfileSlug;
     const nextProfileSlug = profiles.some(profile => profile.slug === desiredProfileSlug)
-      ? desiredProfileSlug : profiles[0]?.slug || 'default';
-    const entriesResponse = await apiFetch(`/api/output-profiles/${encodeURIComponent(nextProfileSlug)}/entries`);
+      ? desiredProfileSlug
+      : profiles[0]?.slug || 'default';
+    const entriesResponse = await apiFetch(
+      `/api/output-profiles/${encodeURIComponent(nextProfileSlug)}/entries`
+    );
     const entriesJson = await entriesResponse.json();
-    if (!entriesResponse.ok) throw new Error(buildApiErrorMessage(entriesJson, 'Failed to load lineup channels'));
+    if (!entriesResponse.ok)
+      throw new Error(buildApiErrorMessage(entriesJson, 'Failed to load lineup channels'));
 
     // Commit the complete read together so a failed request never partially replaces drafts.
     state.canonicalChannels = Array.isArray(channelsJson?.channels)
       ? channelsJson.channels.map(channel => ({
-        ...channel,
-        customNameDraft: channel?.customName || '',
-      }))
+          ...channel,
+          customNameDraft: channel?.customName || '',
+        }))
       : [];
     state.channelBindings = Array.isArray(bindingsJson?.bindings) ? bindingsJson.bindings : [];
     state.guideBindings = Array.isArray(guideBindingsJson?.bindings)
@@ -1902,7 +2152,8 @@ async function loadChannelAuthoringData() {
     return true;
   } catch (e) {
     channelLoadError.value = channelSnapshotInvalid.value
-      ? 'The lineup changed, but the updated list could not be loaded. Editing is paused. Retry refresh to continue. ' + e.message
+      ? 'The lineup changed, but the updated list could not be loaded. Editing is paused. Retry refresh to continue. ' +
+        e.message
       : e.message;
     setStatus('Failed to load channel workflows: ' + e.message, false);
     return false;
@@ -1913,10 +2164,18 @@ async function loadChannelAuthoringData() {
 
 function applyOutputProfileEntries(channels) {
   state.outputProfileEntries = Array.isArray(channels)
-    ? channels.map(channel => ({ ...channel, canonical: { ...(channel.canonical || {}) }, guideNumberOverrideDraft: channel.guideNumberOverride ?? '' })) : [];
+    ? channels.map(channel => ({
+        ...channel,
+        canonical: { ...(channel.canonical || {}) },
+        guideNumberOverrideDraft: channel.guideNumberOverride ?? '',
+      }))
+    : [];
   resetSelectedOutputProfileDraft();
   savedOutputProfileDraft.value = { ...state.outputProfileDraft };
-  savedOutputProfileEntries.value = state.outputProfileEntries.map(entry => ({ ...entry, canonical: { ...entry.canonical } }));
+  savedOutputProfileEntries.value = state.outputProfileEntries.map(entry => ({
+    ...entry,
+    canonical: { ...entry.canonical },
+  }));
   state.channelRowFeedback = {};
 }
 
@@ -2057,10 +2316,10 @@ async function saveApp() {
       base_url: body.base_url,
       oauth: body.oauth
         ? {
-          ...state.app.oauth,
-          ...body.oauth,
-          clients: state.app.oauth.clients,
-        }
+            ...state.app.oauth,
+            ...body.oauth,
+            clients: state.app.oauth.clients,
+          }
         : normalizeOAuthConfig(),
     });
     savedAppDraft.value = cloneAppDraft(state.app);
@@ -2102,14 +2361,18 @@ async function handleProviderRowAction(event) {
     return;
   }
 
-  const index = state.providers.findIndex(entry => String(entry?._id) === String(event.detail.rowId));
+  const index = state.providers.findIndex(
+    entry => String(entry?._id) === String(event.detail.rowId)
+  );
   if (index < 0) {
     return;
   }
 
   const provider = state.providers[index];
   const hasContent = Boolean(
-    String(provider?.name || '').trim() || String(provider?.url || '').trim() || String(provider?.epg || '').trim()
+    String(provider?.name || '').trim() ||
+    String(provider?.url || '').trim() ||
+    String(provider?.epg || '').trim()
   );
   if (hasContent) {
     const confirmed = await openConfirmDialog({
@@ -2168,12 +2431,15 @@ async function loadUsage() {
     ]);
     const [j, history] = await Promise.all([r.json(), historyResponse.json()]);
     if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to load usage'));
-    if (!historyResponse.ok) throw new Error(buildApiErrorMessage(history, 'Failed to load playback history'));
+    if (!historyResponse.ok)
+      throw new Error(buildApiErrorMessage(history, 'Failed to load playback history'));
     const list = Array.isArray(j?.active) ? j.active : [];
     // Normalize and sort by startedAt desc
     state.activeUsage = list
       .map(u => ({
-        key: JSON.stringify(u.userId ? ['user', u.userId, u.ip, u.channelId] : ['ip', u.ip, u.channelId]),
+        key: JSON.stringify(
+          u.userId ? ['user', u.userId, u.ip, u.channelId] : ['ip', u.ip, u.channelId]
+        ),
         ip: u.ip,
         userName: u.userName || '',
         userId: u.userId || '',
@@ -2375,9 +2641,8 @@ function commitGuideNumberOverride(channelId) {
   const entry = state.outputProfileEntries.find(item => item.canonical?.id === channelId);
   if (!entry) return;
 
-  const nextValue = typeof entry.guideNumberOverrideDraft === 'string'
-    ? entry.guideNumberOverrideDraft.trim()
-    : '';
+  const nextValue =
+    typeof entry.guideNumberOverrideDraft === 'string' ? entry.guideNumberOverrideDraft.trim() : '';
   const normalized = nextValue ? nextValue : null;
   entry.guideNumberOverrideDraft = nextValue;
 
@@ -2536,7 +2801,13 @@ async function deleteSelectedOutputProfile() {
 }
 
 async function saveOutputProfileChanges() {
-  if (channelSnapshotInvalid.value || state.savingOutputProfile || state.loadingChannelAuthoring || state.loadingOutputProfileEntries) return false;
+  if (
+    channelSnapshotInvalid.value ||
+    state.savingOutputProfile ||
+    state.loadingChannelAuthoring ||
+    state.loadingOutputProfileEntries
+  )
+    return false;
   try {
     state.savingOutputProfile = true;
     channelSaveError.value = '';
@@ -2576,9 +2847,9 @@ async function saveOutputProfileChanges() {
             body: JSON.stringify({
               profile: profileMetaDirty.value
                 ? {
-                  name: state.outputProfileDraft.name.trim(),
-                  enabled: state.outputProfileDraft.enabled,
-                }
+                    name: state.outputProfileDraft.name.trim(),
+                    enabled: state.outputProfileDraft.enabled,
+                  }
                 : undefined,
               canonicalChannels: canonicalRowsToSave.map(row => ({
                 id: row.id,
@@ -2592,11 +2863,11 @@ async function saveOutputProfileChanges() {
               })),
               channels: outputProfileEntriesDirty.value
                 ? channelWorkflowRows.value.map(row => ({
-                  canonicalId: row.id,
-                  position: row.position,
-                  enabled: row.outputEnabled,
-                  guideNumberOverride: row.committedGuideNumberOverride,
-                }))
+                    canonicalId: row.id,
+                    position: row.position,
+                    enabled: row.outputEnabled,
+                    guideNumberOverride: row.committedGuideNumberOverride,
+                  }))
                 : undefined,
             }),
           }
@@ -2605,7 +2876,10 @@ async function saveOutputProfileChanges() {
         if (!response.ok) {
           const error = new Error(buildApiErrorMessage(json, 'Failed to save lineup'));
           // Older servers include identity only at the end of the validation message.
-          error.channelId = json.canonicalId || json.channelId || dirtyRowIds.find(id => String(json.error || '').endsWith(` ${id}`));
+          error.channelId =
+            json.canonicalId ||
+            json.channelId ||
+            dirtyRowIds.find(id => String(json.error || '').endsWith(` ${id}`));
           throw error;
         }
         return json;
@@ -2621,24 +2895,53 @@ async function saveOutputProfileChanges() {
             channel.customNameDraft = channel.customName || '';
           }
           if (row.preferredStreamDirty) {
-            if (!state.channelBindings.some(binding => binding.canonical?.id === row.id && binding.sourceChannel?.id === row.preferredSourceChannelId)) {
-              const choice = state.channelBindings.find(binding => binding.sourceChannel?.id === row.preferredSourceChannelId);
-              if (choice) state.channelBindings.push({ ...choice, canonical: { id: row.id }, bindingType: 'manual' });
+            if (
+              !state.channelBindings.some(
+                binding =>
+                  binding.canonical?.id === row.id &&
+                  binding.sourceChannel?.id === row.preferredSourceChannelId
+              )
+            ) {
+              const choice = state.channelBindings.find(
+                binding => binding.sourceChannel?.id === row.preferredSourceChannelId
+              );
+              if (choice)
+                state.channelBindings.push({
+                  ...choice,
+                  canonical: { id: row.id },
+                  bindingType: 'manual',
+                });
             }
-            state.channelBindings.filter(binding => binding.canonical?.id === row.id).forEach(binding => {
-              binding.isPreferredStream = binding.sourceChannel?.id === row.preferredSourceChannelId;
-            });
+            state.channelBindings
+              .filter(binding => binding.canonical?.id === row.id)
+              .forEach(binding => {
+                binding.isPreferredStream =
+                  binding.sourceChannel?.id === row.preferredSourceChannelId;
+              });
           }
           if (row.guideBindingDirty) {
             const next = parseGuideBindingValue(row.selectedGuideBindingValue);
-            if (!state.guideBindings.some(binding => binding.canonical?.id === row.id && binding.source?.id === next.sourceId)) {
-              const choice = state.guideBindings.find(binding => binding.source?.id === next.sourceId);
-              if (choice) state.guideBindings.push({ ...choice, canonical: { id: row.id }, epgChannelId: next.epgChannelId });
+            if (
+              !state.guideBindings.some(
+                binding => binding.canonical?.id === row.id && binding.source?.id === next.sourceId
+              )
+            ) {
+              const choice = state.guideBindings.find(
+                binding => binding.source?.id === next.sourceId
+              );
+              if (choice)
+                state.guideBindings.push({
+                  ...choice,
+                  canonical: { id: row.id },
+                  epgChannelId: next.epgChannelId,
+                });
             }
-            state.guideBindings.filter(binding => binding.canonical?.id === row.id).forEach(binding => {
-              binding.selected = binding.source?.id === next.sourceId;
-              if (binding.selected) binding.epgChannelId = next.epgChannelId;
-            });
+            state.guideBindings
+              .filter(binding => binding.canonical?.id === row.id)
+              .forEach(binding => {
+                binding.selected = binding.source?.id === next.sourceId;
+                if (binding.selected) binding.epgChannelId = next.epgChannelId;
+              });
           }
         }
         Object.assign(selectedProfile, json.profile || state.outputProfileDraft);
@@ -2658,7 +2961,8 @@ async function saveOutputProfileChanges() {
       setStatus('Channel and lineup changes saved.');
       message.success('Changes saved');
     } else {
-      channelLoadError.value = 'Changes saved; could not refresh the list. Retry refresh to get the latest data.';
+      channelLoadError.value =
+        'Changes saved; could not refresh the list. Retry refresh to get the latest data.';
       setStatus(channelLoadError.value, false);
     }
     // Do not continue a pending action with potentially stale authoring data.
@@ -3271,10 +3575,10 @@ async function setupVideoPlayer() {
     typeof AbortSignal.timeout === 'function'
       ? AbortSignal.timeout(15000)
       : (() => {
-        const ac = new AbortController();
-        setTimeout(() => ac.abort(), 15000);
-        return ac.signal;
-      })();
+          const ac = new AbortController();
+          setTimeout(() => ac.abort(), 15000);
+          return ac.signal;
+        })();
   fetch(probeUrl, { signal: probeAbortSignal })
     .then(r => (r.ok ? r.json() : null))
     .then(result => {
@@ -3726,10 +4030,14 @@ const outputProfileEntriesDirty = computed(
     JSON.stringify(normalizeOutputProfileEntriesForComparison(savedOutputProfileEntries.value))
 );
 
-const guideNumberDraftDirty = computed(() => hasGuideNumberDraftChanges(state.outputProfileEntries));
+const guideNumberDraftDirty = computed(() =>
+  hasGuideNumberDraftChanges(state.outputProfileEntries)
+);
 const channelWorkflowDraftDirty = computed(
   () =>
-    JSON.stringify(normalizeChannelWorkflowDraftsForComparison(buildCurrentChannelWorkflowDrafts())) !==
+    JSON.stringify(
+      normalizeChannelWorkflowDraftsForComparison(buildCurrentChannelWorkflowDrafts())
+    ) !==
     JSON.stringify(
       normalizeChannelWorkflowDraftsForComparison(
         state.canonicalChannels.map(channel => ({
@@ -3754,7 +4062,9 @@ const appTabLabel = computed(() => buildDirtyTabLabel('App', appDirty.value));
 const providersTabLabel = computed(() => buildDirtyTabLabel('Sources', providersDirty.value));
 const channelsTabLabel = computed(() => buildDirtyTabLabel('Channels', profileDirty.value));
 const providerValidation = computed(() => ({
-  issues: state.providers.flatMap((provider, index) => getProviderValidationIssues(provider, index)),
+  issues: state.providers.flatMap((provider, index) =>
+    getProviderValidationIssues(provider, index)
+  ),
 }));
 const providersCanSave = computed(() => providerValidation.value.issues.length === 0);
 
@@ -3765,11 +4075,11 @@ watch(
     providersDirty.value ? cloneProvidersDraft(state.providers) : null,
     profileDirty.value
       ? cloneOutputProfileDraftState({
-        selectedOutputProfileSlug: state.selectedOutputProfileSlug,
-        outputProfileDraft: state.outputProfileDraft,
-        outputProfileEntries: state.outputProfileEntries,
-        channelDrafts: buildCurrentChannelWorkflowDrafts(),
-      })
+          selectedOutputProfileSlug: state.selectedOutputProfileSlug,
+          outputProfileDraft: state.outputProfileDraft,
+          outputProfileEntries: state.outputProfileEntries,
+          channelDrafts: buildCurrentChannelWorkflowDrafts(),
+        })
       : null,
   ],
   () => {
@@ -3914,12 +4224,15 @@ function describeEffectiveGuideNumber(outputEntry, channel) {
 
 function hasAssignedGuideNumber(outputEntry, channel) {
   return Boolean(
-    String(outputEntry?.guideNumberOverride || '').trim() || String(channel?.guideNumber || '').trim()
+    String(outputEntry?.guideNumberOverride || '').trim() ||
+    String(channel?.guideNumber || '').trim()
   );
 }
 
 function isOutputProfileEntryDirty(channelId, outputEntry) {
-  const savedEntry = savedOutputProfileEntries.value.find(entry => entry.canonical?.id === channelId);
+  const savedEntry = savedOutputProfileEntries.value.find(
+    entry => entry.canonical?.id === channelId
+  );
 
   return (
     Boolean(outputEntry?.enabled) !== Boolean(savedEntry?.enabled) ||
@@ -3928,7 +4241,9 @@ function isOutputProfileEntryDirty(channelId, outputEntry) {
   );
 }
 
-const channelSourceChoices = computed(() => buildChannelSourceOptions('', state.channelBindings, state.guideBindings));
+const channelSourceChoices = computed(() =>
+  buildChannelSourceOptions('', state.channelBindings, state.guideBindings)
+);
 
 const channelWorkflowRows = computed(() => {
   const bindingsByCanonicalId = new Map();
@@ -3974,10 +4289,18 @@ const channelWorkflowRows = computed(() => {
         }
         return (left.sourceChannel?.source || '').localeCompare(right.sourceChannel?.source || '');
       });
-      const draftEntry = { ...outputEntry, guideNumberOverride: String(outputEntry?.guideNumberOverrideDraft ?? outputEntry?.guideNumberOverride ?? '').trim() || null };
+      const draftEntry = {
+        ...outputEntry,
+        guideNumberOverride:
+          String(
+            outputEntry?.guideNumberOverrideDraft ?? outputEntry?.guideNumberOverride ?? ''
+          ).trim() || null,
+      };
       const guideDisplay = describeEffectiveGuideNumber(draftEntry, channel);
       const hasGuideNumber = hasAssignedGuideNumber(draftEntry, channel);
-      const savedEntry = savedOutputProfileEntries.value.find(entry => entry.canonical?.id === channel.id);
+      const savedEntry = savedOutputProfileEntries.value.find(
+        entry => entry.canonical?.id === channel.id
+      );
       const sourceGuideReferences = sortedBindings
         .map(binding => {
           const sourceGuideNumber =
@@ -3999,9 +4322,9 @@ const channelWorkflowRows = computed(() => {
         (getDraftGuideBindingValue(channel.id) || '') !==
         (selectedGuideBinding
           ? JSON.stringify({
-            sourceId: selectedGuideBinding.source?.id || '',
-            epgChannelId: selectedGuideBinding.epgChannelId || '',
-          })
+              sourceId: selectedGuideBinding.source?.id || '',
+              epgChannelId: selectedGuideBinding.epgChannelId || '',
+            })
           : '');
       const outputEntryDirty = isOutputProfileEntryDirty(channel.id, outputEntry);
       const guideNumberDraftDirty =
@@ -4038,15 +4361,18 @@ const channelWorkflowRows = computed(() => {
         committedPreferredSourceChannelId: preferredBinding?.sourceChannel?.id || null,
         preferredStreamOptions: sourceOptions.streams,
         guideBindingOptions,
-        boundGuideValues: (guideBindingsByCanonicalId.get(channel.id) || []).map(binding => JSON.stringify({
-          sourceId: binding.source?.id || '', epgChannelId: binding.epgChannelId || '',
-        })),
+        boundGuideValues: (guideBindingsByCanonicalId.get(channel.id) || []).map(binding =>
+          JSON.stringify({
+            sourceId: binding.source?.id || '',
+            epgChannelId: binding.epgChannelId || '',
+          })
+        ),
         selectedGuideBindingValue: getDraftGuideBindingValue(channel.id) || null,
         committedGuideBindingValue: selectedGuideBinding
           ? JSON.stringify({
-            sourceId: selectedGuideBinding.source?.id || '',
-            epgChannelId: selectedGuideBinding.epgChannelId || '',
-          })
+              sourceId: selectedGuideBinding.source?.id || '',
+              epgChannelId: selectedGuideBinding.epgChannelId || '',
+            })
           : null,
         outputEnabled: hasGuideNumber ? (outputEntry?.enabled ?? false) : false,
         enableToggleDisabled: !hasGuideNumber,
@@ -4089,25 +4415,25 @@ const channelWorkflowRows = computed(() => {
 const healthDetails = computed(() =>
   Array.isArray(health.value.details)
     ? health.value.details.map(d => ({
-      id: d.id,
-      status: d.healthy ? 'online' : 'offline',
-      ms: d.ms,
-      code: d.statusCode,
-      contentType: d.contentType,
-      error: d.error,
-      method: d.method,
-      path: d.path,
-    }))
+        id: d.id,
+        status: d.healthy ? 'online' : 'offline',
+        ms: d.ms,
+        code: d.statusCode,
+        contentType: d.contentType,
+        error: d.error,
+        method: d.method,
+        path: d.path,
+      }))
     : Object.entries(health.value.summary || {}).map(([id, status]) => ({
-      id,
-      status,
-      ms: '',
-      code: '',
-      contentType: '',
-      error: '',
-      method: '',
-      path: '',
-    }))
+        id,
+        status,
+        ms: '',
+        code: '',
+        contentType: '',
+        error: '',
+        method: '',
+        path: '',
+      }))
 );
 
 const healthColumns = [
@@ -4151,7 +4477,8 @@ function formatUsageDuration(seconds) {
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const remaining = total % 60;
-  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`
     : `${minutes}:${String(remaining).padStart(2, '0')}`;
 }
 
@@ -4163,7 +4490,12 @@ const usageHistoryColumns = [
   { label: 'Client', key: 'client' },
   { label: 'Started', key: 'startedAt', sortable: true },
   { label: 'Ended', key: 'endedAt', sortable: true },
-  { label: 'Duration', key: 'durationSeconds', sortable: true, cellRenderer: ({ row }) => formatUsageDuration(row.durationSeconds) },
+  {
+    label: 'Duration',
+    key: 'durationSeconds',
+    sortable: true,
+    cellRenderer: ({ row }) => formatUsageDuration(row.durationSeconds),
+  },
 ];
 
 const taskColumns = [
@@ -4309,7 +4641,8 @@ const filteredPreviewChannels = computed(() => {
 const previewTableRows = computed(() =>
   filteredPreviewChannels.value.map((channel, index) => ({
     ...channel,
-    previewKey: channel.original_url || `${channel.source}|${channel.name}|${channel.guideNumber}|${index}`,
+    previewKey:
+      channel.original_url || `${channel.source}|${channel.name}|${channel.guideNumber}|${index}`,
   }))
 );
 
@@ -4620,11 +4953,21 @@ body {
   gap: 0.75rem;
 }
 
-.workspace-frame.channel-workspace { overflow: clip; }
-.mobile-section-picker { display: none; }
-.admin-tabs::part(mobile-picker) { display: none; }
+.workspace-frame.channel-workspace {
+  overflow: clip;
+}
+.mobile-section-picker {
+  display: none;
+}
+.admin-tabs::part(mobile-picker) {
+  display: none;
+}
 @media (max-width: 640px) {
-  .mobile-section-picker { display: grid; gap: 6px; padding: 12px 12px 0; }
+  .mobile-section-picker {
+    display: grid;
+    gap: 6px;
+    padding: 12px 12px 0;
+  }
 }
 
 .admin-tabs h3 {
@@ -5128,7 +5471,6 @@ body {
   .dialog-body {
     min-width: min(100%, 90vw);
   }
-
 }
 
 @media (max-width: 700px) {
@@ -5166,6 +5508,5 @@ body {
   .guide-list {
     max-height: 260px;
   }
-
 }
 </style>

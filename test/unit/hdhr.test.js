@@ -36,9 +36,12 @@ function getDiscovery(config = {}, request = {}) {
 
 describe('HDHomeRun discovery', () => {
   it('advertises the direct LAN request origin', () => {
-    const discovery = getDiscovery({}, {
-      headers: { Host: '192.168.1.42:34400' },
-    });
+    const discovery = getDiscovery(
+      {},
+      {
+        headers: { Host: '192.168.1.42:34400' },
+      }
+    );
 
     expect(discovery.BaseURL).to.equal('http://192.168.1.42:34400');
     expect(discovery.LineupURL).to.equal('http://192.168.1.42:34400/lineup.json');

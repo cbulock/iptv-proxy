@@ -26,6 +26,7 @@
 
 Files: admin/src/utils/channel-workflow.js; test/unit/channel-workflow.test.js.
 Interfaces: matchesChannelSearch(row, query), getChannelSetupIssues(row), buildChannelChangeReview(rows, profile, savedProfile), restoreChannelDrafts(state, savedProfile, savedEntries), resolveChannelDraftGuard({isDirty,prompt,save,discard}), saveChannelDrafts({write,acknowledge,reload}).
+
 - [x] Write tests for effective-number lookup, missing number on excluded channels, unselected/empty choices, scoped before/after summaries, complete discard, cancel/failed-save guards, and failed post-save reload.
 - [x] Run node node_modules/mocha/bin/mocha.js test/unit/channel-workflow.test.js; observe red.
 - [x] Implement helpers and verify green with existing admin-draft tests.
@@ -33,6 +34,7 @@ Interfaces: matchesChannelSearch(row, query), getChannelSetupIssues(row), buildC
 ## Task 2: App lifecycle integration
 
 Files: admin/src/App.vue.
+
 - [x] Integrate guarded refresh/switch/create/duplicate/delete/source-save, three-choice draft dialog, complete discard, saved publication state, structured save errors and retryable load failure.
 - [x] Add baseline values to rows for change review and use staged numbers for setup state without auto-inclusion.
 - [x] Compile source and run targeted lint/tests.
@@ -40,6 +42,7 @@ Files: admin/src/App.vue.
 ## Task 3: Compact list and editor
 
 Files: admin/src/components/ChannelsPane.vue; optional ChannelEditor.vue.
+
 - [x] Replace form-table/header cards with compact lineup controls, filters, readable rows, setup actions, disclosures, and copy feedback.
 - [x] Add scoped editor and change review with persistent Save/Discard bar, disabled busy actions, meaningful empty/error states and focus restoration.
 - [x] Compact mobile tab navigation and check Vue compilation/lint.

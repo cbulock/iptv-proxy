@@ -73,9 +73,7 @@ describe('source service', () => {
 
     const storedProviders = sourceService.loadProvidersConfigFromStore();
     expect(storedProviders.providers).to.have.lengthOf(2);
-    expect(
-      storedProviders.providers.map(({ id: _id, ...provider }) => provider)
-    ).to.deep.equal([
+    expect(storedProviders.providers.map(({ id: _id, ...provider }) => provider)).to.deep.equal([
       {
         name: 'Antenna',
         url: 'http://hdhr.local',
@@ -88,7 +86,9 @@ describe('source service', () => {
         epg: 'https://remote.example/guide.xml',
       },
     ]);
-    expect(storedProviders.providers.every(provider => typeof provider.id === 'string')).to.equal(true);
+    expect(storedProviders.providers.every(provider => typeof provider.id === 'string')).to.equal(
+      true
+    );
 
     const providersYaml = await fs.readFile(path.join(configDir, 'providers.yaml'), 'utf8');
     expect(providersYaml).to.include('name: Antenna');
@@ -145,9 +145,9 @@ describe('source service', () => {
     expect(db.prepare('SELECT id, source_id FROM source_channels').all()).to.deep.equal([
       { id: channelId, source_id: source.id },
     ]);
-    expect(db.prepare('SELECT source_channel_id, canonical_channel_id FROM channel_bindings').all()).to.deep.equal([
-      { source_channel_id: channelId, canonical_channel_id: canonicalId },
-    ]);
+    expect(
+      db.prepare('SELECT source_channel_id, canonical_channel_id FROM channel_bindings').all()
+    ).to.deep.equal([{ source_channel_id: channelId, canonical_channel_id: canonicalId }]);
     expect(db.prepare('SELECT source_id FROM guide_bindings').all()).to.deep.equal([
       { source_id: source.id },
     ]);
@@ -160,16 +160,15 @@ describe('source service', () => {
     const [source] = sourceService.listSources();
     const db = databaseModule.getDatabase();
     const timestamp = new Date().toISOString();
-    db.prepare('INSERT INTO source_channels (id, source_id, name, last_seen_at) VALUES (?, ?, ?, ?)').run(
-      'removed-source-channel',
-      source.id,
-      'Will Be Removed',
-      timestamp
-    );
+    db.prepare(
+      'INSERT INTO source_channels (id, source_id, name, last_seen_at) VALUES (?, ?, ?, ?)'
+    ).run('removed-source-channel', source.id, 'Will Be Removed', timestamp);
 
     sourceService.replaceProvidersConfig({ providers: [] });
 
     expect(db.prepare('SELECT COUNT(*) AS count FROM sources').get()).to.deep.equal({ count: 0 });
-    expect(db.prepare('SELECT COUNT(*) AS count FROM source_channels').get()).to.deep.equal({ count: 0 });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM source_channels').get()).to.deep.equal({
+      count: 0,
+    });
   });
 });

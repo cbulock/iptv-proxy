@@ -86,7 +86,9 @@ describe('GET /api/guide', () => {
   before(async () => {
     tmpDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-guide-data-'));
     process.env.DATA_PATH = tmpDataDir;
-    process.env.CONFIG_PATH = tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iptv-guide-test-'));
+    process.env.CONFIG_PATH = tmpConfigDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'iptv-guide-test-')
+    );
 
     // Write test channels
     const testChannels = [
@@ -183,9 +185,11 @@ describe('GET /api/guide', () => {
     const before = await axios.get(`${baseUrl}/api/guide?tvgId=${TVG_ID}`);
     const epgModule = await import('../../server/epg.js');
     const revision = epgModule.getPublishedGuideSnapshot().revision;
-    await fs.writeFile(epgFilePath,
+    await fs.writeFile(
+      epgFilePath,
       `<?xml version="1.0" encoding="UTF-8"?><tv><channel id="${TVG_ID}"><display-name>Guide Test Channel</display-name></channel></tv>`,
-      'utf8');
+      'utf8'
+    );
     try {
       const outcome = await refreshEPG();
       const after = await axios.get(`${baseUrl}/api/guide?tvgId=${TVG_ID}`);

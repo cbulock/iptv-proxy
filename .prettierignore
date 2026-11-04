@@ -6,3 +6,6 @@ admin/dist
 admin/node_modules
 package-lock.json
 admin/package-lock.json
+
+# Historical review snapshots, not current application sources.
+review

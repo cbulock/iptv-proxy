@@ -5,6 +5,7 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { inflateRawSync } from 'node:zlib';
 import sinon from 'sinon';
 import { closeDatabase } from '../../libs/database.js';
 import getBaseUrl from '../../libs/getBaseUrl.js';
@@ -23,6 +24,36 @@ async function startServer(app) {
 
 async function stopServer(server) {
   return new Promise(resolve => server.close(resolve));
+}
+
+// Decode the small, non-ZIP64 test archive independently of archiver. Read sizes
+// from the central directory because streaming ZIP entries use data descriptors.
+function readZipFiles(buffer) {
+  const end = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  expect(end).to.be.at.least(0);
+  const count = buffer.readUInt16LE(end + 10);
+  let offset = buffer.readUInt32LE(end + 16);
+  const files = new Map();
+  for (let i = 0; i < count; i++) {
+    expect(buffer.readUInt32LE(offset)).to.equal(0x02014b50);
+    const method = buffer.readUInt16LE(offset + 10);
+    const size = buffer.readUInt32LE(offset + 20);
+    const nameLength = buffer.readUInt16LE(offset + 28);
+    const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLength);
+    const localOffset = buffer.readUInt32LE(offset + 42);
+    if (!name.endsWith('/')) {
+      expect([0, 8]).to.include(method);
+      const start =
+        localOffset +
+        30 +
+        buffer.readUInt16LE(localOffset + 26) +
+        buffer.readUInt16LE(localOffset + 28);
+      const data = buffer.subarray(start, start + size);
+      files.set(name, method === 8 ? inflateRawSync(data) : data);
+    }
+    offset += 46 + nameLength + buffer.readUInt16LE(offset + 30) + buffer.readUInt16LE(offset + 32);
+  }
+  return files;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -63,7 +94,11 @@ describe('Config Backup API', () => {
     // Write some dummy config files
     await fs.writeFile(path.join(tmpDir, 'm3u.yaml'), 'urls: []\n', 'utf8');
     await fs.writeFile(path.join(tmpDir, 'epg.yaml'), 'urls: []\n', 'utf8');
-    await fs.writeFile(path.join(tmpDir, 'app.yaml'), 'base_url: "https://yaml.example.com"\n', 'utf8');
+    await fs.writeFile(
+      path.join(tmpDir, 'app.yaml'),
+      'base_url: "https://yaml.example.com"\n',
+      'utf8'
+    );
 
     // Point config loader to our temp dir
     process.env.CONFIG_PATH = tmpDir;
@@ -144,20 +179,21 @@ describe('Config Backup API', () => {
   it('restores SQLite-backed app state from the database snapshot instead of stale YAML exports', async () => {
     databaseModule.initDatabase();
     databaseModule.run('DELETE FROM app_settings');
-    databaseModule.run(
-      'INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)',
-      [
-        'app-config',
-        JSON.stringify({ base_url: 'https://db-backed.example.com' }),
-        new Date().toISOString(),
-      ]
-    );
+    databaseModule.run('INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)', [
+      'app-config',
+      JSON.stringify({ base_url: 'https://db-backed.example.com' }),
+      new Date().toISOString(),
+    ]);
     databaseModule.closeDatabase();
 
     const createRes = await axios.post(`${baseUrl}/api/config/backup`);
     const { name } = createRes.data;
 
-    await fs.writeFile(path.join(tmpDir, 'app.yaml'), 'base_url: "https://stale-yaml.example.com"\n', 'utf8');
+    await fs.writeFile(
+      path.join(tmpDir, 'app.yaml'),
+      'base_url: "https://stale-yaml.example.com"\n',
+      'utf8'
+    );
     appSettingsService.replaceAppConfig({ base_url: 'https://mutated-after-backup.example.com' });
     databaseModule.closeDatabase();
 
@@ -186,7 +222,15 @@ describe('Config Backup API', () => {
     db.prepare(
       `INSERT INTO sources (id, name, type, playlist_url, enabled, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(sourceId, 'Restore Source', 'm3u', 'http://restore.example/playlist.m3u', 1, timestamp, timestamp);
+    ).run(
+      sourceId,
+      'Restore Source',
+      'm3u',
+      'http://restore.example/playlist.m3u',
+      1,
+      timestamp,
+      timestamp
+    );
     db.prepare(
       `INSERT INTO source_channels (id, source_id, name, last_seen_at)
        VALUES (?, ?, ?, ?)`
@@ -219,7 +263,9 @@ describe('Config Backup API', () => {
     db.prepare('DELETE FROM canonical_channels WHERE id = ?').run(canonicalId);
     databaseModule.closeDatabase();
 
-    const restoreRes = await axios.post(`${baseUrl}/api/config/backups/${createRes.data.name}/restore`);
+    const restoreRes = await axios.post(
+      `${baseUrl}/api/config/backups/${createRes.data.name}/restore`
+    );
     expect(restoreRes.status).to.equal(200);
 
     expect(
@@ -261,6 +307,17 @@ describe('Config Backup API', () => {
   it('GET /api/config/backups/:name/download returns a zip file', async () => {
     const createRes = await axios.post(`${baseUrl}/api/config/backup`);
     const { name } = createRes.data;
+    const backupDir = path.join(tmpDir, 'backups', name);
+    const expected = new Map();
+    for (const filename of await fs.readdir(backupDir)) {
+      expected.set(filename, await fs.readFile(path.join(backupDir, filename)));
+    }
+    // Exercise directory traversal and dotfile inclusion used by archive.directory.
+    await fs.mkdir(path.join(backupDir, 'nested'));
+    await fs.writeFile(path.join(backupDir, 'nested', 'settings.yaml'), 'nested: true\n');
+    await fs.writeFile(path.join(backupDir, '.metadata'), 'backup metadata\n');
+    expected.set('nested/settings.yaml', Buffer.from('nested: true\n'));
+    expected.set('.metadata', Buffer.from('backup metadata\n'));
 
     const downloadRes = await axios.get(`${baseUrl}/api/config/backups/${name}/download`, {
       responseType: 'arraybuffer',
@@ -275,6 +332,11 @@ describe('Config Backup API', () => {
     const buf = Buffer.from(downloadRes.data);
     expect(buf[0]).to.equal(0x50); // 'P'
     expect(buf[1]).to.equal(0x4b); // 'K'
+    const files = readZipFiles(buf);
+    expect([...files.keys()]).to.have.members([...expected.keys()]);
+    for (const [filename, contents] of expected) {
+      expect(files.get(filename), filename).to.deep.equal(contents);
+    }
   });
 
   it('GET /api/config/backups/:name/download returns 404 for unknown backup', async () => {
@@ -640,9 +702,8 @@ describe('GET /channels?mapped_only=true', () => {
     process.env.DATA_PATH = tmpDir;
     closeDatabase();
 
-    const { loadChannelSnapshot, replaceChannelSnapshot } = await import(
-      '../../libs/channel-snapshot-service.js'
-    );
+    const { loadChannelSnapshot, replaceChannelSnapshot } =
+      await import('../../libs/channel-snapshot-service.js');
 
     originalChannels = loadChannelSnapshot();
     hadOriginalChannels = originalChannels.length > 0;
@@ -737,9 +798,8 @@ describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
     process.env.DATA_PATH = tmpDir;
     closeDatabase();
 
-    const { loadChannelSnapshot, replaceChannelSnapshot } = await import(
-      '../../libs/channel-snapshot-service.js'
-    );
+    const { loadChannelSnapshot, replaceChannelSnapshot } =
+      await import('../../libs/channel-snapshot-service.js');
 
     originalChannels = loadChannelSnapshot();
     hadOriginalChannels = originalChannels.length > 0;

@@ -2,6 +2,18 @@
 
 This document describes how to run tests and use code quality tools for the IPTV Proxy project.
 
+Development checks require Node.js 20.19+, 22.13+, or 24+ (ESLint 10's supported
+versions). CI and the production container use Node.js 24 LTS; Node.js 20 is
+end-of-life. The container installs Debian security updates and keeps npm in the
+dependency build stage only. It starts the application directly with `node`.
+
+The root package pins `glob` 14.0.2 and `minimatch` 11.0.1 through npm overrides
+to address GHSA-3g3m-2fjr-6pw4 and GHSA-g3hv-75wg-m249. The remaining consumers
+use the supported `glob.sync`/`hasMagic`, `minimatch`, and `Minimatch` APIs.
+When updating these overrides, run the complete tests and lint, including the
+backup download test which checks ZIP entries and their decompressed contents.
+Keep `npm audit --audit-level=moderate` enabled for both root and admin packages.
+
 ## Running Tests
 
 ### Run All Tests

@@ -7,7 +7,10 @@ import path from 'path';
 import os from 'os';
 import nock from 'nock';
 import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
-import { loadChannelSnapshot, replaceChannelSnapshot } from '../../libs/channel-snapshot-service.js';
+import {
+  loadChannelSnapshot,
+  replaceChannelSnapshot,
+} from '../../libs/channel-snapshot-service.js';
 import { setupStreamProbeRoutes, parseMpegTsCodecs } from '../../server/stream-probe.js';
 import { errorHandler } from '../../server/error-handler.js';
 import { invalidateAuthCache } from '../../server/auth.js';
@@ -329,11 +332,9 @@ describe('Stream Probe Route Integration', () => {
   });
 
   it('returns { container: hls, browserCompatible: true } for an HLS response', async () => {
-    nock('http://iptv-probe.local')
-      .get('/stream/ch1')
-      .reply(200, '#EXTM3U\n#EXT-X-VERSION:3\n', {
-        'content-type': 'application/vnd.apple.mpegurl',
-      });
+    nock('http://iptv-probe.local').get('/stream/ch1').reply(200, '#EXTM3U\n#EXT-X-VERSION:3\n', {
+      'content-type': 'application/vnd.apple.mpegurl',
+    });
 
     const res = await axios.get(`${baseUrl}/api/stream-probe/IPTV/IP%20Channel`, {
       validateStatus: () => true,

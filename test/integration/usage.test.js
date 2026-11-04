@@ -44,11 +44,17 @@ describe('Usage Route Integration', () => {
         userAgent: 'VLC/3',
       });
       unregisterUsage(key);
-      expect(getDatabase().prepare('SELECT COUNT(*) AS count FROM playback_history').get().count).to.equal(1);
-      expect(getDatabase().prepare('SELECT channel_id FROM playback_history').get().channel_id).to.equal(channelId);
+      expect(
+        getDatabase().prepare('SELECT COUNT(*) AS count FROM playback_history').get().count
+      ).to.equal(1);
+      expect(
+        getDatabase().prepare('SELECT channel_id FROM playback_history').get().channel_id
+      ).to.equal(channelId);
       closeDatabase();
       initDatabase({ filename });
-      expect(getDatabase().prepare('SELECT channel_id FROM playback_history').get().channel_id).to.equal(channelId);
+      expect(
+        getDatabase().prepare('SELECT channel_id FROM playback_history').get().channel_id
+      ).to.equal(channelId);
       const response = await axios.get(`${baseUrl}/api/usage/history`);
       const entry = response.data.history.find(item => item.channelId === channelId);
       expect(entry).to.include({ ip: '10.0.0.8', userName: 'Viewer', client: 'VLC' });

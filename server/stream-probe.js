@@ -50,9 +50,7 @@ const INCOMPATIBLE_AUDIO_STREAM_TYPES = new Set([
 const KNOWN_VIDEO_STREAM_TYPES = new Set([0x01, 0x02, 0x1b, 0x24, 0x42, 0x80]);
 
 // Known audio stream types (used to distinguish audio from data/subtitle PIDs).
-const KNOWN_AUDIO_STREAM_TYPES = new Set([
-  0x03, 0x04, 0x0f, 0x11, 0x81, 0x82, 0x84, 0x86, 0x87,
-]);
+const KNOWN_AUDIO_STREAM_TYPES = new Set([0x03, 0x04, 0x0f, 0x11, 0x81, 0x82, 0x84, 0x86, 0x87]);
 
 /**
  * Return the byte offset of the first confirmed MPEG-TS sync byte in buf.
@@ -366,7 +364,10 @@ export function setupStreamProbeRoutes(app) {
   app.get('/api/stream-probe/:source/:name', requireAuth, async (req, res) => {
     let { source, name } = req.params;
     const channels = getChannels();
-    const channel = source === 'channel' ? getSourceChannelById(name) : channels.find(c => c.source === source && c.name === name);
+    const channel =
+      source === 'channel'
+        ? getSourceChannelById(name)
+        : channels.find(c => c.source === source && c.name === name);
     if (channel) {
       source = channel.source;
       name = channel.name;

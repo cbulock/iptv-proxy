@@ -126,13 +126,11 @@ describe('parseAll SQLite persistence', () => {
       'utf8'
     );
 
-    nock('http://hdhr.example')
-      .get('/discover.json')
-      .reply(200, {
-        DeviceID: '12345678',
-        BaseURL: 'http://hdhr.example',
-        ModelNumber: 'HDHR5',
-      });
+    nock('http://hdhr.example').get('/discover.json').reply(200, {
+      DeviceID: '12345678',
+      BaseURL: 'http://hdhr.example',
+      ModelNumber: 'HDHR5',
+    });
     nock('http://hdhr.example')
       .get('/lineup.json')
       .reply(200, [
@@ -220,7 +218,9 @@ describe('parseAll SQLite persistence', () => {
       expect(statuses).to.deep.include({ source: 'Healthy IPTV', status: 'success' });
       expect(statuses).to.deep.include({ source: 'Stalled OTA', status: 'error' });
 
-      const stalledSource = databaseModule.get('SELECT id FROM sources WHERE name = ?', ['Stalled OTA']);
+      const stalledSource = databaseModule.get('SELECT id FROM sources WHERE name = ?', [
+        'Stalled OTA',
+      ]);
       const syncRun = databaseModule.get(
         'SELECT status FROM source_sync_runs WHERE source_id = ? ORDER BY started_at DESC LIMIT 1',
         [stalledSource.id]
@@ -261,7 +261,9 @@ describe('parseAll SQLite persistence', () => {
     const count = await parseM3UModule.parseAll();
     expect(count).to.equal(1);
 
-    const source = databaseModule.get('SELECT id, name FROM sources WHERE name = ?', ['NAS Stream']);
+    const source = databaseModule.get('SELECT id, name FROM sources WHERE name = ?', [
+      'NAS Stream',
+    ]);
     expect(source).to.not.equal(undefined);
 
     const discovered = databaseModule.get(

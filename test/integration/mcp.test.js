@@ -585,35 +585,58 @@ describe('MCP Route Integration', () => {
     const { getDatabase } = await import('../../libs/database.js');
     const db = getDatabase();
     const now = new Date().toISOString();
-    db.prepare(`INSERT INTO sources (id, name, type, epg_url, created_at, updated_at)
-      VALUES ('editor-test-provider', 'Editor fixture', 'm3u', NULL, ?, ?)` ).run(now, now);
+    db.prepare(
+      `INSERT INTO sources (id, name, type, epg_url, created_at, updated_at)
+      VALUES ('editor-test-provider', 'Editor fixture', 'm3u', NULL, ?, ?)`
+    ).run(now, now);
     for (const id of ['editor-one', 'editor-two']) {
-      db.prepare(`INSERT INTO source_channels (id, source_id, name, stream_url, last_seen_at)
-        VALUES (?, 'editor-test-provider', ?, ?, ?)` ).run(id, id, `http://fixture.example/${id}`, now);
+      db.prepare(
+        `INSERT INTO source_channels (id, source_id, name, stream_url, last_seen_at)
+        VALUES (?, 'editor-test-provider', ?, ?, ?)`
+      ).run(id, id, `http://fixture.example/${id}`, now);
     }
     service.rebuildCanonicalChannels();
-    const bindings = service.listChannelBindings().filter(binding => binding.sourceChannel.id.startsWith('editor-'));
+    const bindings = service
+      .listChannelBindings()
+      .filter(binding => binding.sourceChannel.id.startsWith('editor-'));
     const first = bindings[0];
     const other = bindings.find(binding => binding.canonical.id !== first.canonical.id);
     const stream = await mcpPost(baseUrl, 'tools/call', {
       name: 'set_canonical_channel_preferred_stream',
       arguments: { canonical_id: first.canonical.id, source_channel_id: other.sourceChannel.id },
     });
-    expect(expectToolSuccess(stream.msg, 'set_canonical_channel_preferred_stream').data)
-      .to.include({ isPreferredStream: true, bindingType: 'manual' });
+    expect(expectToolSuccess(stream.msg, 'set_canonical_channel_preferred_stream').data).to.include(
+      { isPreferredStream: true, bindingType: 'manual' }
+    );
     const provider = { id: 'editor-test-provider' };
-    getDatabase().prepare('UPDATE sources SET epg_url = ? WHERE id = ?').run('http://guide.example/test.xml', provider.id);
+    getDatabase()
+      .prepare('UPDATE sources SET epg_url = ? WHERE id = ?')
+      .run('http://guide.example/test.xml', provider.id);
     const guide = await mcpPost(baseUrl, 'tools/call', {
       name: 'set_canonical_channel_guide_binding',
-      arguments: { canonical_id: first.canonical.id, source_id: provider.id, epg_channel_id: 'guide.news' },
+      arguments: {
+        canonical_id: first.canonical.id,
+        source_id: provider.id,
+        epg_channel_id: 'guide.news',
+      },
     });
-    expect(expectToolSuccess(guide.msg, 'set_canonical_channel_guide_binding').data)
-      .to.include({ selected: true, epgChannelId: 'guide.news' });
+    expect(expectToolSuccess(guide.msg, 'set_canonical_channel_guide_binding').data).to.include({
+      selected: true,
+      epgChannelId: 'guide.news',
+    });
     service.rebuildCanonicalChannels();
-    expect(service.listChannelBindings().find(binding => binding.canonical.id === first.canonical.id && binding.isPreferredStream).sourceChannel.id)
-      .to.equal(other.sourceChannel.id);
-    expect(service.listGuideBindings().find(binding => binding.canonical.id === first.canonical.id && binding.selected).epgChannelId)
-      .to.equal('guide.news');
+    expect(
+      service
+        .listChannelBindings()
+        .find(binding => binding.canonical.id === first.canonical.id && binding.isPreferredStream)
+        .sourceChannel.id
+    ).to.equal(other.sourceChannel.id);
+    expect(
+      service
+        .listGuideBindings()
+        .find(binding => binding.canonical.id === first.canonical.id && binding.selected)
+        .epgChannelId
+    ).to.equal('guide.news');
   });
 
   it('set_canonical_channel_preferred_stream returns an error for an unknown channel', async () => {

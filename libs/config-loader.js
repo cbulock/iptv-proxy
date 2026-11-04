@@ -124,13 +124,10 @@ const appSchema = Joi.object({
   base_url: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
     'string.uri': 'app.yaml "base_url" must be a valid URL',
   }),
-  trusted_proxies: Joi.array()
-    .items(Joi.string().trim().max(255))
-    .optional()
-    .messages({
-      'array.base': 'app.yaml "trusted_proxies" must be an array of proxy IPs or CIDR ranges',
-      'string.base': 'Each trusted proxy must be a string',
-    }),
+  trusted_proxies: Joi.array().items(Joi.string().trim().max(255)).optional().messages({
+    'array.base': 'app.yaml "trusted_proxies" must be an array of proxy IPs or CIDR ranges',
+    'string.base': 'Each trusted proxy must be a string',
+  }),
   oauth: Joi.object({
     issuer: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
       'string.uri': 'app.yaml "oauth.issuer" must be a valid URL',

@@ -3,14 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, it } from 'mocha';
 import { expect } from 'chai';
-import {
-  all,
-  closeDatabase,
-  get,
-  getDatabase,
-  initDatabase,
-  run,
-} from '../../libs/database.js';
+import { all, closeDatabase, get, getDatabase, initDatabase, run } from '../../libs/database.js';
 
 describe('database foundation', () => {
   let tempDir;
@@ -77,10 +70,11 @@ describe('database foundation', () => {
     initDatabase({ filename: dbPath });
 
     const now = new Date().toISOString();
-    run(
-      'INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)',
-      ['base_url', JSON.stringify('https://example.com'), now]
-    );
+    run('INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)', [
+      'base_url',
+      JSON.stringify('https://example.com'),
+      now,
+    ]);
 
     const row = get('SELECT key, value_json FROM app_settings WHERE key = ?', ['base_url']);
     expect(row).to.deep.equal({

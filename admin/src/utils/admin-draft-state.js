@@ -18,11 +18,11 @@ export function normalizeAppDraftForComparison(appConfig = {}) {
       access_token_ttl_seconds: normalizeString(oauth?.access_token_ttl_seconds),
       clients: Array.isArray(oauth?.clients)
         ? oauth.clients.map(client => ({
-          client_id: normalizeString(client?.client_id),
-          client_name: normalizeString(client?.client_name),
-          redirectUrisText: normalizeString(client?.redirectUrisText),
-          scope: normalizeString(client?.scope ?? 'mcp'),
-        }))
+            client_id: normalizeString(client?.client_id),
+            client_name: normalizeString(client?.client_name),
+            redirectUrisText: normalizeString(client?.redirectUrisText),
+            scope: normalizeString(client?.scope ?? 'mcp'),
+          }))
         : [],
     },
   };
@@ -31,11 +31,11 @@ export function normalizeAppDraftForComparison(appConfig = {}) {
 export function normalizeProvidersForComparison(providers = []) {
   return Array.isArray(providers)
     ? providers.map(provider => ({
-      name: normalizeString(provider?.name),
-      type: normalizeString(provider?.type || 'm3u'),
-      url: normalizeString(provider?.url),
-      epg: normalizeString(provider?.epg),
-    }))
+        name: normalizeString(provider?.name),
+        type: normalizeString(provider?.type || 'm3u'),
+        url: normalizeString(provider?.url),
+        epg: normalizeString(provider?.epg),
+      }))
     : [];
 }
 
@@ -49,36 +49,36 @@ export function normalizeOutputProfileDraftForComparison(outputProfileDraft = {}
 export function normalizeOutputProfileEntriesForComparison(entries = []) {
   return Array.isArray(entries)
     ? entries
-      .map(entry => ({
-        canonicalId: normalizeString(entry?.canonical?.id),
-        enabled: Boolean(entry?.enabled),
-        position: Number.isFinite(entry?.position) ? entry.position : 0,
-        guideNumberOverride: normalizeGuideNumberValue(entry?.guideNumberOverride),
-      }))
-      .sort((left, right) => left.canonicalId.localeCompare(right.canonicalId))
+        .map(entry => ({
+          canonicalId: normalizeString(entry?.canonical?.id),
+          enabled: Boolean(entry?.enabled),
+          position: Number.isFinite(entry?.position) ? entry.position : 0,
+          guideNumberOverride: normalizeGuideNumberValue(entry?.guideNumberOverride),
+        }))
+        .sort((left, right) => left.canonicalId.localeCompare(right.canonicalId))
     : [];
 }
 
 export function normalizeChannelWorkflowDraftsForComparison(channelDrafts = []) {
   return Array.isArray(channelDrafts)
     ? channelDrafts
-      .map(draft => ({
-        canonicalId: normalizeString(draft?.canonicalId),
-        customNameDraft: normalizeString(draft?.customNameDraft),
-        preferredSourceChannelId: normalizeString(draft?.preferredSourceChannelId),
-        selectedGuideBindingValue: normalizeString(draft?.selectedGuideBindingValue),
-      }))
-      .sort((left, right) => left.canonicalId.localeCompare(right.canonicalId))
+        .map(draft => ({
+          canonicalId: normalizeString(draft?.canonicalId),
+          customNameDraft: normalizeString(draft?.customNameDraft),
+          preferredSourceChannelId: normalizeString(draft?.preferredSourceChannelId),
+          selectedGuideBindingValue: normalizeString(draft?.selectedGuideBindingValue),
+        }))
+        .sort((left, right) => left.canonicalId.localeCompare(right.canonicalId))
     : [];
 }
 
 export function hasGuideNumberDraftChanges(entries = []) {
   return Array.isArray(entries)
     ? entries.some(
-      entry =>
-        normalizeGuideNumberValue(entry?.guideNumberOverrideDraft) !==
+        entry =>
+          normalizeGuideNumberValue(entry?.guideNumberOverrideDraft) !==
           normalizeGuideNumberValue(entry?.guideNumberOverride)
-    )
+      )
     : false;
 }
 
@@ -87,15 +87,17 @@ export function cloneAppDraft(appConfig = {}) {
     base_url: normalizeString(appConfig?.base_url),
     oauth: {
       issuer: normalizeString(appConfig?.oauth?.issuer),
-      authorization_code_ttl_seconds: normalizeString(appConfig?.oauth?.authorization_code_ttl_seconds),
+      authorization_code_ttl_seconds: normalizeString(
+        appConfig?.oauth?.authorization_code_ttl_seconds
+      ),
       access_token_ttl_seconds: normalizeString(appConfig?.oauth?.access_token_ttl_seconds),
       clients: Array.isArray(appConfig?.oauth?.clients)
         ? appConfig.oauth.clients.map(client => ({
-          client_id: normalizeString(client?.client_id),
-          client_name: normalizeString(client?.client_name),
-          redirectUrisText: normalizeString(client?.redirectUrisText),
-          scope: normalizeString(client?.scope ?? 'mcp'),
-        }))
+            client_id: normalizeString(client?.client_id),
+            client_name: normalizeString(client?.client_name),
+            redirectUrisText: normalizeString(client?.redirectUrisText),
+            scope: normalizeString(client?.scope ?? 'mcp'),
+          }))
         : [],
     },
   };
@@ -104,11 +106,11 @@ export function cloneAppDraft(appConfig = {}) {
 export function cloneProvidersDraft(providers = []) {
   return Array.isArray(providers)
     ? providers.map(provider => ({
-      name: normalizeString(provider?.name),
-      type: normalizeString(provider?.type || 'm3u'),
-      url: normalizeString(provider?.url),
-      epg: normalizeString(provider?.epg),
-    }))
+        name: normalizeString(provider?.name),
+        type: normalizeString(provider?.type || 'm3u'),
+        url: normalizeString(provider?.url),
+        epg: normalizeString(provider?.epg),
+      }))
     : [];
 }
 
@@ -126,22 +128,22 @@ export function cloneOutputProfileDraftState({
     },
     outputProfileEntries: Array.isArray(outputProfileEntries)
       ? outputProfileEntries.map(entry => ({
-        canonicalId: normalizeString(entry?.canonical?.id),
-        enabled: Boolean(entry?.enabled),
-        position: Number.isFinite(entry?.position) ? entry.position : 0,
-        guideNumberOverride: normalizeGuideNumberValue(entry?.guideNumberOverride),
-        guideNumberOverrideDraft: normalizeString(
-          entry?.guideNumberOverrideDraft ?? entry?.guideNumberOverride ?? ''
-        ),
-      }))
+          canonicalId: normalizeString(entry?.canonical?.id),
+          enabled: Boolean(entry?.enabled),
+          position: Number.isFinite(entry?.position) ? entry.position : 0,
+          guideNumberOverride: normalizeGuideNumberValue(entry?.guideNumberOverride),
+          guideNumberOverrideDraft: normalizeString(
+            entry?.guideNumberOverrideDraft ?? entry?.guideNumberOverride ?? ''
+          ),
+        }))
       : [],
     channelDrafts: Array.isArray(channelDrafts)
       ? channelDrafts.map(draft => ({
-        canonicalId: normalizeString(draft?.canonicalId),
-        customNameDraft: normalizeString(draft?.customNameDraft),
-        preferredSourceChannelId: normalizeString(draft?.preferredSourceChannelId),
-        selectedGuideBindingValue: normalizeString(draft?.selectedGuideBindingValue),
-      }))
+          canonicalId: normalizeString(draft?.canonicalId),
+          customNameDraft: normalizeString(draft?.customNameDraft),
+          preferredSourceChannelId: normalizeString(draft?.preferredSourceChannelId),
+          selectedGuideBindingValue: normalizeString(draft?.selectedGuideBindingValue),
+        }))
       : [],
   };
 }

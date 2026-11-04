@@ -251,11 +251,15 @@ describe('output profile routes', () => {
     });
 
     expect(updateResponse.data).to.include({ status: 'saved' });
-    expect(updateResponse.data.channels.find(entry => entry.canonical.id === first.canonical.id)).to.include({
+    expect(
+      updateResponse.data.channels.find(entry => entry.canonical.id === first.canonical.id)
+    ).to.include({
       position: 1,
       enabled: false,
     });
-    expect(updateResponse.data.channels.find(entry => entry.canonical.id === second.canonical.id)).to.include({
+    expect(
+      updateResponse.data.channels.find(entry => entry.canonical.id === second.canonical.id)
+    ).to.include({
       position: 0,
       enabled: true,
       guideNumberOverride: '900',
@@ -288,7 +292,9 @@ describe('output profile routes', () => {
 
     await parseM3UModule.parseAll();
 
-    const reloadedEntriesResponse = await axios.get(`${baseUrl}/api/output-profiles/default/entries`);
+    const reloadedEntriesResponse = await axios.get(
+      `${baseUrl}/api/output-profiles/default/entries`
+    );
     expect(
       reloadedEntriesResponse.data.channels.find(entry => entry.canonical.id === first.canonical.id)
     ).to.include({
@@ -296,7 +302,9 @@ describe('output profile routes', () => {
       enabled: false,
     });
     expect(
-      reloadedEntriesResponse.data.channels.find(entry => entry.canonical.id === second.canonical.id)
+      reloadedEntriesResponse.data.channels.find(
+        entry => entry.canonical.id === second.canonical.id
+      )
     ).to.include({
       position: 0,
       enabled: true,
@@ -305,24 +313,48 @@ describe('output profile routes', () => {
   });
 
   it('assigns an unbound discovered stream through the draft save and retains it after a rebuild', async () => {
-    const { data: { bindings } } = await axios.get(`${baseUrl}/api/canonical/bindings`);
+    const {
+      data: { bindings },
+    } = await axios.get(`${baseUrl}/api/canonical/bindings`);
     const first = bindings[0];
     const other = bindings.find(binding => binding.canonical.id !== first.canonical.id);
-    const { data: { bindings: guides } } = await axios.get(`${baseUrl}/api/canonical/guide-bindings`);
+    const {
+      data: { bindings: guides },
+    } = await axios.get(`${baseUrl}/api/canonical/guide-bindings`);
     const otherGuide = guides.find(binding => binding.canonical.id === other.canonical.id);
     const response = await axios.put(`${baseUrl}/api/output-profiles/default`, {
-      canonicalChannels: [{ id: first.canonical.id, preferredSourceChannelId: other.sourceChannel.id,
-        guideBinding: { sourceId: otherGuide.source.id, epgChannelId: otherGuide.epgChannelId } }],
+      canonicalChannels: [
+        {
+          id: first.canonical.id,
+          preferredSourceChannelId: other.sourceChannel.id,
+          guideBinding: { sourceId: otherGuide.source.id, epgChannelId: otherGuide.epgChannelId },
+        },
+      ],
     });
     expect(response.data.status).to.equal('saved');
     const service = await import('../../libs/canonical-channel-service.js');
     service.rebuildCanonicalChannels();
-    const updated = service.listChannelBindings().filter(binding => binding.canonical.id === first.canonical.id);
-    expect(updated.filter(binding => binding.isPreferredStream).map(binding => binding.sourceChannel.id))
-      .to.deep.equal([other.sourceChannel.id]);
+    const updated = service
+      .listChannelBindings()
+      .filter(binding => binding.canonical.id === first.canonical.id);
+    expect(
+      updated.filter(binding => binding.isPreferredStream).map(binding => binding.sourceChannel.id)
+    ).to.deep.equal([other.sourceChannel.id]);
+    expect(updated.find(binding => binding.sourceChannel.id === other.sourceChannel.id)).to.include(
+      {
+        bindingType: 'manual',
+        resolutionState: 'resolved',
+        isPreferredStream: true,
+      }
+    );
     expect(service.listCanonicalChannels()).to.have.lengthOf(2);
-    expect(service.listGuideBindings().find(binding => binding.canonical.id === first.canonical.id && binding.selected))
-      .to.include({ epgChannelId: otherGuide.epgChannelId }).and.have.nested.property('source.id', otherGuide.source.id);
+    expect(
+      service
+        .listGuideBindings()
+        .find(binding => binding.canonical.id === first.canonical.id && binding.selected)
+    )
+      .to.include({ epgChannelId: otherGuide.epgChannelId })
+      .and.have.nested.property('source.id', otherGuide.source.id);
   });
 
   it('atomically saves profile metadata, canonical edits, and output entries', async () => {
@@ -350,15 +382,21 @@ describe('output profile routes', () => {
 
     expect(response.data).to.include({ status: 'saved' });
     expect(response.data.profile).to.include({ name: 'Living Room', slug: 'default' });
-    expect(response.data.channels.find(entry => entry.canonical.id === first.canonical.id)).to.include({
+    expect(
+      response.data.channels.find(entry => entry.canonical.id === first.canonical.id)
+    ).to.include({
       position: 1,
       enabled: false,
     });
 
     const profiles = await axios.get(`${baseUrl}/api/output-profiles`);
-    expect(profiles.data.profiles.find(profile => profile.slug === 'default').name).to.equal('Living Room');
+    expect(profiles.data.profiles.find(profile => profile.slug === 'default').name).to.equal(
+      'Living Room'
+    );
     const channels = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
-    expect(channels.data.channels.find(channel => channel.canonicalId === second.canonical.id)).to.include({
+    expect(
+      channels.data.channels.find(channel => channel.canonicalId === second.canonical.id)
+    ).to.include({
       canonicalId: second.canonical.id,
       name: 'Canonical Two',
       guideNumber: '900',
@@ -389,7 +427,9 @@ describe('output profile routes', () => {
       'bedroom-tv',
     ]);
 
-    const copiedEntriesResponse = await axios.get(`${baseUrl}/api/output-profiles/bedroom-tv/entries`);
+    const copiedEntriesResponse = await axios.get(
+      `${baseUrl}/api/output-profiles/bedroom-tv/entries`
+    );
     expect(copiedEntriesResponse.data.channels).to.have.lengthOf(2);
 
     const updateResponse = await axios.patch(`${baseUrl}/api/output-profiles/bedroom-tv`, {
@@ -433,8 +473,12 @@ describe('output profile routes', () => {
     });
 
     const entriesResponse = await axios.get(`${baseUrl}/api/output-profiles/bedroom-tv/entries`);
-    const channelOne = entriesResponse.data.channels.find(entry => entry.canonical.tvg_id === 'output.1');
-    const channelTwo = entriesResponse.data.channels.find(entry => entry.canonical.tvg_id === 'output.2');
+    const channelOne = entriesResponse.data.channels.find(
+      entry => entry.canonical.tvg_id === 'output.1'
+    );
+    const channelTwo = entriesResponse.data.channels.find(
+      entry => entry.canonical.tvg_id === 'output.2'
+    );
 
     await axios.patch(`${baseUrl}/api/output-profiles/bedroom-tv/channels`, {
       channels: [
@@ -588,10 +632,7 @@ describe('output profile routes', () => {
   });
 
   it('keeps default aliases empty after an MCP update removes every effective guide number', async () => {
-    databaseModule
-      .getDatabase()
-      .prepare("UPDATE canonical_channels SET guide_number = ''")
-      .run();
+    databaseModule.getDatabase().prepare("UPDATE canonical_channels SET guide_number = ''").run();
 
     const entriesResponse = await axios.get(`${baseUrl}/api/output-profiles/default/entries`);
     const channels = entriesResponse.data.channels.map((entry, position) => ({
@@ -628,9 +669,12 @@ describe('output profile routes', () => {
       channel => channel.tvg_id === 'output.1'
     );
 
-    const updateResponse = await axios.patch(`${baseUrl}/api/canonical/channels/${canonicalChannel.id}`, {
-      customName: 'Living Room One',
-    });
+    const updateResponse = await axios.patch(
+      `${baseUrl}/api/canonical/channels/${canonicalChannel.id}`,
+      {
+        customName: 'Living Room One',
+      }
+    );
     expect(updateResponse.data.channel).to.include({
       id: canonicalChannel.id,
       name: 'Living Room One',
@@ -638,7 +682,9 @@ describe('output profile routes', () => {
       customName: 'Living Room One',
     });
 
-    const outputChannelsResponse = await axios.get(`${baseUrl}/api/output-profiles/default/channels`);
+    const outputChannelsResponse = await axios.get(
+      `${baseUrl}/api/output-profiles/default/channels`
+    );
     const renamedChannel = outputChannelsResponse.data.channels.find(
       channel => channel.canonicalId === canonicalChannel.id
     );
@@ -651,7 +697,9 @@ describe('output profile routes', () => {
     const stableStreamUrl = `${publicBaseUrl}/stream/channel/${encodeURIComponent(renamedChannel.sourceChannelId)}`;
 
     const lineupJsonResponse = await axios.get(`${baseUrl}/lineup.json`);
-    expect(lineupJsonResponse.data.find(channel => channel.GuideName === 'Living Room One')).to.include({
+    expect(
+      lineupJsonResponse.data.find(channel => channel.GuideName === 'Living Room One')
+    ).to.include({
       GuideName: 'Living Room One',
       URL: stableStreamUrl,
     });
@@ -672,7 +720,9 @@ describe('output profile routes', () => {
     const stableStreamResponse = await axios.get(stableStreamUrl, {
       responseType: 'arraybuffer',
     });
-    expect(Buffer.from(stableStreamResponse.data).toString()).to.equal('stable source-channel stream');
+    expect(Buffer.from(stableStreamResponse.data).toString()).to.equal(
+      'stable source-channel stream'
+    );
 
     const xmltvResponse = await axios.get(`${baseUrl}/xmltv.xml`);
     expect(xmltvResponse.data).to.include('<channel id="output.1">');

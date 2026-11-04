@@ -23,15 +23,19 @@ describe('streaming XMLTV ingestion', () => {
   });
 
   it('handles gzip-compressed XMLTV streams', async () => {
-    const xml = '<tv><channel id="one"/><programme channel="one" start="20260101000000 +0000"><title>Zipped</title></programme></tv>';
+    const xml =
+      '<tv><channel id="one"/><programme channel="one" start="20260101000000 +0000"><title>Zipped</title></programme></tv>';
     const records = await readXmltvRecords(decodeXmltvStream(source([gzipSync(xml)]), true));
     expect(records.channels).to.have.length(1);
     expect(records.programmes[0].title).to.equal('Zipped');
   });
 
   it('processes a representative large feed delivered in small chunks', async () => {
-    const programme = '<programme channel="one" start="20260101000000 +0000"><title>Show</title></programme>';
-    const records = await readXmltvRecords(source(['<tv>', ...Array(1000).fill(programme), '</tv>']));
+    const programme =
+      '<programme channel="one" start="20260101000000 +0000"><title>Show</title></programme>';
+    const records = await readXmltvRecords(
+      source(['<tv>', ...Array(1000).fill(programme), '</tv>'])
+    );
     expect(records.programmes).to.have.length(1000);
     expect(records.bytes).to.be.greaterThan(80 * 1024);
   });
