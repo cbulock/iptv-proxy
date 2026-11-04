@@ -452,6 +452,20 @@
                 />
               </div>
               <div id="usage-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">No active viewers detected.</div>
+              <h3 class="usage-history-heading">Playback history</h3>
+              <div
+                v-if="usageHistory.length"
+                class="table-scroll-shell"
+                role="region"
+                aria-label="Playback history table"
+                aria-describedby="usage-history-summary"
+              >
+                <div id="usage-history-summary" class="tab-meta-copy" role="status" aria-live="polite">
+                  Showing {{ usageHistory.length }} recent completed playback session{{ usageHistory.length === 1 ? '' : 's' }}.
+                </div>
+                <CindorDataTable row-id-key="id" density="compact" :columns="usageHistoryColumns" :rows="usageHistory" />
+              </div>
+              <div v-else class="tab-empty-copy" role="status" aria-live="polite">No completed playback yet.</div>
             </CindorTabPanel>
 
             <CindorTabPanel value="tasks" label="Tasks">
@@ -1293,6 +1307,7 @@ const state = reactive({
   loadingHealth: false,
   runningHealth: false,
   activeUsage: [],
+  usageHistory: [],
   loadingUsage: false,
   tasks: [],
   loadingTasks: false,
@@ -2147,9 +2162,13 @@ async function runHealth() {
 async function loadUsage() {
   try {
     state.loadingUsage = true;
-    const r = await apiFetch('/api/usage/active');
-    const j = await r.json();
+    const [r, historyResponse] = await Promise.all([
+      apiFetch('/api/usage/active'),
+      apiFetch('/api/usage/history'),
+    ]);
+    const [j, history] = await Promise.all([r.json(), historyResponse.json()]);
     if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to load usage'));
+    if (!historyResponse.ok) throw new Error(buildApiErrorMessage(history, 'Failed to load playback history'));
     const list = Array.isArray(j?.active) ? j.active : [];
     // Normalize and sort by startedAt desc
     state.activeUsage = list
@@ -2173,6 +2192,11 @@ async function loadUsage() {
         if (a.startedAtRaw > b.startedAtRaw) return -1;
         return 0;
       });
+    state.usageHistory = (Array.isArray(history?.history) ? history.history : []).map(u => ({
+      ...u,
+      startedAt: u.startedAt ? new Date(u.startedAt).toLocaleString() : '',
+      endedAt: u.endedAt ? new Date(u.endedAt).toLocaleString() : '',
+    }));
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
@@ -3625,6 +3649,7 @@ const {
   loadingChannelAuthoring,
   savingOutputProfile,
   activeUsage,
+  usageHistory,
   loadingUsage,
   tasks,
   loadingTasks,
@@ -4119,6 +4144,26 @@ const usageColumns = [
   { label: 'User Agent', key: 'userAgent', tooltip: true, truncate: true },
   { label: 'Started', key: 'startedAt', sortable: true },
   { label: 'Last Seen', key: 'lastSeenAt', sortable: true },
+];
+
+function formatUsageDuration(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remaining = total % 60;
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`
+    : `${minutes}:${String(remaining).padStart(2, '0')}`;
+}
+
+const usageHistoryColumns = [
+  { label: 'Viewer', key: 'userName', sortable: true },
+  { label: 'IP', key: 'ip', sortable: true },
+  { label: 'Channel ID', key: 'channelId', sortable: true },
+  { label: 'Name', key: 'name', sortable: true },
+  { label: 'Client', key: 'client' },
+  { label: 'Started', key: 'startedAt', sortable: true },
+  { label: 'Ended', key: 'endedAt', sortable: true },
+  { label: 'Duration', key: 'durationSeconds', sortable: true, cellRenderer: ({ row }) => formatUsageDuration(row.durationSeconds) },
 ];
 
 const taskColumns = [
@@ -4710,6 +4755,10 @@ body {
 .pane-toolbar,
 .preview-toolbar {
   margin-bottom: 0.75rem;
+}
+
+.usage-history-heading {
+  margin: 1.5rem 0 0.75rem;
 }
 
 .tab-empty-state {

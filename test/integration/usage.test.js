@@ -2,7 +2,12 @@ import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import express from 'express';
 import axios from 'axios';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import usageRouter, { registerUsage, touchUsage, unregisterUsage } from '../../server/usage.js';
+import { closeDatabase, getDatabase, initDatabase } from '../../libs/database.js';
+import { isAuthEnabled } from '../../server/auth.js';
 
 function makeApp() {
   const app = express();
@@ -24,6 +29,65 @@ async function startServer(app) {
 }
 
 describe('Usage Route Integration', () => {
+  it('persists completed playback across a database reopen', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'iptv-usage-'));
+    const filename = path.join(directory, 'usage.sqlite');
+    const { server, baseUrl } = await startServer(makeApp());
+    const channelId = `persist-${Date.now()}`;
+    try {
+      isAuthEnabled(); // Warm the auth cache before switching the shared database to this fixture.
+      initDatabase({ filename });
+      const key = await registerUsage({
+        ip: '10.0.0.8',
+        channelId,
+        userName: 'Viewer',
+        userAgent: 'VLC/3',
+      });
+      unregisterUsage(key);
+      expect(getDatabase().prepare('SELECT COUNT(*) AS count FROM playback_history').get().count).to.equal(1);
+      expect(getDatabase().prepare('SELECT channel_id FROM playback_history').get().channel_id).to.equal(channelId);
+      closeDatabase();
+      initDatabase({ filename });
+      expect(getDatabase().prepare('SELECT channel_id FROM playback_history').get().channel_id).to.equal(channelId);
+      const response = await axios.get(`${baseUrl}/api/usage/history`);
+      const entry = response.data.history.find(item => item.channelId === channelId);
+      expect(entry).to.include({ ip: '10.0.0.8', userName: 'Viewer', client: 'VLC' });
+      expect(entry.startedAt).to.be.a('string');
+      expect(entry.endedAt).to.be.a('string');
+      expect(entry.durationSeconds).to.be.a('number');
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+      closeDatabase();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('records an idle HLS viewer as one playback session', async () => {
+    initDatabase();
+    const { server, baseUrl } = await startServer(makeApp());
+    const channelId = `hls-${Date.now()}`;
+    try {
+      const first = await registerUsage({ ip: '10.0.0.9', channelId, transient: true });
+      const second = await registerUsage({ ip: '10.0.0.9', channelId, transient: true });
+      expect(second).to.equal(first);
+      const active = await axios.get(`${baseUrl}/api/usage/active`);
+      const entry = active.data.active.find(item => item.channelId === channelId);
+      expect(entry).to.exist;
+      // Force idle without waiting 45 seconds, then let the read endpoint prune it.
+      // A fake clock makes the existing lastSeen timestamp older than the idle cutoff.
+      const originalNow = Date.now;
+      try {
+        Date.now = () => originalNow() + 46_000;
+        await axios.get(`${baseUrl}/api/usage/history`);
+      } finally {
+        Date.now = originalNow;
+      }
+      const history = await axios.get(`${baseUrl}/api/usage/history`);
+      expect(history.data.history.filter(item => item.channelId === channelId)).to.have.length(1);
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
   it('keeps two authenticated viewers behind the same IP separate and exposes their names', async () => {
     const { server, baseUrl } = await startServer(makeApp());
     const channelId = `usage-identity-${Date.now()}`;

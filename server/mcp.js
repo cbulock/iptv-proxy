@@ -197,6 +197,12 @@ function buildWorkflowOverview() {
     server: SERVER_INFO,
     recommendedEntryTool: 'diagnose_agent_readiness',
     adminOnlyEndpoints: ['/api/usage/active', '/api/usage/history'],
+    playbackHistory: {
+      endpoint: '/api/usage/history',
+      access: 'admin session',
+      retention: 'most recent 1000 completed sessions in SQLite',
+      fields: ['id', 'ip', 'channelId', 'userId', 'userName', 'name', 'tvg_id', 'client', 'userAgent', 'startedAt', 'endedAt', 'durationSeconds'],
+    },
     toolGroups: {
       overview: ['get_agent_workflow', 'diagnose_agent_readiness', 'get_status'],
       discovery: [

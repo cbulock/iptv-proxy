@@ -497,7 +497,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     res.on('close', abortForDisconnectedClient);
     res.on('error', cleanup);
     const touchViewer = async () => {
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity });
+      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity, transient: true });
       touchUsage(usageKey);
     };
     const registerPersistentViewer = async () => {

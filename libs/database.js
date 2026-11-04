@@ -236,6 +236,26 @@ const MIGRATIONS = [
         ON oauth_refresh_tokens(expires_at);
     `,
   },
+  {
+    id: '008-playback-history',
+    sql: `
+      CREATE TABLE IF NOT EXISTS playback_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        user_name TEXT NOT NULL,
+        name TEXT NOT NULL,
+        tvg_id TEXT NOT NULL,
+        user_agent TEXT NOT NULL,
+        client TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL,
+        duration_seconds INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_playback_history_ended_at ON playback_history(ended_at DESC);
+    `,
+  },
 ];
 
 let database = null;
@@ -266,7 +286,12 @@ function ensureMigrationTable(db) {
 function applyMigrations(db) {
   ensureMigrationTable(db);
 
-  const applied = new Set(db.prepare('SELECT id FROM schema_migrations').all().map(row => row.id));
+  const applied = new Set(
+    db
+      .prepare('SELECT id FROM schema_migrations')
+      .all()
+      .map(row => row.id)
+  );
   const insertMigration = db.prepare(
     'INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)'
   );

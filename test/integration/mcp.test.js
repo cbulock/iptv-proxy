@@ -243,6 +243,10 @@ describe('MCP Route Integration', () => {
     expect(payload.data.phases).to.be.an('array').that.is.not.empty;
     expect(payload.data.toolGroups.overview).to.include('get_status');
     expect(payload.data.adminOnlyEndpoints).to.include('/api/usage/active');
+    expect(payload.data.playbackHistory).to.include({
+      endpoint: '/api/usage/history',
+      access: 'admin session',
+    });
   });
 
   it('diagnose_agent_readiness returns a readiness summary', async () => {
