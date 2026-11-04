@@ -595,24 +595,22 @@
                 @update:password-confirm="passwordForm.confirm = $event"
               />
             </CindorTabPanel>
-
             </CindorTabs>
           </div>
         </main>
       </CindorLayoutContent>
     </CindorLayout>
 
-    <CindorDialog v-model:open="showVideoModal" modal aria-labelledby="preview-dialog-title">
+    <CindorDialog v-model:open="showVideoModal" class="app-dialog" modal aria-labelledby="preview-dialog-title">
       <div v-if="previewWatchingChannel" class="dialog-body">
-        <div id="preview-dialog-title" class="dialog-title">
-          {{ previewWatchingChannel ? previewWatchingChannel.name : 'Watch Channel' }}
-        </div>
-        <div class="preview-player-shell">
+        <DialogHeading title-id="preview-dialog-title" :title="previewWatchingChannel.name" @close="showVideoModal = false" />
+        <div class="preview-player-shell" :class="{ 'has-error': state.playerError }">
           <video
             ref="videoPlayerEl"
             class="preview-player-video"
             controls
             autoplay
+            playsinline
             preload="auto"
             :aria-label="`Live preview for ${previewWatchingChannel?.name || 'selected channel'}`"
           />
@@ -796,6 +794,7 @@
 
     <CindorDialog
       v-model:open="channelDraftDialog.open"
+      class="app-dialog"
       modal
       aria-labelledby="channel-draft-title"
       aria-describedby="channel-draft-copy"
@@ -803,7 +802,7 @@
       @close="resolveChannelDraftDialog('cancel')"
     >
       <div class="dialog-body">
-        <h2 id="channel-draft-title">Unsaved channel changes</h2>
+        <DialogHeading title-id="channel-draft-title" title="Unsaved channel changes" @close="resolveChannelDraftDialog('cancel')" />
         <p id="channel-draft-copy">Save or discard your changes before {{ channelDraftDialog.action }}.</p>
         <CindorStack direction="horizontal" gap="sm" wrap>
           <CindorButton variant="ghost" @click="resolveChannelDraftDialog('cancel')">Cancel</CindorButton>
@@ -815,6 +814,7 @@
 
     <CindorDialog
       v-model:open="confirmDialog.open"
+      class="app-dialog"
       modal
       aria-labelledby="confirm-dialog-title"
       aria-describedby="confirm-dialog-copy"
@@ -822,7 +822,7 @@
       @close="resolveConfirmDialog(false)"
     >
       <div class="dialog-body">
-        <div id="confirm-dialog-title" class="dialog-title">{{ confirmDialog.title }}</div>
+        <DialogHeading title-id="confirm-dialog-title" :title="confirmDialog.title" @close="resolveConfirmDialog(false)" />
         <div id="confirm-dialog-copy" class="dialog-copy">{{ confirmDialog.content }}</div>
         <CindorStack direction="horizontal" justify="end" gap="sm" wrap role="group" aria-label="Confirmation actions">
           <CindorButton variant="ghost" @click="resolveConfirmDialog(false)">
@@ -843,6 +843,7 @@
 
     <CindorDialog
       v-model:open="textPromptDialog.open"
+      class="app-dialog"
       modal
       aria-labelledby="text-prompt-dialog-title"
       :aria-describedby="
@@ -871,7 +872,7 @@
         "
         @submit.prevent="submitTextPromptDialog"
       >
-        <div id="text-prompt-dialog-title" class="dialog-title">{{ textPromptDialog.title }}</div>
+        <DialogHeading title-id="text-prompt-dialog-title" :title="textPromptDialog.title" @close="resolveTextPromptDialog(null)" />
         <div
           v-if="textPromptDialog.description"
           id="text-prompt-dialog-description"
@@ -907,7 +908,8 @@
           {{ textPromptDialog.error }}
         </div>
         <CindorStack direction="horizontal" justify="end" gap="sm" wrap role="group" aria-label="Prompt actions">
-          <CindorButton type="button" variant="ghost" @click="resolveTextPromptDialog(null)">
+          <!-- Cindor distinguishes an explicit type attribute from its default button property. -->
+          <CindorButton :type.attr="'button'" variant="ghost" @click="resolveTextPromptDialog(null)">
             {{ textPromptDialog.negativeText }}
           </CindorButton>
           <CindorButton type="submit" :disabled="savingOutputProfile">
@@ -925,6 +927,7 @@ import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
 import AppSettingsPane from './components/AppSettingsPane.vue';
 import ChannelsPane from './components/ChannelsPane.vue';
+import DialogHeading from './components/DialogHeading.vue';
 import { buildChannelSourceOptions } from './utils/channel-source-options.js';
 import { runRefreshStages, observeNativePlayback, readAdminSection, parseBackupDate, formatDateTime, describeSchedule, resolveHealthChannel, guideRefreshProblem } from './utils/admin-experience.js';
 import { getProviderTypeOptions } from './utils/provider-type-options.js';
@@ -4692,6 +4695,7 @@ body {
 
 .admin-main {
   display: block;
+  min-width: 0;
 }
 
 .login-content {
@@ -4929,15 +4933,29 @@ body {
   overflow-x: auto;
 }
 
+.app-dialog::part(dialog) {
+  box-sizing: border-box;
+  width: min(800px, calc(100vw - 24px));
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
 .dialog-body {
   display: grid;
   gap: 1rem;
-  min-width: min(720px, 90vw);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.dialog-title {
-  font-size: 1.1rem;
-  font-weight: 600;
+.dialog-body > * {
+  min-width: 0;
+}
+
+.app-dialog::part(close-button) {
+  display: none;
 }
 
 .dialog-copy {
@@ -5174,16 +5192,12 @@ body {
     padding: 18px;
   }
 
-  .preview-toolbar :deep(cindor-select) {
+  .preview-toolbar cindor-select {
     flex: 1 1 220px;
   }
 
-  .preview-toolbar :deep(cindor-input) {
+  .preview-toolbar cindor-input {
     flex: 1 1 260px;
-  }
-
-  .dialog-body {
-    min-width: min(680px, 92vw);
   }
 }
 
@@ -5210,9 +5224,9 @@ body {
     width: 100%;
   }
 
-  .preview-toolbar :deep(cindor-select),
-  .preview-toolbar :deep(cindor-input),
-  .preview-toolbar :deep(cindor-button) {
+  .preview-toolbar cindor-select,
+  .preview-toolbar cindor-input,
+  .preview-toolbar cindor-button {
     width: 100%;
   }
 
@@ -5220,7 +5234,7 @@ body {
     width: 100%;
   }
 
-  .pane-toolbar :deep(cindor-button) {
+  .pane-toolbar cindor-button {
     width: 100%;
   }
 
@@ -5265,11 +5279,6 @@ body {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
-
-  .dialog-body {
-    min-width: min(100%, 90vw);
-  }
-
 }
 
 @media (max-width: 700px) {
@@ -5291,6 +5300,21 @@ body {
 
   .preview-player-overlay {
     padding: 1rem !important;
+  }
+
+  .preview-player-shell.has-error .preview-player-video {
+    display: none;
+  }
+
+  .preview-player-overlay {
+    position: static;
+  }
+
+  .preview-player-error-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
   }
 
   .dialog-link,
@@ -5330,5 +5354,12 @@ body {
   .admin-tabs { padding: 10px; }
   .mobile-section-picker { padding: 10px 10px 0; gap: 10px; grid-template-columns: auto minmax(0, 1fr); align-items: center; }
   .page-heading { margin-top: 0; margin-bottom: 12px; }
+  /* Keep controls readable and avoid focus zoom on phone browsers. */
+  .admin-shell input, .admin-shell select,
+  .app-dialog input, .app-dialog select,
+  .channel-editor input, .channel-editor select,
+  cindor-input::part(control), cindor-select::part(control) {
+    font-size: 16px;
+  }
 }
 </style>

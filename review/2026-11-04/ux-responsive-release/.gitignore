@@ -1,0 +1,6 @@
+source/
+source.zip
+public/
+release.tar
+build.log
+*.json

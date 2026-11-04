@@ -393,9 +393,9 @@
       </div>
     </CindorDialog>
 
-    <CindorDialog v-model:open="reviewOpen" modal aria-labelledby="changes-review-title">
+    <CindorDialog v-model:open="reviewOpen" class="change-review-dialog" modal aria-labelledby="changes-review-title">
       <div class="change-review">
-        <h2 id="changes-review-title">Review changes</h2>
+        <DialogHeading title-id="changes-review-title" title="Review changes" @close="reviewOpen = false" />
         <p>Nothing below is applied until you save changes.</p>
         <section v-if="review.profile.length">
           <h3>Lineup settings</h3>
@@ -430,6 +430,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { CindorButton, CindorDialog, CindorInput, CindorSelect, CindorSwitch } from 'cindor-ui-vue';
 import ChannelSourceSelect from './ChannelSourceSelect.vue';
+import DialogHeading from './DialogHeading.vue';
 import {
   matchesChannelSearch,
   getChannelSetupIssues,
@@ -607,7 +608,8 @@ watch(activeRow, row => {
 </script>
 
 <style scoped>
-.channel-editor-dialog::part(close-button) {
+.channel-editor-dialog::part(close-button),
+.change-review-dialog::part(close-button) {
   display: none;
 }
 .editor-close {
