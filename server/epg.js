@@ -407,7 +407,8 @@ function buildGuideSelection(outputChannels) {
   const bindingsBySource = new Map();
   for (const binding of selectedGuideBindings) {
     const outputChannel = outputChannelsByCanonicalId.get(binding.canonical.id);
-    const outputChannelId = outputChannel?.tvg_id || binding.canonical.tvg_id || outputChannel?.name;
+    const outputChannelId =
+      outputChannel?.tvg_id || binding.canonical.tvg_id || outputChannel?.name;
     if (!outputChannelId) {
       continue;
     }
@@ -439,12 +440,7 @@ export async function setupEPGRoutes(app) {
 
   // Initialize EPG cache with TTL from config (default: 6 hours)
   const epgTTL = (appConfig.cache?.epg_ttl ?? 21600) * 1000; // Convert seconds to milliseconds
-  epgCache = cacheManager.createCache(
-    'epg',
-    epgTTL,
-    MAX_EPG_CACHE_ENTRIES,
-    MAX_EPG_CACHE_BYTES
-  );
+  epgCache = cacheManager.createCache('epg', epgTTL, MAX_EPG_CACHE_ENTRIES, MAX_EPG_CACHE_BYTES);
   console.log(`EPG cache initialized with TTL: ${epgTTL / 1000}s`);
 
   async function fetchAndMergeEPGs(revision) {
@@ -511,10 +507,9 @@ export async function setupEPGRoutes(app) {
             });
             const encoding = String(response.headers['content-encoding'] || '').toLowerCase();
             const compressed = encoding.includes('gzip') || /\.gz(?:$|\?)/i.test(sourceUrl);
-            sourceRecords = await readXmltvRecords(
-              decodeXmltvStream(response.data, compressed),
-              { maxBytes: MAX_XMLTV_INPUT_BYTES }
-            );
+            sourceRecords = await readXmltvRecords(decodeXmltvStream(response.data, compressed), {
+              maxBytes: MAX_XMLTV_INPUT_BYTES,
+            });
           } catch (httpErr) {
             sourceFetchError = new Error(`Failed to fetch EPG: ${httpErr.message}`);
             const lastGood = lastGoodSourceXml.get(sourceName);
@@ -526,7 +521,10 @@ export async function setupEPGRoutes(app) {
           }
         }
 
-        if (!sourceRecords || (!sourceRecords.channels.length && !sourceRecords.programmes.length)) {
+        if (
+          !sourceRecords ||
+          (!sourceRecords.channels.length && !sourceRecords.programmes.length)
+        ) {
           throw new Error('Empty or invalid EPG data received');
         }
 
@@ -535,37 +533,35 @@ export async function setupEPGRoutes(app) {
         }
 
         if (sourceRecords.channels.length) {
-          const channels = []
-            .concat(sourceRecords.channels)
-            .flatMap(channel => {
-              if (!channel) {
-                return [];
-              }
-
-              const selectedRules = bindingRulesByInputId.get(channel['@_id']);
-              if (selectedRules) {
-                return selectedRules.map(selectedRule => {
-                  const rewrittenChannel = cloneNode(channel);
-                  rewrittenChannel['@_id'] = selectedRule.outputChannelId;
-                  if (!getDisplayNameValues(rewrittenChannel).includes(selectedRule.outputName)) {
-                    rewrittenChannel['display-name'] = [selectedRule.outputName].concat(
-                      [].concat(rewrittenChannel['display-name'] || [])
-                    );
-                  }
-                  return rewrittenChannel;
-                });
-              }
-
-              const displayNames = getDisplayNameValues(channel);
-              if (
-                fallbackTvgIds.has(channel['@_id']) ||
-                displayNames.some(name => fallbackNames.has(name))
-              ) {
-                return [channel];
-              }
-
+          const channels = [].concat(sourceRecords.channels).flatMap(channel => {
+            if (!channel) {
               return [];
-            });
+            }
+
+            const selectedRules = bindingRulesByInputId.get(channel['@_id']);
+            if (selectedRules) {
+              return selectedRules.map(selectedRule => {
+                const rewrittenChannel = cloneNode(channel);
+                rewrittenChannel['@_id'] = selectedRule.outputChannelId;
+                if (!getDisplayNameValues(rewrittenChannel).includes(selectedRule.outputName)) {
+                  rewrittenChannel['display-name'] = [selectedRule.outputName].concat(
+                    [].concat(rewrittenChannel['display-name'] || [])
+                  );
+                }
+                return rewrittenChannel;
+              });
+            }
+
+            const displayNames = getDisplayNameValues(channel);
+            if (
+              fallbackTvgIds.has(channel['@_id']) ||
+              displayNames.some(name => fallbackNames.has(name))
+            ) {
+              return [channel];
+            }
+
+            return [];
+          });
 
           merged.tv.channel.push(...channels);
 
@@ -581,31 +577,29 @@ export async function setupEPGRoutes(app) {
 
         let sourceProgrammeCount = 0;
         if (sourceRecords.programmes.length) {
-          const programmes = []
-            .concat(sourceRecords.programmes)
-            .flatMap(programme => {
-              if (!programme) {
-                return [];
-              }
-
-              const selectedRules = bindingRulesByInputId.get(programme['@_channel']);
-              if (selectedRules) {
-                return selectedRules.map(selectedRule => {
-                  const rewrittenProgramme = cloneNode(programme);
-                  rewrittenProgramme['@_channel'] = selectedRule.outputChannelId;
-                  return rewrittenProgramme;
-                });
-              }
-
-              if (
-                fallbackTvgIds.has(programme['@_channel']) ||
-                fallbackNames.has(programme['@_channel'])
-              ) {
-                return [programme];
-              }
-
+          const programmes = [].concat(sourceRecords.programmes).flatMap(programme => {
+            if (!programme) {
               return [];
-            });
+            }
+
+            const selectedRules = bindingRulesByInputId.get(programme['@_channel']);
+            if (selectedRules) {
+              return selectedRules.map(selectedRule => {
+                const rewrittenProgramme = cloneNode(programme);
+                rewrittenProgramme['@_channel'] = selectedRule.outputChannelId;
+                return rewrittenProgramme;
+              });
+            }
+
+            if (
+              fallbackTvgIds.has(programme['@_channel']) ||
+              fallbackNames.has(programme['@_channel'])
+            ) {
+              return [programme];
+            }
+
+            return [];
+          });
 
           merged.tv.programme.push(...programmes);
           sourceProgrammeCount = programmes.length;
@@ -692,8 +686,8 @@ export async function setupEPGRoutes(app) {
     const errors = sourceResults.filter(result => result.status === 'error');
 
     const noUsableSources = usableSources.length === 0;
-    const emptyRefresh = allChannels.length > 0 &&
-      merged.tv.programme.length === 0 && guideProgrammeIndex.size > 0;
+    const emptyRefresh =
+      allChannels.length > 0 && merged.tv.programme.length === 0 && guideProgrammeIndex.size > 0;
     if (noUsableSources || emptyRefresh) {
       const message = noUsableSources
         ? epgSources.length
@@ -732,9 +726,12 @@ export async function setupEPGRoutes(app) {
       if (!nextProgrammeIndex.has(channelId)) nextProgrammeIndex.set(channelId, []);
       nextProgrammeIndex.get(channelId).push(programme);
     }
-    const nextIcons = new Map(merged.tv.channel.map(channel => [
-      channel['@_id'], [].concat(channel.icon || [])[0]?.['@_src'] || '',
-    ]));
+    const nextIcons = new Map(
+      merged.tv.channel.map(channel => [
+        channel['@_id'],
+        [].concat(channel.icon || [])[0]?.['@_src'] || '',
+      ])
+    );
     mergedEPG = nextMergedEPG;
     guideProgrammeIndex = nextProgrammeIndex;
     guideIcons = nextIcons;

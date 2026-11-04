@@ -201,7 +201,20 @@ function buildWorkflowOverview() {
       endpoint: '/api/usage/history',
       access: 'admin session',
       retention: 'most recent 1000 completed sessions in SQLite',
-      fields: ['id', 'ip', 'channelId', 'userId', 'userName', 'name', 'tvg_id', 'client', 'userAgent', 'startedAt', 'endedAt', 'durationSeconds'],
+      fields: [
+        'id',
+        'ip',
+        'channelId',
+        'userId',
+        'userName',
+        'name',
+        'tvg_id',
+        'client',
+        'userAgent',
+        'startedAt',
+        'endedAt',
+        'durationSeconds',
+      ],
     },
     toolGroups: {
       overview: ['get_agent_workflow', 'diagnose_agent_readiness', 'get_status'],
@@ -869,9 +882,9 @@ function createMcpServer() {
           preferredSourceChannelId: channel.preferred_source_channel_id,
           guideBinding: channel.guide_binding
             ? {
-              sourceId: channel.guide_binding.source_id,
-              epgChannelId: channel.guide_binding.epg_channel_id,
-            }
+                sourceId: channel.guide_binding.source_id,
+                epgChannelId: channel.guide_binding.epg_channel_id,
+              }
             : undefined,
         })),
         channels,
@@ -1158,7 +1171,10 @@ function createMcpServer() {
 
         return createSuccess('set_canonical_channel_guide_binding', binding, {
           summary: `Updated guide binding for canonical channel ${canonical_id}.`,
-          sideEffects: ['Guide binding selection was updated; a persistent binding is created if needed.', ...epgRefreshSideEffect()],
+          sideEffects: [
+            'Guide binding selection was updated; a persistent binding is created if needed.',
+            ...epgRefreshSideEffect(),
+          ],
           nextSuggestedTools: ['list_guide_bindings', 'get_guide', 'diagnose_agent_readiness'],
         });
       } catch (error) {

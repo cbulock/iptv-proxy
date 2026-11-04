@@ -25,7 +25,10 @@ export default function getBaseUrl(req) {
       (req.get('X-Forwarded-Ssl') === 'on' ? 'https' : req.protocol);
   const host = isExpressRequest
     ? req.host || req.get('host')
-    : req.get('X-Forwarded-Host') || req.get('host') || req.hostname || (req.headers && req.headers.host);
+    : req.get('X-Forwarded-Host') ||
+      req.get('host') ||
+      req.hostname ||
+      (req.headers && req.headers.host);
 
   // If we still cannot determine a host, return empty string so callers can handle it explicitly
   if (!host) {

@@ -437,7 +437,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         upstreamUrl = hdUrl.toString();
       } catch (_err) {
         // URL parse error; proceed with original URL without modification
-        console.warn('[stream] %s/%s: could not append ?streamMode=hls to upstream URL: %s', source, name, channel.original_url);
+        console.warn(
+          '[stream] %s/%s: could not append ?streamMode=hls to upstream URL: %s',
+          source,
+          name,
+          channel.original_url
+        );
       }
     }
 
@@ -497,12 +502,23 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     res.on('close', abortForDisconnectedClient);
     res.on('error', cleanup);
     const touchViewer = async () => {
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity, transient: true });
+      usageKey = await registerUsage({
+        ip: String(ip),
+        channelId: String(channelId),
+        userAgent,
+        ...identity,
+        transient: true,
+      });
       touchUsage(usageKey);
     };
     const registerPersistentViewer = async () => {
       if (usageKey) return;
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity });
+      usageKey = await registerUsage({
+        ip: String(ip),
+        channelId: String(channelId),
+        userAgent,
+        ...identity,
+      });
       usageInterval = setInterval(() => touchUsage(usageKey), 10000);
       res.on('finish', cleanup);
     };
@@ -529,10 +545,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       //   HDHomeRun channels, preventing readStreamToUtf8 from buffering a continuous
       //   MPEG-TS feed when firmware redirects to an .m3u8-named URL.
       const isHlsResponse = requestedHlsMode
-        // Content-type only (empty URL disables the URL-hint path inside isLikelyHlsPlaylist).
-        // URL hints are intentionally skipped here: we appended ?streamMode=hls to the
-        // upstream URL, so those hints would always match regardless of the actual format.
-        ? isLikelyHlsPlaylist(contentType, '')
+        ? // Content-type only (empty URL disables the URL-hint path inside isLikelyHlsPlaylist).
+          // URL hints are intentionally skipped here: we appended ?streamMode=hls to the
+          // upstream URL, so those hints would always match regardless of the actual format.
+          isLikelyHlsPlaylist(contentType, '')
         : !channel.hdhomerun && isLikelyHlsPlaylist(contentType, responseUrl);
 
       console.info(

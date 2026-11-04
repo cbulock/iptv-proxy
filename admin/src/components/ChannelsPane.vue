@@ -5,7 +5,8 @@
         <h1 id="channels-title">Channels</h1>
         <p>Choose which channels appear in your player.</p>
       </div>
-      <label class="lineup-picker"><span>Lineup</span>
+      <label class="lineup-picker"
+        ><span>Lineup</span>
         <CindorSelect
           :model-value="selectedProfileSlug"
           :value.attr="selectedProfileSlug"
@@ -21,49 +22,56 @@
     </header>
 
     <div class="lineup-tools">
-      <span v-if="profileEndpointInfo" class="publication"><span class="status-dot" :class="{ active: profileEndpointInfo?.available }" />{{
+      <span v-if="profileEndpointInfo" class="publication"
+        ><span class="status-dot" :class="{ active: profileEndpointInfo?.available }" />{{
           profileEndpointInfo?.available ? 'Saved lineup enabled' : 'Saved lineup disabled'
-        }}</span>
+        }}</span
+      >
       <span
         v-if="selectedProfile && selectedProfile.enabled !== savedProfile.enabled"
         class="pending"
-        >Availability change pending</span>
+        >Availability change pending</span
+      >
       <details>
         <summary>Lineup settings</summary>
         <div class="disclosure-content settings-fields">
-          <label><span>Lineup name</span><CindorInput
+          <label
+            ><span>Lineup name</span
+            ><CindorInput
               :model-value="selectedProfile?.name || ''"
               :disabled="busy || !selectedProfile"
               aria-label="Lineup name"
               @update:model-value="updateProfileName"
           /></label>
-          <label v-if="selectedProfile && !selectedProfile.isDefault" class="switch-label"><CindorSwitch
+          <label v-if="selectedProfile && !selectedProfile.isDefault" class="switch-label"
+            ><CindorSwitch
               :model-value="selectedProfile.enabled"
               :disabled="busy"
               aria-label="Lineup enabled"
               @update:model-value="updateProfileEnabled"
-            />Enable this lineup</label>
+            />Enable this lineup</label
+          >
           <p v-else class="help">The default lineup is always enabled and cannot be deleted.</p>
           <p class="help">Name and availability changes take effect when you save.</p>
           <div class="button-row">
             <CindorButton variant="ghost" :disabled="busy" @click="createProfile">
-New lineup
-</CindorButton>
+              New lineup
+            </CindorButton>
             <CindorButton
               variant="ghost"
               :disabled="busy || !selectedProfile"
               @click="duplicateProfile"
-              >
-Duplicate lineup
-</CindorButton>
+            >
+              Duplicate lineup
+            </CindorButton>
             <CindorButton
               v-if="selectedProfile && !selectedProfile.isDefault"
               variant="ghost"
               :disabled="busy"
               @click="deleteProfile"
-              >
-Delete lineup
-</CindorButton>
+            >
+              Delete lineup
+            </CindorButton>
           </div>
         </div>
       </details>
@@ -76,14 +84,15 @@ Delete lineup
             :key="endpoint.label"
             class="endpoint"
           >
-            <strong>{{ endpointNames[endpoint.label] || endpoint.label }}</strong><code>{{ endpoint.url }}</code>
+            <strong>{{ endpointNames[endpoint.label] || endpoint.label }}</strong
+            ><code>{{ endpoint.url }}</code>
             <CindorButton
               variant="ghost"
               :aria-label="`Copy ${endpointNames[endpoint.label] || endpoint.label} URL`"
               @click="copyEndpoint(endpoint)"
-              >
-Copy
-</CindorButton>
+            >
+              Copy
+            </CindorButton>
           </div>
           <p v-if="copyStatus" role="status">{{ copyStatus }}</p>
         </div>
@@ -92,25 +101,25 @@ Copy
         <summary>Maintenance</summary>
         <div class="disclosure-content maintenance">
           <div>
-            <CindorButton variant="ghost" :disabled="actionsBusy || loading" @click="refreshChannels">
-Refresh view
-</CindorButton>
+            <CindorButton
+              variant="ghost"
+              :disabled="actionsBusy || loading"
+              @click="refreshChannels"
+            >
+              Refresh view
+            </CindorButton>
             <p>Reread saved channel settings.</p>
           </div>
           <div>
             <CindorButton variant="ghost" :disabled="busy" @click="reloadChannels">
-{{
-              reloadingChannels ? 'Rescanning…' : 'Rescan sources'
-            }}
-</CindorButton>
+              {{ reloadingChannels ? 'Rescanning…' : 'Rescan sources' }}
+            </CindorButton>
             <p>Discover channels again from your sources.</p>
           </div>
           <div>
             <CindorButton variant="ghost" :disabled="busy" @click="reloadEPG">
-{{
-              reloadingEPG ? 'Updating…' : 'Update TV guide'
-            }}
-</CindorButton>
+              {{ reloadingEPG ? 'Updating…' : 'Update TV guide' }}
+            </CindorButton>
             <p>Download programme schedules. Your drafts are kept.</p>
           </div>
         </div>
@@ -120,8 +129,8 @@ Refresh view
     <div v-if="loadError" class="error-message" role="alert">
       <p>{{ loadError }}</p>
       <CindorButton variant="ghost" :disabled="actionsBusy || loading" @click="refreshChannels">
-Retry refresh
-</CindorButton>
+        Retry refresh
+      </CindorButton>
     </div>
     <div v-if="saveError" class="error-message" role="alert">
       {{ saveError }} Your changes are kept for correction.
@@ -134,8 +143,8 @@ Retry refresh
         placeholder="Search name, channel number, or source"
       />
       <CindorButton v-if="search || filter !== 'all'" variant="ghost" @click="clearFilters">
-Clear filters
-</CindorButton>
+        Clear filters
+      </CindorButton>
     </div>
     <div class="filters" role="group" aria-label="Show channels">
       <CindorButton
@@ -145,9 +154,9 @@ Clear filters
         :class="{ selected: filter === item.value }"
         :aria-pressed="filter === item.value"
         @click="filter = item.value"
-        >
-{{ item.label }} <span class="filter-count">{{ item.count }}</span>
-</CindorButton>
+      >
+        {{ item.label }} <span class="filter-count">{{ item.count }}</span>
+      </CindorButton>
     </div>
     <p class="results" role="status">
       {{
@@ -198,10 +207,12 @@ Clear filters
                   ? `Channel ${row.effectiveGuideNumber}`
                   : 'No channel number'
               "
-              >{{ row.effectiveGuideNumber || '—' }}</span>
+              >{{ row.effectiveGuideNumber || '—' }}</span
+            >
           </td>
           <td class="identity-cell">
-            <strong>{{ displayName(row) }}</strong><span v-if="row.hasDraftChanges" class="pending changed-label">Changed</span>
+            <strong>{{ displayName(row) }}</strong
+            ><span v-if="row.hasDraftChanges" class="pending changed-label">Changed</span>
             <div
               :id="`setup-${row.id}`"
               class="row-help"
@@ -215,7 +226,10 @@ Clear filters
             <div class="mobile-source">{{ sourceLabel(row) }}</div>
           </td>
           <td class="source-cell">
-            <span>{{ sourceLabel(row) }}</span><small v-if="row.sourceBindings.length > 1">{{ row.sourceBindings.length }} bound streams</small>
+            <span>{{ sourceLabel(row) }}</span
+            ><small v-if="row.sourceBindings.length > 1"
+              >{{ row.sourceBindings.length }} bound streams</small
+            >
           </td>
           <td class="edit-cell">
             <CindorButton
@@ -224,9 +238,9 @@ Clear filters
               :data-edit-channel="row.id"
               :aria-label="`Edit ${displayName(row)}`"
               @click="openEditor(row)"
-              >
-{{ row.setupIssues.length ? 'Set up' : 'Edit' }}
-</CindorButton>
+            >
+              {{ row.setupIssues.length ? 'Set up' : 'Edit' }}
+            </CindorButton>
           </td>
         </tr>
       </tbody>
@@ -234,19 +248,18 @@ Clear filters
 
     <div v-if="profileDirty" class="save-bar" aria-label="Unsaved changes">
       <div>
-        <strong>{{ changedCount }} channel{{ changedCount === 1 ? '' : 's' }} changed</strong><span v-if="review.profile.length" class="help"> · Lineup settings changed</span>
+        <strong>{{ changedCount }} channel{{ changedCount === 1 ? '' : 's' }} changed</strong
+        ><span v-if="review.profile.length" class="help"> · Lineup settings changed</span>
         <p class="help">Changes take effect when you save.</p>
       </div>
       <div class="button-row">
         <CindorButton variant="ghost" :disabled="busy" @click="reviewOpen = true">
-Review changes
-</CindorButton><CindorButton variant="ghost" :disabled="busy" @click="discardChanges">
-Discard
-</CindorButton><CindorButton :disabled="busy" @click="saveProfileChanges">
-{{
-          savingProfile ? 'Saving…' : 'Save changes'
-        }}
-</CindorButton>
+          Review changes </CindorButton
+        ><CindorButton variant="ghost" :disabled="busy" @click="discardChanges">
+          Discard </CindorButton
+        ><CindorButton :disabled="busy" @click="saveProfileChanges">
+          {{ savingProfile ? 'Saving…' : 'Save changes' }}
+        </CindorButton>
       </div>
     </div>
 
@@ -265,7 +278,12 @@ Discard
             <p class="eyebrow">CHANNEL SETTINGS</p>
             <h2 id="channel-editor-title">{{ displayName(activeRow) }}</h2>
           </div>
-          <button type="button" class="editor-close" aria-label="Close channel settings" @click="closeEditor">
+          <button
+            type="button"
+            class="editor-close"
+            aria-label="Close channel settings"
+            @click="closeEditor"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </header>
@@ -275,17 +293,21 @@ Discard
         <section aria-labelledby="lineup-fields-title" class="editor-section">
           <h3 id="lineup-fields-title">In this lineup</h3>
           <p class="help">Only affects {{ selectedProfile?.name }}.</p>
-          <label class="switch-label"><CindorSwitch
+          <label class="switch-label"
+            ><CindorSwitch
               :model-value="activeRow.outputEnabled"
               :disabled="busy || activeRow.enableToggleDisabled"
               aria-label="Include in this lineup"
               :aria-describedby="activeRow.enableToggleDisabled ? 'editor-include-help' : undefined"
               @update:model-value="value => updateOutputEnabled(activeRow.id, value)"
-            />Include in lineup</label>
+            />Include in lineup</label
+          >
           <p v-if="activeRow.enableToggleDisabled" id="editor-include-help" class="needs-setup">
             Assign a channel number to include this channel.
           </p>
-          <label class="editor-field"><span>Channel number</span><CindorInput
+          <label class="editor-field"
+            ><span>Channel number</span
+            ><CindorInput
               ref="numberInput"
               :model-value="activeRow.guideNumberOverrideInput"
               :placeholder="activeRow.guideNumber || 'e.g. 42'"
@@ -308,15 +330,17 @@ Discard
               variant="ghost"
               :disabled="busy"
               @click="resetNumber"
-              >
-Use default number
-</CindorButton>
+            >
+              Use default number
+            </CindorButton>
           </div>
         </section>
         <section aria-labelledby="shared-fields-title" class="editor-section">
           <h3 id="shared-fields-title">Shared across all lineups</h3>
           <p class="scope-notice">Changes here apply to this channel in every lineup.</p>
-          <label class="editor-field"><span>Display name</span><CindorInput
+          <label class="editor-field"
+            ><span>Display name</span
+            ><CindorInput
               :model-value="activeRow.customNameDraft"
               :placeholder="activeRow.baseName"
               :disabled="busy"
@@ -326,18 +350,16 @@ Use default number
               @blur="saveCanonicalName(activeRow.id)"
           /></label>
           <p id="editor-name-help" class="help">Leave blank to use {{ activeRow.baseName }}.</p>
-          <label class="editor-field"><span>Stream source</span><CindorSelect
+          <label class="editor-field"
+            ><span>Stream source</span
+            ><CindorSelect
               :model-value="activeRow.preferredSourceChannelId || ''"
               :value.attr="activeRow.preferredSourceChannelId || ''"
               :disabled="busy || !activeStreamOptions.length"
               aria-label="Stream source"
               @update:model-value="value => updatePreferredStream(activeRow.id, value)"
               ><option value="" disabled>
-                {{
-                  activeStreamOptions.length
-                    ? 'Choose a stream'
-                    : 'No stream available'
-                }}
+                {{ activeStreamOptions.length ? 'Choose a stream' : 'No stream available' }}
               </option>
               <option
                 v-for="option in activeStreamOptions"
@@ -345,7 +367,9 @@ Use default number
                 :value="option.value"
               >
                 {{ option.label }}
-              </option></CindorSelect></label>
+              </option></CindorSelect
+            ></label
+          >
           <p class="help">
             {{
               activeStreamOptions.length === 1
@@ -353,7 +377,9 @@ Use default number
                 : 'Choose a discovered stream for playback. Current channel matches appear first.'
             }}
           </p>
-          <label class="editor-field"><span>TV guide source</span><CindorSelect
+          <label class="editor-field"
+            ><span>TV guide source</span
+            ><CindorSelect
               :model-value="activeRow.selectedGuideBindingValue || ''"
               :value.attr="activeRow.selectedGuideBindingValue || ''"
               :disabled="busy || !activeGuideOptions.length"
@@ -361,11 +387,7 @@ Use default number
               aria-describedby="editor-guide-help"
               @update:model-value="value => updateGuideBinding(activeRow.id, value)"
               ><option value="" disabled>
-                {{
-                  activeGuideOptions.length
-                    ? 'Choose a TV guide'
-                    : 'No TV guide available'
-                }}
+                {{ activeGuideOptions.length ? 'Choose a TV guide' : 'No TV guide available' }}
               </option>
               <option
                 v-for="option in activeGuideOptions"
@@ -373,7 +395,9 @@ Use default number
                 :value="option.value"
               >
                 {{ option.label }}
-              </option></CindorSelect></label>
+              </option></CindorSelect
+            ></label
+          >
           <p id="editor-guide-help" class="help">
             Choose a discovered guide reference. Current channel matches appear first. This selects
             programme information, not the channel number, and does not guarantee schedule coverage.
@@ -395,7 +419,8 @@ Use default number
           </dl>
         </details>
         <footer class="editor-footer">
-          <span class="help">Done keeps your draft. Save changes from the channel list.</span><CindorButton @click="closeEditor">Done</CindorButton>
+          <span class="help">Done keeps your draft. Save changes from the channel list.</span
+          ><CindorButton @click="closeEditor">Done</CindorButton>
         </footer>
       </div>
     </CindorDialog>
@@ -424,11 +449,10 @@ Use default number
           </div>
         </section>
         <div class="button-row">
-          <CindorButton variant="ghost" @click="reviewOpen = false">Keep editing</CindorButton><CindorButton :disabled="busy" @click="saveFromReview">
-{{
-            savingProfile ? 'Saving…' : 'Save changes'
-          }}
-</CindorButton>
+          <CindorButton variant="ghost" @click="reviewOpen = false">Keep editing</CindorButton
+          ><CindorButton :disabled="busy" @click="saveFromReview">
+            {{ savingProfile ? 'Saving…' : 'Save changes' }}
+          </CindorButton>
         </div>
       </div>
     </CindorDialog>
@@ -537,15 +561,22 @@ const activeRow = computed(() => enrichedRows.value.find(row => row.id === edito
 // Reorder shared option references only for the open editor.
 const activeStreamOptions = computed(() => {
   const bound = new Set(activeRow.value?.sourceBindings.map(binding => binding.sourceChannel?.id));
-  return (activeRow.value?.preferredStreamOptions || []).slice().sort((a, b) =>
-    Number(bound.has(b.value)) - Number(bound.has(a.value)));
+  return (activeRow.value?.preferredStreamOptions || [])
+    .slice()
+    .sort((a, b) => Number(bound.has(b.value)) - Number(bound.has(a.value)));
 });
 const activeGuideOptions = computed(() => {
   const bound = new Set(activeRow.value?.boundGuideValues);
-  return (activeRow.value?.guideBindingOptions || []).slice().sort((a, b) =>
-    Number(bound.has(b.value)) - Number(bound.has(a.value)));
+  return (activeRow.value?.guideBindingOptions || [])
+    .slice()
+    .sort((a, b) => Number(bound.has(b.value)) - Number(bound.has(a.value)));
 });
-const streamLabels = computed(() => new Map((props.rows[0]?.preferredStreamOptions || []).map(option => [option.value, option.label])));
+const streamLabels = computed(
+  () =>
+    new Map(
+      (props.rows[0]?.preferredStreamOptions || []).map(option => [option.value, option.label])
+    )
+);
 const changedCount = computed(() => props.rows.filter(row => row.hasDraftChanges).length);
 const review = computed(() =>
   buildChannelChangeReview(props.rows, props.selectedProfile || {}, props.savedProfile)
@@ -916,7 +947,11 @@ summary:focus-visible {
   box-sizing: border-box;
 }
 :deep(cindor-dialog::part(dialog)) {
- padding: 12px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow: hidden; box-sizing: border-box;
+  padding: 12px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .editor-header {
   display: flex;

@@ -12,7 +12,9 @@ const HISTORY_MAX = 1000;
 let channelsCache = [];
 
 async function loadChannels() {
-  const row = usageDatabase().prepare('SELECT channels_json FROM channel_snapshots WHERE id = 1').get();
+  const row = usageDatabase()
+    .prepare('SELECT channels_json FROM channel_snapshots WHERE id = 1')
+    .get();
   channelsCache = row?.channels_json ? JSON.parse(row.channels_json) : [];
 }
 

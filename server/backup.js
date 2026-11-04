@@ -12,12 +12,8 @@ import { invalidateCache } from '../libs/channels-cache.js';
 import { invalidateLineupCaches } from './lineup.js';
 import { invalidateEPGCache } from './epg.js';
 import { ensureAppConfigSeeded } from '../libs/app-settings-service.js';
-import {
-  ensureSourcesSeeded,
-} from '../libs/source-service.js';
-import {
-  ensureChannelMapSeeded,
-} from '../libs/channel-map-service.js';
+import { ensureSourcesSeeded } from '../libs/source-service.js';
+import { ensureChannelMapSeeded } from '../libs/channel-map-service.js';
 
 const router = express.Router();
 
@@ -115,9 +111,7 @@ function exportPrimaryConfigsFromDatabase() {
       };
       return map;
     }, {});
-  const appRow = db
-    .prepare("SELECT value_json FROM app_settings WHERE key = 'app-config'")
-    .get();
+  const appRow = db.prepare("SELECT value_json FROM app_settings WHERE key = 'app-config'").get();
   let appConfig = {};
   try {
     appConfig = appRow?.value_json ? JSON.parse(appRow.value_json) : {};
@@ -148,10 +142,12 @@ async function restoreBackupSnapshot(backupDir, filesInBackup, hasDatabaseSnapsh
 
     const targetFiles = hasDatabaseSnapshot
       ? [
-        ...LEGACY_COMPAT_CONFIG_FILES.filter(file => files.includes(file)),
-        ...DATABASE_RUNTIME_FILES,
-      ]
-      : files.filter(file => [...PRIMARY_CONFIG_FILES, ...LEGACY_COMPAT_CONFIG_FILES].includes(file));
+          ...LEGACY_COMPAT_CONFIG_FILES.filter(file => files.includes(file)),
+          ...DATABASE_RUNTIME_FILES,
+        ]
+      : files.filter(file =>
+          [...PRIMARY_CONFIG_FILES, ...LEGACY_COMPAT_CONFIG_FILES].includes(file)
+        );
 
     if (hasDatabaseSnapshot) {
       closeDatabase();
@@ -187,7 +183,11 @@ async function restoreBackupSnapshot(backupDir, filesInBackup, hasDatabaseSnapsh
           yaml.stringify(configs.providers),
           'utf8'
         );
-        await fs.writeFile(getConfigPath('channel-map.yaml'), yaml.stringify(configs.channelMap), 'utf8');
+        await fs.writeFile(
+          getConfigPath('channel-map.yaml'),
+          yaml.stringify(configs.channelMap),
+          'utf8'
+        );
         await fs.writeFile(getConfigPath('app.yaml'), yaml.stringify(configs.appConfig), 'utf8');
         for (const file of PRIMARY_CONFIG_FILES) {
           if (!restored.includes(file)) {

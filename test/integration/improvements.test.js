@@ -63,7 +63,11 @@ describe('Config Backup API', () => {
     // Write some dummy config files
     await fs.writeFile(path.join(tmpDir, 'm3u.yaml'), 'urls: []\n', 'utf8');
     await fs.writeFile(path.join(tmpDir, 'epg.yaml'), 'urls: []\n', 'utf8');
-    await fs.writeFile(path.join(tmpDir, 'app.yaml'), 'base_url: "https://yaml.example.com"\n', 'utf8');
+    await fs.writeFile(
+      path.join(tmpDir, 'app.yaml'),
+      'base_url: "https://yaml.example.com"\n',
+      'utf8'
+    );
 
     // Point config loader to our temp dir
     process.env.CONFIG_PATH = tmpDir;
@@ -144,20 +148,21 @@ describe('Config Backup API', () => {
   it('restores SQLite-backed app state from the database snapshot instead of stale YAML exports', async () => {
     databaseModule.initDatabase();
     databaseModule.run('DELETE FROM app_settings');
-    databaseModule.run(
-      'INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)',
-      [
-        'app-config',
-        JSON.stringify({ base_url: 'https://db-backed.example.com' }),
-        new Date().toISOString(),
-      ]
-    );
+    databaseModule.run('INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)', [
+      'app-config',
+      JSON.stringify({ base_url: 'https://db-backed.example.com' }),
+      new Date().toISOString(),
+    ]);
     databaseModule.closeDatabase();
 
     const createRes = await axios.post(`${baseUrl}/api/config/backup`);
     const { name } = createRes.data;
 
-    await fs.writeFile(path.join(tmpDir, 'app.yaml'), 'base_url: "https://stale-yaml.example.com"\n', 'utf8');
+    await fs.writeFile(
+      path.join(tmpDir, 'app.yaml'),
+      'base_url: "https://stale-yaml.example.com"\n',
+      'utf8'
+    );
     appSettingsService.replaceAppConfig({ base_url: 'https://mutated-after-backup.example.com' });
     databaseModule.closeDatabase();
 
@@ -186,7 +191,15 @@ describe('Config Backup API', () => {
     db.prepare(
       `INSERT INTO sources (id, name, type, playlist_url, enabled, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(sourceId, 'Restore Source', 'm3u', 'http://restore.example/playlist.m3u', 1, timestamp, timestamp);
+    ).run(
+      sourceId,
+      'Restore Source',
+      'm3u',
+      'http://restore.example/playlist.m3u',
+      1,
+      timestamp,
+      timestamp
+    );
     db.prepare(
       `INSERT INTO source_channels (id, source_id, name, last_seen_at)
        VALUES (?, ?, ?, ?)`
@@ -219,7 +232,9 @@ describe('Config Backup API', () => {
     db.prepare('DELETE FROM canonical_channels WHERE id = ?').run(canonicalId);
     databaseModule.closeDatabase();
 
-    const restoreRes = await axios.post(`${baseUrl}/api/config/backups/${createRes.data.name}/restore`);
+    const restoreRes = await axios.post(
+      `${baseUrl}/api/config/backups/${createRes.data.name}/restore`
+    );
     expect(restoreRes.status).to.equal(200);
 
     expect(
@@ -640,9 +655,8 @@ describe('GET /channels?mapped_only=true', () => {
     process.env.DATA_PATH = tmpDir;
     closeDatabase();
 
-    const { loadChannelSnapshot, replaceChannelSnapshot } = await import(
-      '../../libs/channel-snapshot-service.js'
-    );
+    const { loadChannelSnapshot, replaceChannelSnapshot } =
+      await import('../../libs/channel-snapshot-service.js');
 
     originalChannels = loadChannelSnapshot();
     hadOriginalChannels = originalChannels.length > 0;
@@ -737,9 +751,8 @@ describe('GET /channels?mapped_only=true with HDHomeRun channels', () => {
     process.env.DATA_PATH = tmpDir;
     closeDatabase();
 
-    const { loadChannelSnapshot, replaceChannelSnapshot } = await import(
-      '../../libs/channel-snapshot-service.js'
-    );
+    const { loadChannelSnapshot, replaceChannelSnapshot } =
+      await import('../../libs/channel-snapshot-service.js');
 
     originalChannels = loadChannelSnapshot();
     hadOriginalChannels = originalChannels.length > 0;

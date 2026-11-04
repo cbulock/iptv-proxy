@@ -34,12 +34,14 @@ async function ensureCanonicalModelReady() {
 
   const db = getDatabase();
   const loadCounts = () =>
-    db.prepare(
-      `SELECT
+    db
+      .prepare(
+        `SELECT
           (SELECT COUNT(*) FROM source_channels) AS source_channels,
           (SELECT COUNT(*) FROM canonical_channels) AS canonical_channels,
           (SELECT COUNT(*) FROM output_profile_channels) AS output_profile_channels`
-    ).get();
+      )
+      .get();
 
   const counts = loadCounts();
   if (
@@ -59,10 +61,7 @@ async function ensureCanonicalModelReady() {
         if (current.canonical_channels === 0) {
           rebuildCanonicalChannels();
         }
-        if (
-          current.canonical_channels === 0 ||
-          loadCounts().output_profile_channels === 0
-        ) {
+        if (current.canonical_channels === 0 || loadCounts().output_profile_channels === 0) {
           syncAllOutputProfiles();
         }
       })
@@ -348,10 +347,7 @@ router.patch('/api/output-profiles/:slug/channels', requireAuth, async (req, res
       if (typeof channel.enabled !== 'boolean') {
         return res.status(400).json({ error: 'enabled must be a boolean' });
       }
-      if (
-        channel.guideNumberOverride !== null &&
-        typeof channel.guideNumberOverride !== 'string'
-      ) {
+      if (channel.guideNumberOverride !== null && typeof channel.guideNumberOverride !== 'string') {
         return res.status(400).json({ error: 'guideNumberOverride must be a string or null' });
       }
     }
@@ -361,9 +357,9 @@ router.patch('/api/output-profiles/:slug/channels', requireAuth, async (req, res
       return res.status(404).json({ error: 'Output profile not found' });
     }
     if (updatedChannels?.error === 'entry-not-found') {
-      return res
-        .status(404)
-        .json({ error: `Output profile entry not found for canonical channel ${updatedChannels.canonicalId}` });
+      return res.status(404).json({
+        error: `Output profile entry not found for canonical channel ${updatedChannels.canonicalId}`,
+      });
     }
 
     invalidateLineupCaches();
@@ -373,7 +369,9 @@ router.patch('/api/output-profiles/:slug/channels', requireAuth, async (req, res
 
     res.json({ status: 'saved', channels: updatedChannels });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update output profile channels', detail: err.message });
+    res
+      .status(500)
+      .json({ error: 'Failed to update output profile channels', detail: err.message });
   }
 });
 
@@ -400,13 +398,19 @@ router.put('/api/output-profiles/:slug', requireAuth, async (req, res) => {
       return res.status(404).json({ error: `Canonical channel not found: ${result.canonicalId}` });
     }
     if (result?.error === 'binding-not-found' || result?.error === 'guide-binding-not-found') {
-      return res.status(404).json({ error: `Channel binding not found for canonical channel ${result.canonicalId}` });
+      return res
+        .status(404)
+        .json({ error: `Channel binding not found for canonical channel ${result.canonicalId}` });
     }
     if (result?.error === 'entry-not-found') {
-      return res.status(404).json({ error: `Output profile entry not found for canonical channel ${result.canonicalId}` });
+      return res.status(404).json({
+        error: `Output profile entry not found for canonical channel ${result.canonicalId}`,
+      });
     }
     if (result?.error === 'invalid-entry') {
-      return res.status(400).json({ error: `Invalid output profile entry for canonical channel ${result.canonicalId}` });
+      return res.status(400).json({
+        error: `Invalid output profile entry for canonical channel ${result.canonicalId}`,
+      });
     }
 
     invalidateLineupCaches();

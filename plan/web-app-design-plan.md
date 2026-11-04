@@ -154,16 +154,16 @@ Build the web app around these first-class entities:
 
 ## Comparison: Target Design vs Current App
 
-| Area | Current design | Better target design | Needed change |
-| --- | --- | --- | --- |
-| Source model | Flat provider entries with optional EPG | Explicit source records with connectivity, auth, health, capabilities | Expand provider model into a richer source domain |
-| Channel model | Parsed channel objects + flat mapping overrides | Source channels + canonical channels + bindings | Add first-class canonical/binding layer |
-| Mapping | YAML override file keyed by name/tvg-id | Reviewable assignment workflow with suggestions and conflicts | Replace file-only mapping UX with workflow-based channel assignment |
-| Output | One merged lineup/guide | Managed output profiles with stable publication | Add output profile/publish layer |
-| Persistence | YAML + generated `channels.json` + in-memory state | Durable app state for syncs, bindings, drafts, and publishing | Introduce a stronger persistence model |
-| Admin UI | Large single-file admin console | Modular workflow-oriented app | Split `App.vue` and redesign navigation/features |
-| Config architecture | Mixed `providers.yaml` + legacy `m3u.yaml`/`epg.yaml` | One coherent config/domain model | Remove config drift and consolidate APIs |
-| Operations | Good base observability | Rich sync, publish, and assignment lifecycle visibility | Extend status/history around ingest and publish lifecycle |
+| Area                | Current design                                        | Better target design                                                  | Needed change                                                       |
+| ------------------- | ----------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Source model        | Flat provider entries with optional EPG               | Explicit source records with connectivity, auth, health, capabilities | Expand provider model into a richer source domain                   |
+| Channel model       | Parsed channel objects + flat mapping overrides       | Source channels + canonical channels + bindings                       | Add first-class canonical/binding layer                             |
+| Mapping             | YAML override file keyed by name/tvg-id               | Reviewable assignment workflow with suggestions and conflicts         | Replace file-only mapping UX with workflow-based channel assignment |
+| Output              | One merged lineup/guide                               | Managed output profiles with stable publication                       | Add output profile/publish layer                                    |
+| Persistence         | YAML + generated `channels.json` + in-memory state    | Durable app state for syncs, bindings, drafts, and publishing         | Introduce a stronger persistence model                              |
+| Admin UI            | Large single-file admin console                       | Modular workflow-oriented app                                         | Split `App.vue` and redesign navigation/features                    |
+| Config architecture | Mixed `providers.yaml` + legacy `m3u.yaml`/`epg.yaml` | One coherent config/domain model                                      | Remove config drift and consolidate APIs                            |
+| Operations          | Good base observability                               | Rich sync, publish, and assignment lifecycle visibility               | Extend status/history around ingest and publish lifecycle           |
 
 ## Recommended Changes to the Current App
 

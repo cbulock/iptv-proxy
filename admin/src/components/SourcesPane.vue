@@ -9,7 +9,9 @@
       role="group"
       aria-label="Source actions"
     >
-      <CindorButton variant="ghost" aria-describedby="sources-toolbar-summary" @click="addProvider">Add Source</CindorButton>
+      <CindorButton variant="ghost" aria-describedby="sources-toolbar-summary" @click="addProvider"
+        >Add Source</CindorButton
+      >
       <CindorButton
         :disabled="savingProviders || !providersCanSave"
         :aria-busy="savingProviders ? 'true' : undefined"
@@ -83,7 +85,12 @@
         <span v-if="epgValidation.valid" class="epg-validation-state success">✓ Valid</span>
         <span v-else class="epg-validation-state danger">✗ Invalid</span>
       </div>
-      <div id="sources-epg-validation-summary" class="collection-summary" role="status" aria-live="polite">
+      <div
+        id="sources-epg-validation-summary"
+        class="collection-summary"
+        role="status"
+        aria-live="polite"
+      >
         {{ epgValidationSummary }}
       </div>
       <div class="epg-validation-summary" role="list" aria-label="EPG validation summary">
@@ -93,7 +100,8 @@
           <span
             v-if="epgValidation.summary?.validChannels !== epgValidation.summary?.channels"
             class="epg-validation-state warning"
-            >({{ epgValidation.summary?.validChannels || 0 }} valid)</span>
+            >({{ epgValidation.summary?.validChannels || 0 }} valid)</span
+          >
         </div>
         <div role="listitem">
           <span class="epg-validation-label">Programmes:</span>
@@ -101,7 +109,8 @@
           <span
             v-if="epgValidation.summary?.validProgrammes !== epgValidation.summary?.programmes"
             class="epg-validation-state warning"
-            >({{ epgValidation.summary?.validProgrammes || 0 }} valid)</span>
+            >({{ epgValidation.summary?.validProgrammes || 0 }} valid)</span
+          >
         </div>
         <div role="listitem">
           <span class="epg-validation-label">Errors:</span>
@@ -110,7 +119,8 @@
               'epg-validation-metric-value',
               epgValidation.summary?.errorCount > 0 ? 'danger' : 'success',
             ]"
-            >{{ epgValidation.summary?.errorCount || 0 }}</span>
+            >{{ epgValidation.summary?.errorCount || 0 }}</span
+          >
         </div>
         <div role="listitem">
           <span class="epg-validation-label">Sources:</span>
@@ -119,7 +129,11 @@
               'epg-validation-metric-value',
               epgValidation.sources?.failed > 0 ? 'danger' : 'success',
             ]"
-            >{{ epgValidation.sources?.valid || 0 }}/{{ epgValidation.sources?.total || 0 }} loaded</span>
+            >{{ epgValidation.sources?.valid || 0 }}/{{
+              epgValidation.sources?.total || 0
+            }}
+            loaded</span
+          >
         </div>
         <div role="listitem">
           <span class="epg-validation-label">Warnings:</span>
@@ -128,7 +142,8 @@
               'epg-validation-metric-value',
               epgValidation.summary?.warningCount > 0 ? 'warning' : 'success',
             ]"
-            >{{ epgValidation.summary?.warningCount || 0 }}</span>
+            >{{ epgValidation.summary?.warningCount || 0 }}</span
+          >
         </div>
       </div>
       <div
@@ -144,19 +159,18 @@
         <div id="epg-failed-sources-summary" class="validation-summary">
           {{ epgFailedSourcesSummary }}
         </div>
-        <div
-          role="list"
-          aria-label="Failed EPG sources"
-        >
+        <div role="list" aria-label="Failed EPG sources">
           <div
-          v-for="(source, idx) in epgValidation.sources.results.filter(result => result.status === 'error')"
-          :key="idx"
-          class="epg-validation-source"
-          role="listitem"
-        >
-          <div>{{ source.source }} — {{ source.error }}</div>
-          <div class="epg-validation-url">{{ source.url }}</div>
-        </div>
+            v-for="(source, idx) in epgValidation.sources.results.filter(
+              result => result.status === 'error'
+            )"
+            :key="idx"
+            class="epg-validation-source"
+            role="listitem"
+          >
+            <div>{{ source.source }} — {{ source.error }}</div>
+            <div class="epg-validation-url">{{ source.url }}</div>
+          </div>
         </div>
       </div>
       <div
@@ -191,19 +205,16 @@
           <div id="epg-missing-summary" class="validation-summary">
             {{ epgMissingCoverageSummary }}
           </div>
-          <div
-            role="list"
-            aria-label="Channels missing EPG"
-          >
+          <div role="list" aria-label="Channels missing EPG">
             <div
-            v-for="(channel, idx) in epgValidation.coverage.channelsWithoutEPG"
-            :key="idx"
-            class="epg-validation-message"
-            role="listitem"
-          >
-            {{ channel.name }}
-            <span class="epg-validation-meta">({{ channel.tvg_id || 'no tvg-id' }})</span>
-          </div>
+              v-for="(channel, idx) in epgValidation.coverage.channelsWithoutEPG"
+              :key="idx"
+              class="epg-validation-message"
+              role="listitem"
+            >
+              {{ channel.name }}
+              <span class="epg-validation-meta">({{ channel.tvg_id || 'no tvg-id' }})</span>
+            </div>
           </div>
         </div>
       </div>
@@ -220,20 +231,20 @@
         </div>
         <div role="list" aria-label="EPG validation errors">
           <div
-          v-for="(error, idx) in epgValidation.errors.slice(0, 10)"
-          :key="idx"
-          class="epg-validation-message"
-          role="listitem"
-        >
-          {{ error }}
-        </div>
+            v-for="(error, idx) in epgValidation.errors.slice(0, 10)"
+            :key="idx"
+            class="epg-validation-message"
+            role="listitem"
+          >
+            {{ error }}
+          </div>
           <div
-          v-if="epgValidation.errors.length > 10"
-          class="epg-validation-message"
-          role="listitem"
-        >
-          ... and {{ epgValidation.errors.length - 10 }} more
-        </div>
+            v-if="epgValidation.errors.length > 10"
+            class="epg-validation-message"
+            role="listitem"
+          >
+            ... and {{ epgValidation.errors.length - 10 }} more
+          </div>
         </div>
       </div>
       <div
@@ -249,24 +260,29 @@
         </div>
         <div role="list" aria-label="EPG validation warnings">
           <div
-          v-for="(warning, idx) in epgValidation.warnings.slice(0, 10)"
-          :key="idx"
-          class="epg-validation-message"
-          role="listitem"
-        >
-          {{ warning }}
-        </div>
+            v-for="(warning, idx) in epgValidation.warnings.slice(0, 10)"
+            :key="idx"
+            class="epg-validation-message"
+            role="listitem"
+          >
+            {{ warning }}
+          </div>
           <div
-          v-if="epgValidation.warnings.length > 10"
-          class="epg-validation-message"
-          role="listitem"
-        >
-          ... and {{ epgValidation.warnings.length - 10 }} more
-        </div>
+            v-if="epgValidation.warnings.length > 10"
+            class="epg-validation-message"
+            role="listitem"
+          >
+            ... and {{ epgValidation.warnings.length - 10 }} more
+          </div>
         </div>
       </div>
     </div>
-    <div v-if="Array.isArray(providers) && providers.length" class="data-collection" role="region" aria-label="Configured sources">
+    <div
+      v-if="Array.isArray(providers) && providers.length"
+      class="data-collection"
+      role="region"
+      aria-label="Configured sources"
+    >
       <div class="collection-summary" role="status" aria-live="polite">
         {{ providerCountSummary }}
       </div>
@@ -304,7 +320,9 @@ const props = defineProps({
 
 defineEmits(['cell-edit', 'row-action']);
 
-const showGettingStarted = computed(() => !Array.isArray(props.providers) || props.providers.length === 0);
+const showGettingStarted = computed(
+  () => !Array.isArray(props.providers) || props.providers.length === 0
+);
 const providerCountSummary = computed(
   () => `${props.providers.length} source${props.providers.length === 1 ? '' : 's'} configured.`
 );
@@ -365,10 +383,12 @@ const epgMissingCoverageSummary = computed(() => {
   return `${coverage.withoutEPG} channel${coverage.withoutEPG === 1 ? '' : 's'} below are still missing guide matches.`;
 });
 const epgErrorsSummary = computed(
-  () => `${props.epgValidation?.errors?.length || 0} validation error${props.epgValidation?.errors?.length === 1 ? '' : 's'} listed below.`
+  () =>
+    `${props.epgValidation?.errors?.length || 0} validation error${props.epgValidation?.errors?.length === 1 ? '' : 's'} listed below.`
 );
 const epgWarningsSummary = computed(
-  () => `${props.epgValidation?.warnings?.length || 0} validation warning${props.epgValidation?.warnings?.length === 1 ? '' : 's'} listed below.`
+  () =>
+    `${props.epgValidation?.warnings?.length || 0} validation warning${props.epgValidation?.warnings?.length === 1 ? '' : 's'} listed below.`
 );
 </script>
 
@@ -589,6 +609,5 @@ const epgWarningsSummary = computed(
   .epg-validation-summary {
     grid-template-columns: 1fr;
   }
-
 }
 </style>

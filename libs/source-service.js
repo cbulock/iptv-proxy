@@ -87,10 +87,7 @@ function replaceSourcesInternal(providersConfig, { writeConfig = true } = {}) {
     for (const source of existingSources) {
       // A name is a legacy fallback only when it is unambiguous. Current
       // provider exports include IDs, so renamed providers retain their IDs.
-      existingByName.set(
-        source.name,
-        existingByName.has(source.name) ? null : source
-      );
+      existingByName.set(source.name, existingByName.has(source.name) ? null : source);
     }
     const retainedIds = new Set();
 
@@ -124,8 +121,7 @@ function replaceSourcesInternal(providersConfig, { writeConfig = true } = {}) {
     const sourceRows = [];
 
     for (const provider of nextProviders) {
-      const existing =
-        existingById.get(provider.id) || existingByName.get(provider.name) || null;
+      const existing = existingById.get(provider.id) || existingByName.get(provider.name) || null;
       if (existing && retainedIds.has(existing.id)) {
         throw new Error(`Provider ${provider.name} is specified more than once`);
       }

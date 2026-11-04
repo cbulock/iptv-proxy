@@ -10,15 +10,30 @@ describe('Published projection boundaries', () => {
     const channel = { canonicalId: 'ocho-test', name: 'ESPN: The Ocho', tvg_id: '' };
     const snapshot = {
       revision: 'fallback-test',
-      programmes: new Map([[channel.name, [{
-        '@_start': '20261025200000 -0400',
-        '@_stop': '20261025210000 -0400',
-        title: 'Web guide test',
-      }]]]),
+      programmes: new Map([
+        [
+          channel.name,
+          [
+            {
+              '@_start': '20261025200000 -0400',
+              '@_stop': '20261025210000 -0400',
+              title: 'Web guide test',
+            },
+          ],
+        ],
+      ]),
     };
-    const page = publishedGuidePage([channel], snapshot, { hours: 24 }, Date.parse('2026-10-25T23:30:00Z'));
+    const page = publishedGuidePage(
+      [channel],
+      snapshot,
+      { hours: 24 },
+      Date.parse('2026-10-25T23:30:00Z')
+    );
     expect(page.programmes).to.have.length(1);
-    expect(page.programmes[0]).to.include({ channelId: channel.canonicalId, title: 'Web guide test' });
+    expect(page.programmes[0]).to.include({
+      channelId: channel.canonicalId,
+      title: 'Web guide test',
+    });
   });
   it('allows private addresses only for exact configured source hosts and rejects unsafe DNS answers', async () => {
     const sources = [

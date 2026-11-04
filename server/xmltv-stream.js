@@ -63,7 +63,11 @@ export async function readXmltvRecords(input, limits = {}) {
       const openingEnd = buffer.indexOf('>');
       const selfClosing = openingEnd !== -1 && /\/\s*$/.test(buffer.slice(0, openingEnd));
       const closeIndex = selfClosing ? -1 : buffer.toLowerCase().indexOf(closeTag);
-      const endIndex = selfClosing ? openingEnd + 1 : closeIndex === -1 ? -1 : closeIndex + closeTag.length;
+      const endIndex = selfClosing
+        ? openingEnd + 1
+        : closeIndex === -1
+          ? -1
+          : closeIndex + closeTag.length;
 
       if (endIndex === -1) {
         if (Buffer.byteLength(buffer) > maxElementBytes) {

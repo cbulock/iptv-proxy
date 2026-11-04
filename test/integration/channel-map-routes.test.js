@@ -146,7 +146,9 @@ describe('channel map SQLite-backed routes', () => {
     expect(bulkResponse.status).to.equal(200);
     expect(bulkResponse.data).to.deep.equal({ status: 'saved', count: 2 });
 
-    const deleteResponse = await axios.delete(`${baseUrl}/api/mapping/${encodeURIComponent('Source Beta')}`);
+    const deleteResponse = await axios.delete(
+      `${baseUrl}/api/mapping/${encodeURIComponent('Source Beta')}`
+    );
     expect(deleteResponse.status).to.equal(200);
     expect(deleteResponse.data).to.deep.equal({ status: 'deleted', key: 'Source Beta' });
 

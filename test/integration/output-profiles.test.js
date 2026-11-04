@@ -271,7 +271,10 @@ describe('output profile persistence', () => {
     const canonicalChannel = canonicalService.listCanonicalChannels()[0];
     const sourceTwoGuideBinding = canonicalService
       .listGuideBindings()
-      .find(binding => binding.canonical.id === canonicalChannel.id && binding.source.name === 'IPTV Two');
+      .find(
+        binding =>
+          binding.canonical.id === canonicalChannel.id && binding.source.name === 'IPTV Two'
+      );
     canonicalService.setCanonicalChannelGuideBinding(
       canonicalChannel.id,
       sourceTwoGuideBinding.source.id,
@@ -352,14 +355,19 @@ describe('output profile persistence', () => {
       )
       .get();
     const firstCanonical = canonicalService.listCanonicalChannels()[0];
-    const defaultProfile = db.prepare("SELECT id FROM output_profiles WHERE slug = 'default'").get();
+    const defaultProfile = db
+      .prepare("SELECT id FROM output_profiles WHERE slug = 'default'")
+      .get();
     const now = new Date().toISOString();
     const secondCanonicalId = 'fanout-canonical-two';
 
-    db.prepare('UPDATE sources SET epg_url = ? WHERE id = ?').run(pathToFileURL(epgPath).href, source.id);
-    db.prepare('UPDATE channel_bindings SET is_preferred_stream = 0 WHERE canonical_channel_id = ?').run(
-      firstCanonical.id
+    db.prepare('UPDATE sources SET epg_url = ? WHERE id = ?').run(
+      pathToFileURL(epgPath).href,
+      source.id
     );
+    db.prepare(
+      'UPDATE channel_bindings SET is_preferred_stream = 0 WHERE canonical_channel_id = ?'
+    ).run(firstCanonical.id);
     db.prepare(
       `UPDATE channel_bindings
           SET is_preferred_stream = 1
@@ -485,15 +493,19 @@ describe('output profile persistence', () => {
       },
     ]);
 
-    expect(updatedEntries.find(entry => entry.canonical.id === entries[0].canonical.id)).to.include({
-      position: 1,
-      enabled: false,
-    });
-    expect(updatedEntries.find(entry => entry.canonical.id === entries[1].canonical.id)).to.include({
-      position: 0,
-      enabled: true,
-      guideNumberOverride: '900',
-    });
+    expect(updatedEntries.find(entry => entry.canonical.id === entries[0].canonical.id)).to.include(
+      {
+        position: 1,
+        enabled: false,
+      }
+    );
+    expect(updatedEntries.find(entry => entry.canonical.id === entries[1].canonical.id)).to.include(
+      {
+        position: 0,
+        enabled: true,
+        guideNumberOverride: '900',
+      }
+    );
 
     nock('http://output.example')
       .get('/one.m3u')
@@ -515,11 +527,15 @@ describe('output profile persistence', () => {
     await parseM3UModule.parseAll();
 
     const reloadedEntries = outputProfileService.listOutputProfileEntries('default');
-    expect(reloadedEntries.find(entry => entry.canonical.id === entries[0].canonical.id)).to.include({
+    expect(
+      reloadedEntries.find(entry => entry.canonical.id === entries[0].canonical.id)
+    ).to.include({
       position: 1,
       enabled: false,
     });
-    expect(reloadedEntries.find(entry => entry.canonical.id === entries[1].canonical.id)).to.include({
+    expect(
+      reloadedEntries.find(entry => entry.canonical.id === entries[1].canonical.id)
+    ).to.include({
       position: 0,
       enabled: true,
       guideNumberOverride: '900',
@@ -598,11 +614,15 @@ describe('output profile persistence', () => {
     });
 
     const copiedEntries = outputProfileService.listOutputProfileEntries('bedroom-tv');
-    expect(copiedEntries.find(entry => entry.canonical.id === defaultEntries[0].canonical.id)).to.include({
+    expect(
+      copiedEntries.find(entry => entry.canonical.id === defaultEntries[0].canonical.id)
+    ).to.include({
       enabled: false,
       position: 1,
     });
-    expect(copiedEntries.find(entry => entry.canonical.id === defaultEntries[1].canonical.id)).to.include({
+    expect(
+      copiedEntries.find(entry => entry.canonical.id === defaultEntries[1].canonical.id)
+    ).to.include({
       enabled: true,
       position: 0,
       guideNumberOverride: '900',
@@ -675,15 +695,11 @@ describe('output profile persistence', () => {
 
     const resyncedEntries = outputProfileService.listOutputProfileEntries('bedroom-tv');
     expect(resyncedEntries).to.have.lengthOf(3);
-    expect(
-      resyncedEntries.find(entry => entry.canonical.name === 'Canonical Two')
-    ).to.include({
+    expect(resyncedEntries.find(entry => entry.canonical.name === 'Canonical Two')).to.include({
       enabled: true,
       guideNumberOverride: '900',
     });
-    expect(
-      resyncedEntries.find(entry => entry.canonical.name === 'Canonical Three')
-    ).to.include({
+    expect(resyncedEntries.find(entry => entry.canonical.name === 'Canonical Three')).to.include({
       enabled: true,
       guideNumberOverride: null,
     });
@@ -703,11 +719,7 @@ describe('output profile persistence', () => {
   it('treats channels without a guide number as disabled in output profiles', async () => {
     await fs.writeFile(
       path.join(configDir, 'channel-map.yaml'),
-      [
-        "'Source One':",
-        "  name: 'Canonical One'",
-        "  tvg_id: 'output.1'",
-      ].join('\n'),
+      ["'Source One':", "  name: 'Canonical One'", "  tvg_id: 'output.1'"].join('\n'),
       'utf8'
     );
 

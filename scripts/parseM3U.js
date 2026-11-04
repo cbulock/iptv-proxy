@@ -340,7 +340,9 @@ export async function parseAll() {
   syncAllOutputProfiles();
 
   const duration = Date.now() - startTime;
-  console.log(`Parsed ${allChannels.length} channels and updated database snapshot in ${duration}ms`);
+  console.log(
+    `Parsed ${allChannels.length} channels and updated database snapshot in ${duration}ms`
+  );
 
   return allChannels.length;
 }

@@ -157,9 +157,9 @@ describe('legacy config compatibility routes', () => {
         epg: 'http://updated.example/three.xml',
       },
     ]);
-    expect(providersResponse.data.providers.every(provider => typeof provider.id === 'string')).to.equal(
-      true
-    );
+    expect(
+      providersResponse.data.providers.every(provider => typeof provider.id === 'string')
+    ).to.equal(true);
   });
 
   it('keeps source relationships when the primary provider configuration is saved', async () => {
@@ -168,12 +168,9 @@ describe('legacy config compatibility routes', () => {
     const db = databaseModule.getDatabase();
     const timestamp = new Date().toISOString();
 
-    db.prepare('INSERT INTO source_channels (id, source_id, name, last_seen_at) VALUES (?, ?, ?, ?)').run(
-      'primary-config-channel',
-      provider.id,
-      'Saved Channel',
-      timestamp
-    );
+    db.prepare(
+      'INSERT INTO source_channels (id, source_id, name, last_seen_at) VALUES (?, ?, ?, ?)'
+    ).run('primary-config-channel', provider.id, 'Saved Channel', timestamp);
 
     await axios.put(`${baseUrl}/api/config/providers`, initial.data);
     await axios.put(`${baseUrl}/api/config/providers`, {

@@ -45,7 +45,13 @@
             aria-describedby="app-settings-security-copy"
           />
         </CindorFormField>
-        <CindorStack direction="horizontal" gap="sm" wrap role="group" aria-label="Password actions">
+        <CindorStack
+          direction="horizontal"
+          gap="sm"
+          wrap
+          role="group"
+          aria-label="Password actions"
+        >
           <CindorButton
             :disabled="savingPassword"
             :aria-busy="savingPassword ? 'true' : undefined"
@@ -70,7 +76,11 @@
         behind a reverse proxy or custom hostname.
       </p>
       <CindorFormField label="Base URL">
-        <CindorInput v-model="appBaseUrl" placeholder="https://example.com" aria-describedby="app-settings-core-copy" />
+        <CindorInput
+          v-model="appBaseUrl"
+          placeholder="https://example.com"
+          aria-describedby="app-settings-core-copy"
+        />
       </CindorFormField>
 
       <div
@@ -81,7 +91,9 @@
       >
         <div class="section-header">
           <div>
-            <h3 id="app-settings-oauth-title" class="section-title">MCP OAuth Clients (/mcp only)</h3>
+            <h3 id="app-settings-oauth-title" class="section-title">
+              MCP OAuth Clients (/mcp only)
+            </h3>
             <p id="app-settings-oauth-copy" class="section-copy">
               Configure the built-in OAuth server used only by `/mcp` clients. This does not change
               admin sign-in, which continues to use the normal session-based login.
@@ -94,7 +106,11 @@
             class="action-button"
             :disabled="savingApp"
             :aria-busy="savingApp ? 'true' : undefined"
-            :aria-describedby="oauthClients.length ? 'app-settings-oauth-copy oauth-client-summary' : 'app-settings-oauth-copy'"
+            :aria-describedby="
+              oauthClients.length
+                ? 'app-settings-oauth-copy oauth-client-summary'
+                : 'app-settings-oauth-copy'
+            "
             @click="addClient"
           >
             Add MCP Client
@@ -104,7 +120,12 @@
         <p id="oauth-preset-summary" class="section-copy" role="status" aria-live="polite">
           {{ oauthPresetCountSummary }}
         </p>
-        <div class="preset-grid" role="list" aria-label="OAuth client presets" aria-describedby="oauth-preset-summary">
+        <div
+          class="preset-grid"
+          role="list"
+          aria-label="OAuth client presets"
+          aria-describedby="oauth-preset-summary"
+        >
           <div
             v-for="preset in oauthClientPresets"
             :key="preset.key"
@@ -117,7 +138,9 @@
             <div class="preset-card-meta">
               {{ preset.verified ? 'Verified callbacks' : 'Template - add your own callback URI' }}
             </div>
-            <p :id="buildPresetDescriptionId(preset)" class="preset-card-copy">{{ preset.description }}</p>
+            <p :id="buildPresetDescriptionId(preset)" class="preset-card-copy">
+              {{ preset.description }}
+            </p>
             <CindorButton
               class="preset-button"
               :disabled="savingApp"
@@ -167,7 +190,13 @@
           </CindorFormField>
         </div>
 
-        <p v-if="oauthClients.length" id="oauth-client-summary" class="section-copy oauth-client-summary" role="status" aria-live="polite">
+        <p
+          v-if="oauthClients.length"
+          id="oauth-client-summary"
+          class="section-copy oauth-client-summary"
+          role="status"
+          aria-live="polite"
+        >
           {{ oauthClientCountSummary }}
         </p>
         <div
@@ -393,7 +422,8 @@ const oauthPresetCountSummary = `${oauthClientPresets.length} OAuth client prese
   oauthClientPresets.length === 1 ? '' : 's'
 } available.`;
 const oauthClientCountSummary = computed(
-  () => `${props.oauthClients.length} MCP OAuth client${props.oauthClients.length === 1 ? '' : 's'} configured.`
+  () =>
+    `${props.oauthClients.length} MCP OAuth client${props.oauthClients.length === 1 ? '' : 's'} configured.`
 );
 
 const passwordCurrent = computed({
@@ -483,8 +513,8 @@ async function removeClient(index) {
   const client = props.oauthClients[index];
   const hasContent = Boolean(
     String(client?.client_id || '').trim() ||
-      String(client?.client_name || '').trim() ||
-      String(client?.redirectUrisText || '').trim()
+    String(client?.client_name || '').trim() ||
+    String(client?.redirectUrisText || '').trim()
   );
 
   if (hasContent) {

@@ -4,7 +4,10 @@ import nock from 'nock';
 import fs from 'fs/promises';
 import path from 'path';
 import { getDataPath } from '../../libs/paths.js';
-import { loadChannelSnapshot, replaceChannelSnapshot } from '../../libs/channel-snapshot-service.js';
+import {
+  loadChannelSnapshot,
+  replaceChannelSnapshot,
+} from '../../libs/channel-snapshot-service.js';
 import { runHealthCheck } from '../../scripts/check-channel-health.js';
 
 const STATUS_FILE = getDataPath('lineup_status.json');

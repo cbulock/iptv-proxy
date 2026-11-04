@@ -128,10 +128,7 @@ export function replaceDiscoveredSourceChannels(sourceId, channels) {
       // the normalized source_channels row.  Playback clients must not use the
       // editable provider/channel names as an identifier.
       channel.sourceChannelId = channelId;
-      sourceChannelIds.set(
-        channel.external_key || getChannelIdentity(channel),
-        channelId
-      );
+      sourceChannelIds.set(channel.external_key || getChannelIdentity(channel), channelId);
       retainedIds.add(channelId);
 
       if (existing) {

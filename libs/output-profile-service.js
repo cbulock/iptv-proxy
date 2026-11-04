@@ -1,6 +1,9 @@
 import crypto from 'crypto';
 import { getDatabase, initDatabase, transaction } from './database.js';
-import { setCanonicalChannelPreferredStream, setCanonicalChannelGuideBinding } from './canonical-channel-service.js';
+import {
+  setCanonicalChannelPreferredStream,
+  setCanonicalChannelGuideBinding,
+} from './canonical-channel-service.js';
 
 const DEFAULT_PROFILE_NAME = 'Default Output';
 const DEFAULT_PROFILE_SLUG = 'default';
@@ -121,7 +124,9 @@ function allocateProfileSlug(desiredSlug, ignoreProfileId = null) {
 function getProfileBySlug(slug = DEFAULT_PROFILE_SLUG) {
   ensureDatabaseReady();
   return getDatabase()
-    .prepare('SELECT id, name, slug, enabled, settings_json, created_at, updated_at FROM output_profiles WHERE slug = ?')
+    .prepare(
+      'SELECT id, name, slug, enabled, settings_json, created_at, updated_at FROM output_profiles WHERE slug = ?'
+    )
     .get(slug);
 }
 
@@ -190,7 +195,9 @@ function buildCanonicalChannelsForProfiles(db = getDatabase()) {
 function syncOutputProfileById(profileId) {
   const db = getDatabase();
   const profile = db
-    .prepare('SELECT id, name, slug, enabled, settings_json, created_at, updated_at FROM output_profiles WHERE id = ?')
+    .prepare(
+      'SELECT id, name, slug, enabled, settings_json, created_at, updated_at FROM output_profiles WHERE id = ?'
+    )
     .get(profileId);
   if (!profile) {
     return { error: 'profile-not-found' };
@@ -473,7 +480,9 @@ export function updateOutputProfileEntries(slug = DEFAULT_PROFILE_SLUG, channels
          WHERE output_profile_channels.output_profile_id = ?`
     )
     .all(profile.id);
-  const existingByCanonicalId = new Map(existingEntries.map(row => [row.canonical_channel_id, row]));
+  const existingByCanonicalId = new Map(
+    existingEntries.map(row => [row.canonical_channel_id, row])
+  );
 
   for (const channel of channels) {
     if (!existingByCanonicalId.has(channel.canonicalId)) {
@@ -533,12 +542,16 @@ export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
     profileChanges.name === undefined ? profile.name : String(profileChanges.name || '').trim();
   if (!nextName) return { error: 'invalid-name' };
   const nextEnabled =
-    profileChanges.enabled === undefined ? Boolean(profile.enabled) : Boolean(profileChanges.enabled);
+    profileChanges.enabled === undefined
+      ? Boolean(profile.enabled)
+      : Boolean(profileChanges.enabled);
   if (profile.slug === DEFAULT_PROFILE_SLUG && !nextEnabled) {
     return { error: 'default-profile-required' };
   }
 
-  const canonicalChanges = Array.isArray(changes.canonicalChannels) ? changes.canonicalChannels : [];
+  const canonicalChanges = Array.isArray(changes.canonicalChannels)
+    ? changes.canonicalChannels
+    : [];
   const channels = Array.isArray(changes.channels) ? changes.channels : [];
   const canonicalById = new Map(
     db
@@ -562,17 +575,13 @@ export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
     }
     if (change.preferredSourceChannelId !== undefined) {
       const binding = db
-        .prepare(
-          'SELECT id FROM source_channels WHERE id = ?'
-        )
+        .prepare('SELECT id FROM source_channels WHERE id = ?')
         .get(change.preferredSourceChannelId);
       if (!binding) return { error: 'binding-not-found', canonicalId: change.id };
     }
     if (change.guideBinding !== undefined) {
       const binding = db
-        .prepare(
-          "SELECT id FROM sources WHERE id = ? AND TRIM(COALESCE(epg_url, '')) != ''"
-        )
+        .prepare("SELECT id FROM sources WHERE id = ? AND TRIM(COALESCE(epg_url, '')) != ''")
         .get(change.guideBinding?.sourceId);
       if (!binding || !String(change.guideBinding?.epgChannelId || '').trim()) {
         return { error: 'guide-binding-not-found', canonicalId: change.id };
@@ -584,10 +593,18 @@ export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
     if (!channel?.canonicalId || !entryByCanonicalId.has(channel.canonicalId)) {
       return { error: 'entry-not-found', canonicalId: channel?.canonicalId };
     }
-    if (!Number.isInteger(channel.position) || channel.position < 0 || typeof channel.enabled !== 'boolean') {
+    if (
+      !Number.isInteger(channel.position) ||
+      channel.position < 0 ||
+      typeof channel.enabled !== 'boolean'
+    ) {
       return { error: 'invalid-entry', canonicalId: channel.canonicalId };
     }
-    if (channel.guideNumberOverride !== null && channel.guideNumberOverride !== undefined && typeof channel.guideNumberOverride !== 'string') {
+    if (
+      channel.guideNumberOverride !== null &&
+      channel.guideNumberOverride !== undefined &&
+      typeof channel.guideNumberOverride !== 'string'
+    ) {
       return { error: 'invalid-entry', canonicalId: channel.canonicalId };
     }
   }
@@ -599,7 +616,9 @@ export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
       new Date().toISOString(),
       profile.id
     );
-    const updateName = db.prepare('UPDATE canonical_channels SET custom_name = ?, updated_at = ? WHERE id = ?');
+    const updateName = db.prepare(
+      'UPDATE canonical_channels SET custom_name = ?, updated_at = ? WHERE id = ?'
+    );
     for (const change of canonicalChanges) {
       if (Object.hasOwn(change, 'customName')) {
         updateName.run(
@@ -610,7 +629,8 @@ export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
           change.id
         );
       }
-      if (change.preferredSourceChannelId !== undefined) setCanonicalChannelPreferredStream(change.id, change.preferredSourceChannelId);
+      if (change.preferredSourceChannelId !== undefined)
+        setCanonicalChannelPreferredStream(change.id, change.preferredSourceChannelId);
       if (change.guideBinding !== undefined) {
         setCanonicalChannelGuideBinding(
           change.id,
@@ -733,8 +753,7 @@ export function updateOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
     return { error: 'invalid-name' };
   }
 
-  const nextEnabled =
-    changes.enabled === undefined ? profile.enabled : Boolean(changes.enabled);
+  const nextEnabled = changes.enabled === undefined ? profile.enabled : Boolean(changes.enabled);
   if (profile.slug === DEFAULT_PROFILE_SLUG && !nextEnabled) {
     return { error: 'default-profile-required' };
   }
