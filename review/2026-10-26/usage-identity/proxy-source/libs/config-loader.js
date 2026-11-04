@@ -1,0 +1,432 @@
+import fs from 'fs';
+import yaml from 'yaml';
+import Joi from 'joi';
+import chalk from 'chalk';
+import { getConfigPath } from './paths.js';
+
+// Constants for external URLs used in error messages
+const YAML_VALIDATOR_URL = 'https://www.yamllint.com/';
+
+/**
+ * Decode common HTML entities in a string (e.g. &amp; → &).
+ * Uses a single-pass replacement to avoid any risk of double-decoding.
+ * @param {string} str
+ * @returns {string}
+ */
+function decodeHtmlEntities(str) {
+  const entities = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'" };
+  return String(str).replace(/&(?:amp|lt|gt|quot|apos);/g, match => entities[match] ?? match);
+}
+
+/**
+ * Normalize channel map keys by decoding HTML entities.
+ * YAML does not decode HTML entities, so keys like "H &amp; I" must be
+ * normalised to "H & I" before being matched against channel names.
+ * @param {object} map
+ * @returns {object}
+ */
+function normalizeChannelMapKeys(map) {
+  if (!map || typeof map !== 'object') return map;
+  const normalized = {};
+  for (const [key, value] of Object.entries(map)) {
+    const decodedKey = decodeHtmlEntities(key);
+    if (decodedKey !== key) {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Channel map key contains HTML entities: "${key}" → "${decodedKey}". ` +
+            `Consider updating your channel-map.yaml to use "${decodedKey}:" directly.`
+        )
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(normalized, decodedKey)) {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Channel map key collision: "${decodedKey}" is defined more than once after HTML entity decoding. ` +
+            `The entry for "${key}" will overwrite the previous value. ` +
+            'Check your channel-map.yaml for duplicate or equivalent keys.'
+        )
+      );
+    }
+    normalized[decodedKey] = value;
+  }
+  return normalized;
+}
+
+// Define schemas for each config file
+const m3uSchema = Joi.object({
+  urls: Joi.array()
+    .items(
+      Joi.object({
+        id: Joi.string().trim().min(1).optional().messages({
+          'string.empty': 'Provider "id" cannot be empty',
+        }),
+        name: Joi.string().required().messages({
+          'any.required': 'Each M3U source must have a "name"',
+          'string.empty': 'M3U source "name" cannot be empty',
+        }),
+        url: Joi.string().required().messages({
+          'any.required': 'Each M3U source must have a "url"',
+          'string.empty': 'M3U source "url" cannot be empty',
+        }),
+        type: Joi.string().valid('m3u', 'hdhomerun').lowercase().default('m3u').messages({
+          'any.only': 'M3U source "type" must be either "m3u" or "hdhomerun"',
+        }),
+      })
+    )
+    .default([]),
+}).default({ urls: [] });
+
+const epgSchema = Joi.object({
+  urls: Joi.array()
+    .items(
+      Joi.object({
+        name: Joi.string().required().messages({
+          'any.required': 'Each EPG source must have a "name"',
+          'string.empty': 'EPG source "name" cannot be empty',
+        }),
+        url: Joi.string().required().messages({
+          'any.required': 'Each EPG source must have a "url"',
+          'string.empty': 'EPG source "url" cannot be empty',
+        }),
+      })
+    )
+    .default([]),
+}).default({ urls: [] });
+
+const providersSchema = Joi.object({
+  providers: Joi.array()
+    .items(
+      Joi.object({
+        id: Joi.string().trim().min(1).optional().messages({
+          'string.empty': 'Provider "id" cannot be empty',
+        }),
+        name: Joi.string().required().messages({
+          'any.required': 'Each provider must have a "name"',
+          'string.empty': 'Provider "name" cannot be empty',
+        }),
+        url: Joi.string().required().messages({
+          'any.required': 'Each provider must have a "url"',
+          'string.empty': 'Provider "url" cannot be empty',
+        }),
+        type: Joi.string().valid('m3u', 'hdhomerun').lowercase().default('m3u').messages({
+          'any.only': 'Provider "type" must be either "m3u" or "hdhomerun"',
+        }),
+        epg: Joi.string().optional().allow(null, '').messages({
+          'string.base': 'Provider "epg" must be a string URL',
+        }),
+        enabled: Joi.boolean().optional(),
+      })
+    )
+    .default([]),
+}).default({ providers: [] });
+
+const appSchema = Joi.object({
+  base_url: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
+    'string.uri': 'app.yaml "base_url" must be a valid URL',
+  }),
+  trusted_proxies: Joi.array()
+    .items(Joi.string().trim().max(255))
+    .optional()
+    .messages({
+      'array.base': 'app.yaml "trusted_proxies" must be an array of proxy IPs or CIDR ranges',
+      'string.base': 'Each trusted proxy must be a string',
+    }),
+  oauth: Joi.object({
+    issuer: Joi.string().uri({ allowRelative: false }).optional().allow(null, '').messages({
+      'string.uri': 'app.yaml "oauth.issuer" must be a valid URL',
+    }),
+    authorization_code_ttl_seconds: Joi.number().integer().min(60).max(1800).optional().messages({
+      'number.base': 'oauth.authorization_code_ttl_seconds must be a number',
+      'number.integer': 'oauth.authorization_code_ttl_seconds must be an integer',
+      'number.min': 'oauth.authorization_code_ttl_seconds must be at least 60',
+      'number.max': 'oauth.authorization_code_ttl_seconds must be 1800 or less',
+    }),
+    access_token_ttl_seconds: Joi.number().integer().min(60).max(86400).optional().messages({
+      'number.base': 'oauth.access_token_ttl_seconds must be a number',
+      'number.integer': 'oauth.access_token_ttl_seconds must be an integer',
+      'number.min': 'oauth.access_token_ttl_seconds must be at least 60',
+      'number.max': 'oauth.access_token_ttl_seconds must be 86400 or less',
+    }),
+    clients: Joi.array()
+      .items(
+        Joi.object({
+          client_id: Joi.string().trim().required().messages({
+            'any.required': 'Each OAuth client must have a "client_id"',
+            'string.empty': 'OAuth client "client_id" cannot be empty',
+          }),
+          client_name: Joi.string().trim().optional().allow(''),
+          enabled: Joi.boolean().optional(),
+          redirect_uris: Joi.array()
+            .items(
+              Joi.string().uri({ allowRelative: false }).required().messages({
+                'string.uri': 'Each OAuth redirect URI must be a valid absolute URL',
+              })
+            )
+            .min(1)
+            .required()
+            .messages({
+              'any.required': 'Each OAuth client must define at least one redirect URI',
+              'array.min': 'Each OAuth client must define at least one redirect URI',
+            }),
+          scope: Joi.string().trim().optional().allow('').messages({
+            'string.base': 'OAuth client "scope" must be a string',
+          }),
+        })
+      )
+      .optional(),
+  }).optional(),
+  cache: Joi.object({
+    epg_ttl: Joi.number().integer().min(0).optional().messages({
+      'number.base': 'cache.epg_ttl must be a number',
+      'number.integer': 'cache.epg_ttl must be an integer',
+      'number.min': 'cache.epg_ttl must be at least 0',
+    }),
+    m3u_ttl: Joi.number().integer().min(0).optional().messages({
+      'number.base': 'cache.m3u_ttl must be a number',
+      'number.integer': 'cache.m3u_ttl must be an integer',
+      'number.min': 'cache.m3u_ttl must be at least 0',
+    }),
+  }).optional(),
+  webhooks: Joi.array()
+    .items(
+      Joi.object({
+        url: Joi.string().uri().required().messages({
+          'any.required': 'Each webhook must have a "url"',
+          'string.uri': 'Webhook "url" must be a valid URL',
+        }),
+        events: Joi.array().items(Joi.string()).optional(),
+        timeout_ms: Joi.number().integer().min(0).optional(),
+      })
+    )
+    .optional(),
+})
+  .unknown(true)
+  .default({});
+
+const channelMapSchema = Joi.object()
+  .pattern(
+    Joi.string(),
+    Joi.object({
+      name: Joi.string().optional(),
+      number: Joi.string().optional(),
+      tvg_id: Joi.string().optional(),
+      logo: Joi.string().optional(),
+      url: Joi.string().optional(),
+      group: Joi.string().optional(),
+    })
+      .or('name', 'number', 'tvg_id', 'logo', 'url', 'group')
+      .messages({
+        'object.missing':
+          'Each channel mapping must have at least one property (name, number, tvg_id, logo, url, or group)',
+      })
+  )
+  .default({});
+
+// Default configurations
+const defaultConfigs = {
+  m3u: { urls: [] },
+  epg: { urls: [] },
+  providers: { providers: [] },
+  app: {},
+  channelMap: {},
+};
+
+/**
+ * Load and validate a YAML config file
+ * @param {string} path - Path to the YAML file
+ * @param {Joi.Schema} schema - Joi schema to validate against
+ * @param {object} defaultValue - Default value if file doesn't exist or is invalid
+ * @param {string} name - Human-readable name for logging
+ * @returns {object} Validated config object
+ */
+function loadAndValidateConfig(path, schema, defaultValue, name) {
+  try {
+    // Check if file exists
+    if (!fs.existsSync(path)) {
+      console.warn(chalk.yellow(`⚠️  Config file not found: ${path}`));
+      console.log(chalk.gray(`   Using default configuration for ${name}`));
+      return defaultValue;
+    }
+
+    // Read and parse YAML
+    const content = fs.readFileSync(path, 'utf8');
+    let parsed;
+
+    try {
+      parsed = yaml.parse(content);
+    } catch (parseError) {
+      console.error(chalk.red(`❌ Failed to parse YAML in ${path}:`));
+      console.error(chalk.red(`   ${parseError.message}`));
+      console.log(chalk.yellow('   💡 Fix: Check YAML syntax - common issues include:'));
+      console.log(chalk.yellow('      • Incorrect indentation (use spaces, not tabs)'));
+      console.log(chalk.yellow('      • Missing quotes around strings with special characters'));
+      console.log(chalk.yellow('      • Unclosed brackets or quotes'));
+      console.log(chalk.yellow(`      • Use a YAML validator: ${YAML_VALIDATOR_URL}`));
+      console.log(chalk.gray(`   Using default configuration for ${name}`));
+      return defaultValue;
+    }
+
+    // Validate with Joi schema
+    const { error, value } = schema.validate(parsed, {
+      abortEarly: false,
+      stripUnknown: false,
+    });
+
+    if (error) {
+      console.error(chalk.red(`❌ Validation errors in ${path}:`));
+      for (const detail of error.details) {
+        console.error(chalk.red(`   • ${detail.message}`));
+      }
+      console.log(chalk.yellow('   💡 Fix: Review your configuration against the examples:'));
+      console.log(chalk.yellow('      • See config/examples/ for valid configuration templates'));
+      console.log(chalk.yellow('      • Ensure all required fields are present'));
+      console.log(chalk.yellow('      • Check that URLs are valid and accessible'));
+      console.log(chalk.gray(`   Using default configuration for ${name}`));
+      return defaultValue;
+    }
+
+    console.log(chalk.green(`✓ Loaded and validated ${name} from ${path}`));
+    return value;
+  } catch (err) {
+    console.error(chalk.red(`❌ Unexpected error loading ${path}:`));
+    console.error(chalk.red(`   ${err.message}`));
+    console.log(chalk.gray(`   Using default configuration for ${name}`));
+    return defaultValue;
+  }
+}
+
+/**
+ * Load all configuration files with validation
+ * @returns {object} Object containing all validated configs
+ */
+export function loadAllConfigs() {
+  const m3u = loadAndValidateConfig(
+    getConfigPath('m3u.yaml'),
+    m3uSchema,
+    defaultConfigs.m3u,
+    'M3U config'
+  );
+
+  const epg = loadAndValidateConfig(
+    getConfigPath('epg.yaml'),
+    epgSchema,
+    defaultConfigs.epg,
+    'EPG config'
+  );
+
+  const providers = loadAndValidateConfig(
+    getConfigPath('providers.yaml'),
+    providersSchema,
+    defaultConfigs.providers,
+    'Providers config'
+  );
+
+  const app = loadAndValidateConfig(
+    getConfigPath('app.yaml'),
+    appSchema,
+    defaultConfigs.app,
+    'App config'
+  );
+
+  const channelMap = normalizeChannelMapKeys(
+    loadAndValidateConfig(
+      getConfigPath('channel-map.yaml'),
+      channelMapSchema,
+      defaultConfigs.channelMap,
+      'Channel map'
+    )
+  );
+
+  return { m3u, epg, providers, app, channelMap };
+}
+
+/**
+ * Load a single config file with validation
+ * @param {string} configType - Type of config: 'm3u', 'epg', 'app', or 'channelMap'
+ * @returns {object} Validated config object
+ */
+export function loadConfig(configType) {
+  const configs = {
+    m3u: {
+      path: getConfigPath('m3u.yaml'),
+      schema: m3uSchema,
+      default: defaultConfigs.m3u,
+      name: 'M3U config',
+    },
+    epg: {
+      path: getConfigPath('epg.yaml'),
+      schema: epgSchema,
+      default: defaultConfigs.epg,
+      name: 'EPG config',
+    },
+    providers: {
+      path: getConfigPath('providers.yaml'),
+      schema: providersSchema,
+      default: defaultConfigs.providers,
+      name: 'Providers config',
+    },
+    app: {
+      path: getConfigPath('app.yaml'),
+      schema: appSchema,
+      default: defaultConfigs.app,
+      name: 'App config',
+    },
+    channelMap: {
+      path: getConfigPath('channel-map.yaml'),
+      schema: channelMapSchema,
+      default: defaultConfigs.channelMap,
+      name: 'Channel map',
+    },
+  };
+
+  const config = configs[configType];
+  if (!config) {
+    throw new Error(`Unknown config type: ${configType}`);
+  }
+
+  const result = loadAndValidateConfig(config.path, config.schema, config.default, config.name);
+
+  // Normalize channel map keys so HTML entities in YAML keys (e.g. "H &amp; I")
+  // are decoded to their plain-text equivalents (e.g. "H & I") before matching.
+  if (configType === 'channelMap') {
+    return normalizeChannelMapKeys(result);
+  }
+
+  return result;
+}
+
+/**
+ * Validate config data against a schema (for API updates)
+ * @param {string} configType - Type of config: 'm3u', 'epg', 'app', or 'channelMap'
+ * @param {object} data - Data to validate
+ * @returns {object} { valid: boolean, value?: object, error?: string }
+ */
+export function validateConfigData(configType, data) {
+  const schemas = {
+    m3u: m3uSchema,
+    epg: epgSchema,
+    providers: providersSchema,
+    app: appSchema,
+    channelMap: channelMapSchema,
+  };
+
+  const schema = schemas[configType];
+  if (!schema) {
+    return { valid: false, error: `Unknown config type: ${configType}` };
+  }
+
+  const { error, value } = schema.validate(data, {
+    abortEarly: false,
+    stripUnknown: false,
+  });
+
+  if (error) {
+    const errorMessage = error.details.map(d => d.message).join('; ');
+    return { valid: false, error: errorMessage };
+  }
+
+  return { valid: true, value };
+}
+
+export { normalizeChannelMapKeys };
+export default { loadAllConfigs, loadConfig, validateConfigData };

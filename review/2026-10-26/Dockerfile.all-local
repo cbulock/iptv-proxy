@@ -1,0 +1,6 @@
+FROM bulock-iptv-proxy:mcp-providers-20261025
+COPY source/package.json source/package-lock.json source/index.js /usr/src/app/
+COPY source/libs /usr/src/app/libs
+COPY source/server /usr/src/app/server
+COPY source/scripts /usr/src/app/scripts
+COPY source/public /usr/src/app/public

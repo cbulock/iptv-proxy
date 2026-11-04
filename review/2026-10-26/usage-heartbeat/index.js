@@ -1,0 +1,359 @@
+import { setupLiveTvRoutes } from './server/live-tv.js';
+import express from 'express';
+import fs from 'fs';
+import chalk from 'chalk';
+import path from 'path';
+import crypto from 'crypto';
+import yaml from 'yaml';
+import session from 'express-session';
+import SQLiteSessionStore from './libs/sqlite-session-store.js';
+import RateLimit from 'express-rate-limit';
+import { initConfig } from './server/init-config.js';
+import { loadConfig } from './libs/config-loader.js';
+import { getConfigPath } from './libs/paths.js';
+import { setupHDHRRoutes } from './server/hdhr.js';
+import { setupLineupRoutes, invalidateLineupCaches } from './server/lineup.js';
+import { setupTranscodeRoutes } from './server/transcode.js';
+import { setupStreamProbeRoutes } from './server/stream-probe.js';
+import { setupEPGRoutes } from './server/epg.js';
+import { imageProxyRoute } from './libs/proxy-image.js';
+import { setupMCPRoutes } from './server/mcp.js';
+import channelsRoute from './server/channels.js';
+import configRoute from './server/config.js';
+import healthRouter from './server/health.js';
+import statusRouter from './server/status.js';
+import mappingRouter from './server/mapping.js';
+import channelsManagementRouter from './server/channels-management.js';
+import canonicalRouter from './server/canonical.js';
+import previewRouter from './server/preview.js';
+import cacheRouter from './server/cache.js';
+import { parseAll, setStatusCallback } from './scripts/parseM3U.js';
+import { updateSourceStatus, resetSourceStatus } from './server/status.js';
+import usageRouter, { registerUsage, touchUsage, unregisterUsage } from './server/usage.js';
+import { initChannelsCache, onChannelsUpdate } from './libs/channels-cache.js';
+import { notFoundHandler, errorHandler } from './server/error-handler.js';
+import { requireAuthHTML } from './server/auth.js';
+import { csrfMiddleware } from './server/csrf.js';
+import authRoutesRouter from './server/auth-routes.js';
+import oauthRouter from './server/oauth.js';
+import backupRouter from './server/backup.js';
+import { initDatabase } from './libs/database.js';
+
+// Ensure config files exist before anything else
+initConfig();
+initDatabase();
+
+const app = express();
+const port = parseInt(process.env.PORT || '34400', 10);
+
+// Load and validate config first (needed for auth check and session secret)
+const appConfig = loadConfig('app');
+
+const config = { ...appConfig, host: 'localhost' };
+
+// Forwarded headers are trusted only when the direct peer is explicitly
+// configured as a reverse proxy. A direct LAN client must not be able to
+// forge X-Forwarded-For/Host/Proto to impersonate loopback or HTTPS.
+app.set(
+  'trust proxy',
+  Array.isArray(appConfig.trusted_proxies) && appConfig.trusted_proxies.length
+    ? appConfig.trusted_proxies
+    : false
+);
+app.use(express.json({ limit: '1mb' }));
+
+// Session middleware — secret is read from config or generated and saved on first run
+const sessionSecret = (() => {
+  try {
+    const appCfg = appConfig || {};
+    if (typeof appCfg.session_secret === 'string' && appCfg.session_secret.length >= 32) {
+      return appCfg.session_secret;
+    }
+  } catch (_) {
+    /* ignore: fall through to generate */
+  }
+
+  // Generate a new secret and persist it so sessions survive restarts
+  const newSecret = crypto.randomBytes(32).toString('hex');
+  try {
+    const appYamlPath = getConfigPath('app.yaml');
+    const existing = fs.existsSync(appYamlPath)
+      ? yaml.parse(fs.readFileSync(appYamlPath, 'utf8')) || {}
+      : {};
+    existing.session_secret = newSecret;
+    fs.writeFileSync(appYamlPath, yaml.stringify(existing), 'utf8');
+    console.log(
+      chalk.cyan('[Auth] Generated and saved session_secret to app.yaml for persistent sessions.')
+    );
+  } catch (saveErr) {
+    console.warn(
+      '[Auth] Could not save session_secret to app.yaml — sessions will be invalidated on restart.',
+      saveErr.message
+    );
+  }
+  return newSecret;
+})();
+
+// Persist sessions alongside the rest of the application data so restarts
+// retain authentication and CSRF state until the existing cookie expires.
+app.use(
+  session({
+    secret: sessionSecret,
+    store: new SQLiteSessionStore(),
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      // Use secure cookies only when behind HTTPS (trust proxy is already set)
+      secure: 'auto',
+      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+    },
+  })
+);
+
+// CSRF protection for all mutating API requests (POST, PUT, DELETE, PATCH)
+// Exempt: login, setup, status, session, and csrf-token endpoints (pre-auth)
+// lgtm[js/missing-csrf-middleware] - csrfMiddleware (server/csrf.js) provides complete CSRF protection
+app.use(csrfMiddleware); // lgtm[js/missing-csrf-middleware]
+
+// Admin UI setup (before static middleware to control access)
+const publicDir = path.resolve('./public');
+const builtAdminDir = path.join(publicDir, 'admin');
+const builtAdminIndexPath = path.join(builtAdminDir, 'index.html');
+const isAdminBuilt = () => fs.existsSync(builtAdminIndexPath);
+const builtAdminAssetsDir = path.join(builtAdminDir, 'assets');
+const builtAdminStatic = express.static(builtAdminDir, { index: false });
+const publicStaticForAdmin = express.static(publicDir, { index: false });
+const useAdminDevServer = process.env.IPTV_PROXY_USE_ADMIN_DEV === '1';
+
+/**
+ * Resolve a hashed Vite entry asset (e.g. index-abc123.js) in public/admin/assets.
+ * Returns null when no matching asset is found.
+ * @param {'js' | 'css'} ext
+ * @returns {string | null}
+ */
+function resolveHashedAdminEntry(ext) {
+  if (!fs.existsSync(builtAdminAssetsDir)) {
+    return null;
+  }
+
+  const assetNames = fs.readdirSync(builtAdminAssetsDir);
+  const match = assetNames.find(name => name.startsWith('index-') && name.endsWith(`.${ext}`));
+  return match ? path.join(builtAdminAssetsDir, match) : null;
+}
+
+// Try to load vite config for dev server info
+let adminDevPort = parseInt(process.env.ADMIN_DEV_PORT || '5173', 10);
+const adminDevHost = process.env.ADMIN_DEV_HOST || 'localhost';
+try {
+  const viteConfig = await import('./admin/vite.config.js');
+  adminDevPort = viteConfig.default?.server?.port || 5173;
+} catch (err) {
+  console.log(chalk.gray('Note: Vite config not loaded (using default port 5173)'));
+  if (process.env.DEBUG) {
+    console.log(chalk.gray(`  Reason: ${err.message}`));
+  }
+}
+
+const adminDevOrigin = `http://${adminDevHost}:${adminDevPort}`;
+
+function buildAdminDevRedirectUrl(req) {
+  const originalUrl = req.originalUrl || '/admin';
+  const normalizedPath = originalUrl === '/admin.html' ? '/admin/' : originalUrl;
+  return new URL(
+    normalizedPath === '/admin' ? '/admin/' : normalizedPath,
+    adminDevOrigin
+  ).toString();
+}
+
+function sendAdminEntryHtml(req, res) {
+  if (useAdminDevServer) {
+    return res.redirect(307, buildAdminDevRedirectUrl(req));
+  }
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  if (isAdminBuilt()) {
+    return res.sendFile(builtAdminIndexPath);
+  }
+
+  // Admin UI not built - show helpful error message
+  return res.status(503).send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Admin UI Not Available</title>
+        <style>
+          body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+          h1 { color: #e74c3c; }
+          code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+          pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        </style>
+      </head>
+      <body>
+        <h1>Admin UI Not Available</h1>
+        <p>The admin interface has not been built. To use the admin UI, you need to build it first.</p>
+        <h2>Build Instructions:</h2>
+        <pre>cd admin
+npm install
+npm run build</pre>
+        <p>Or use the shortcut from the project root:</p>
+        <pre>npm run admin:build</pre>
+        <p>For development with hot reload, run:</p>
+        <pre>npm run dev</pre>
+        <p>This will start both the server and the admin dev server on port ${adminDevPort}.</p>
+      </body>
+    </html>
+  `);
+}
+
+// Rate limiter for admin interface access
+const adminLimiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
+});
+
+// Serve /admin assets. Auth is enforced for HTML routes, while login assets stay public.
+// Order: built admin files -> shared public files -> hashed entry fallback.
+app.use('/admin', adminLimiter, requireAuthHTML, (req, res, next) => {
+  if (useAdminDevServer && (req.path === '/' || req.path === '' || req.path === '/index.html')) {
+    return res.redirect(307, buildAdminDevRedirectUrl(req));
+  }
+
+  if (
+    req.path === '/' ||
+    req.path === '' ||
+    req.path === '/index.html' ||
+    req.path === '/assets/index.js' ||
+    req.path === '/assets/index.css'
+  ) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+
+  builtAdminStatic(req, res, err => {
+    if (err) {
+      return next(err);
+    }
+
+    publicStaticForAdmin(req, res, fallbackErr => {
+      if (fallbackErr) {
+        return next(fallbackErr);
+      }
+
+      if (req.path === '/assets/index.js') {
+        const filePath = resolveHashedAdminEntry('js');
+        if (filePath) {
+          return res.sendFile(filePath);
+        }
+      }
+
+      if (req.path === '/assets/index.css') {
+        const filePath = resolveHashedAdminEntry('css');
+        if (filePath) {
+          return res.sendFile(filePath);
+        }
+      }
+
+      return next();
+    });
+  });
+});
+
+// Serve the login page from the same admin bundle so pre-auth and post-auth UI stay aligned.
+app.get('/admin/login', (req, res) => {
+  sendAdminEntryHtml(req, res);
+});
+
+// Serve admin HTML pages with authentication
+app.get('/admin', requireAuthHTML, (req, res) => {
+  sendAdminEntryHtml(req, res);
+});
+
+app.get('/admin.html', adminLimiter, requireAuthHTML, (req, res) => {
+  sendAdminEntryHtml(req, res);
+});
+
+// Serve other static files (not admin)
+// Create static middleware once for efficiency
+const publicStatic = express.static(publicDir);
+app.use((req, res, next) => {
+  if (req.path.startsWith('/admin')) {
+    return next();
+  }
+  publicStatic(req, res, next);
+});
+
+// Optionally serve node_modules in development to allow ESM imports without a bundler
+if (process.env.NODE_ENV === 'development') {
+  app.use('/node_modules', express.static(path.resolve('./node_modules')));
+}
+
+// Set up source status tracking for parseM3U
+setStatusCallback(updateSourceStatus);
+
+// Load the persisted snapshot before server setup. Source refreshes run after
+// listening so a stalled tuner cannot hold admin and health endpoints hostage.
+resetSourceStatus();
+await initChannelsCache();
+
+// Register lineup cache invalidation when channels update
+onChannelsUpdate(invalidateLineupCaches);
+
+// Register routes
+app.use(authRoutesRouter);
+app.use(oauthRouter);
+app.use('/channels', channelsRoute);
+app.use(configRoute);
+app.use(mappingRouter);
+app.use('/api/channels', channelsManagementRouter);
+app.use(canonicalRouter);
+app.use('/', healthRouter);
+app.use('/', statusRouter);
+app.use('/', usageRouter);
+app.use(previewRouter); // Preview API routes
+app.use(cacheRouter); // Cache management routes
+app.use(backupRouter); // Config backup/restore routes
+imageProxyRoute(app);
+setupHDHRRoutes(app, config);
+setupLineupRoutes(app, config, { registerUsage, touchUsage, unregisterUsage });
+setupTranscodeRoutes(app, { registerUsage, touchUsage, unregisterUsage });
+setupStreamProbeRoutes(app);
+await setupEPGRoutes(app);
+setupLiveTvRoutes(app);
+setupMCPRoutes(app);
+
+// Initialize and start scheduled jobs (health checks, EPG refresh, etc.)
+import { initDefaultJobs, startScheduler, schedulerRouter } from './server/scheduler.js';
+initDefaultJobs();
+app.use('/api/scheduler', schedulerRouter);
+await startScheduler();
+
+// Error handling middleware (must be after all routes)
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+// Friendly startup banner
+app.listen(port, () => {
+  const base = `http://${config.host}:${port}`;
+  const adminUrl = isAdminBuilt()
+    ? `${base}/admin/`
+    : `http://${config.host}:${adminDevPort}/admin/ (dev server - run 'npm run dev')`;
+
+  console.log(chalk.greenBright(`🚀 IPTV Proxy running at ${chalk.bold(base)}`));
+  console.log(chalk.cyan('  M3U Playlist:'), chalk.yellow(`${base}/lineup.m3u`));
+  console.log(chalk.cyan('  XMLTV Guide:'), chalk.yellow(`${base}/xmltv.xml`));
+  console.log(chalk.cyan('  MCP Endpoint:'), chalk.yellow(`${base}/mcp`));
+  console.log(chalk.cyan('  Admin UI:'), chalk.yellow(adminUrl));
+});
+
+// Do not await source discovery during startup. parseAll records failures per
+// source and preserves the last persisted snapshot until healthy sources finish.
+void parseAll().catch(err => {
+  console.error(`❌ Background source refresh failed: ${err.message}`);
+});

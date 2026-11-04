@@ -5,10 +5,16 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import { spawn } from 'child_process';
 import { initChannelsCache, cleanupCache } from '../../libs/channels-cache.js';
-import { loadChannelSnapshot, replaceChannelSnapshot } from '../../libs/channel-snapshot-service.js';
+import {
+  loadChannelSnapshot,
+  replaceChannelSnapshot,
+} from '../../libs/channel-snapshot-service.js';
 import { setupTranscodeRoutes } from '../../server/transcode.js';
 import { errorHandler } from '../../server/error-handler.js';
+
+let stubScript;
 
 /**
  * Configure the current Node executable as a direct ffmpeg fixture. This is
@@ -38,10 +44,13 @@ function setProcessPath(value) {
 function setFfmpegStub(stub, originalNodeOptions) {
   process.env.FFMPEG_PATH = process.execPath;
   process.env.FFMPEG_STUB_CONFIG = JSON.stringify(stub.options);
-  process.env.NODE_OPTIONS = `${originalNodeOptions || ''} --require ${JSON.stringify(stub.preloadPath)}`.trim();
+  stubScript = stub.preloadPath;
+  if (originalNodeOptions) process.env.NODE_OPTIONS = originalNodeOptions;
+  else delete process.env.NODE_OPTIONS;
 }
 
 describe('Transcode Route Integration', () => {
+  const usageEvents = [];
   let originalChannels = null;
   let server = null;
   let baseUrl = '';
@@ -75,7 +84,17 @@ describe('Transcode Route Integration', () => {
     originalStubConfig = process.env.FFMPEG_STUB_CONFIG;
 
     const app = express();
-    setupTranscodeRoutes(app);
+    setupTranscodeRoutes(app, {
+      spawn: (command, args, options) =>
+        spawn(command, command === process.execPath ? [stubScript, ...args] : args, options),
+      registerUsage: async data => {
+        usageEvents.push({ type: 'start', data });
+        return 'transcode-usage-key';
+      },
+      touchUsage: key => usageEvents.push({ type: 'touch', key }),
+      unregisterUsage: key => usageEvents.push({ type: 'stop', key }),
+      usageHeartbeatMs: 25,
+    });
     app.use(errorHandler);
 
     await new Promise(resolve => {
@@ -110,6 +129,7 @@ describe('Transcode Route Integration', () => {
   });
 
   afterEach(async () => {
+    usageEvents.length = 0;
     // Restore PATH to its original value
     setProcessPath(originalPath);
     if (originalFfmpegPath === undefined) delete process.env.FFMPEG_PATH;
@@ -153,8 +173,8 @@ describe('Transcode Route Integration', () => {
     expect(response.status).to.equal(502);
     expect(response.data).to.have.property('error');
     expect(response.data.error).to.include('Transcoding failed');
-    expect(response.data).to.have.property('details');
-    expect(response.data.details).to.include('1');
+    expect(response.data).not.to.have.property('details');
+    expect(response.data.code).to.equal('TRANSCODE_FAILED');
   });
 
   it('pipes ffmpeg stdout to the response', async () => {
@@ -172,6 +192,52 @@ describe('Transcode Route Integration', () => {
     expect(Buffer.from(response.data).toString()).to.equal('FAKEDATA');
   });
 
+  it('records a trusted viewer while transcoded playback is active', async () => {
+    const previousSecret = process.env.IPTV_USAGE_IDENTITY_SECRET;
+    process.env.IPTV_USAGE_IDENTITY_SECRET = 'test-identity-secret';
+    try {
+      const stub = await makeFFmpegStub(tmpBinDir, { exitCode: 0, stdoutData: 'FAKEDATA' });
+      setFfmpegStub(stub, originalNodeOptions);
+      const response = await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
+        headers: {
+          'X-IPTV-Identity-Secret': 'test-identity-secret',
+          'X-IPTV-User-Id': 'account-1',
+          'X-IPTV-User-Name': encodeURIComponent('Bób Smith'),
+        },
+        responseType: 'arraybuffer',
+      });
+      expect(response.status).to.equal(200);
+      expect(usageEvents.find(event => event.type === 'start')?.data).to.include({
+        userId: 'account-1',
+        userName: 'Bób Smith',
+      });
+      expect(usageEvents.find(event => event.type === 'stop')?.key).to.equal('transcode-usage-key');
+    } finally {
+      if (previousSecret === undefined) delete process.env.IPTV_USAGE_IDENTITY_SECRET;
+      else process.env.IPTV_USAGE_IDENTITY_SECRET = previousSecret;
+    }
+  });
+
+  it('refreshes usage throughout an open transcoded stream', async () => {
+    const stub = await makeFFmpegStub(tmpBinDir, {
+      exitCode: 0,
+      stdoutData: 'FAKEDATA',
+      delayMs: 500,
+    });
+    setFfmpegStub(stub, originalNodeOptions);
+
+    const response = await axios.get(`${baseUrl}/transcode/Antenna/OTA%20Channel`, {
+      responseType: 'stream',
+    });
+    try {
+      await new Promise(resolve => setTimeout(resolve, 150));
+      expect(usageEvents.filter(event => event.type === 'touch').length).to.be.greaterThan(0);
+      expect(usageEvents.find(event => event.type === 'stop')).to.equal(undefined);
+    } finally {
+      response.data.destroy();
+    }
+  });
+
   it('passes browser-compatible encoding flags to ffmpeg', async () => {
     const argsFile = path.join(tmpBinDir, 'ffmpeg-args.json');
     const stub = await makeFFmpegStub(tmpBinDir, { exitCode: 0, stdoutData: 'X', argsFile });
@@ -183,6 +249,14 @@ describe('Transcode Route Integration', () => {
     });
 
     const args = JSON.parse(await fs.readFile(argsFile, 'utf8'));
+
+    // Deinterlace before encoding: one output frame per field preserves broadcast
+    // motion, while progressive frames bypass the filter.
+    expect(args).to.include('-vf');
+    expect(args[args.indexOf('-vf') + 1]).to.equal(
+      'bwdif=mode=send_field:parity=auto:deint=interlaced'
+    );
+    expect(args.indexOf('-vf')).to.be.greaterThan(args.indexOf('-i') + 1);
 
     // Stereo downmix (-ac 2) must be present so 5.1 AC-3 is not re-encoded as
     // 6-channel AAC, which many browser MSE implementations reject.

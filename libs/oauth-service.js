@@ -5,6 +5,7 @@ import { getDatabase, initDatabase, transaction } from './database.js';
 const DEFAULT_SCOPE = 'mcp';
 const DEFAULT_AUTHORIZATION_CODE_TTL_SECONDS = 300;
 const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 3600;
+const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 function ensureDatabaseReady() {
   return initDatabase();
@@ -50,7 +51,11 @@ function scopeIncludes(scope, requiredScope) {
 }
 
 function scopeAllows(allowedScope, requestedScope) {
-  const allowed = new Set(String(allowedScope || '').split(/\s+/).filter(Boolean));
+  const allowed = new Set(
+    String(allowedScope || '')
+      .split(/\s+/)
+      .filter(Boolean)
+  );
   return String(requestedScope || '')
     .split(/\s+/)
     .filter(Boolean)
@@ -64,9 +69,7 @@ function sanitizeOauthClient(rawClient) {
 
   const clientId = String(rawClient.client_id || '').trim();
   const redirectUris = Array.isArray(rawClient.redirect_uris)
-    ? rawClient.redirect_uris
-      .map(uri => String(uri || '').trim())
-      .filter(Boolean)
+    ? rawClient.redirect_uris.map(uri => String(uri || '').trim()).filter(Boolean)
     : [];
 
   if (!clientId || redirectUris.length === 0) {
@@ -97,7 +100,9 @@ function getOAuthConfig() {
       Number.isInteger(oauth.access_token_ttl_seconds) && oauth.access_token_ttl_seconds > 0
         ? oauth.access_token_ttl_seconds
         : DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
-    clients: Array.isArray(oauth.clients) ? oauth.clients.map(sanitizeOauthClient).filter(Boolean) : [],
+    clients: Array.isArray(oauth.clients)
+      ? oauth.clients.map(sanitizeOauthClient).filter(Boolean)
+      : [],
   };
 }
 
@@ -185,12 +190,7 @@ function verifyPkce({ verifier, challenge, method }) {
   return false;
 }
 
-export function exchangeAuthorizationCode({
-  code,
-  clientId,
-  redirectUri,
-  codeVerifier,
-}) {
+export function exchangeAuthorizationCode({ code, clientId, redirectUri, codeVerifier }) {
   ensureDatabaseReady();
 
   const client = getOAuthClient(clientId);
@@ -283,12 +283,14 @@ export function createAccessToken({ clientId, scope = DEFAULT_SCOPE, username })
   ensureDatabaseReady();
 
   const token = base64Url(crypto.randomBytes(32));
+  const refreshToken = base64Url(crypto.randomBytes(32));
   const timestamp = nowIso();
   const expiresAt = expiresAtIso(getOAuthServerSettings().accessTokenTtlSeconds);
+  const refreshExpiresAt = expiresAtIso(REFRESH_TOKEN_TTL_SECONDS);
 
-  getDatabase()
-    .prepare(
-      `INSERT INTO oauth_access_tokens (
+  const db = getDatabase();
+  db.prepare(
+    `INSERT INTO oauth_access_tokens (
         token_hash,
         client_id,
         scope,
@@ -297,15 +299,68 @@ export function createAccessToken({ clientId, scope = DEFAULT_SCOPE, username })
         expires_at,
         revoked_at
       ) VALUES (?, ?, ?, ?, ?, ?, NULL)`
-    )
-    .run(sha256(token), clientId, normalizeScope(scope), username, timestamp, expiresAt);
+  ).run(sha256(token), clientId, normalizeScope(scope), username, timestamp, expiresAt);
+  db.prepare(
+    `INSERT INTO oauth_refresh_tokens (
+      token_hash, client_id, scope, username, created_at, expires_at, revoked_at
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL)`
+  ).run(
+    sha256(refreshToken),
+    clientId,
+    normalizeScope(scope),
+    username,
+    timestamp,
+    refreshExpiresAt
+  );
 
   return {
     access_token: token,
     token_type: 'Bearer',
     expires_in: getOAuthServerSettings().accessTokenTtlSeconds,
+    refresh_token: refreshToken,
     scope: normalizeScope(scope),
   };
+}
+
+export function exchangeRefreshToken({ refreshToken, clientId }) {
+  ensureDatabaseReady();
+  const db = getDatabase();
+  const rotate = transaction(() => {
+    const tokenHash = sha256(refreshToken);
+    const row = db
+      .prepare(
+        `SELECT client_id, scope, username, expires_at, revoked_at
+         FROM oauth_refresh_tokens WHERE token_hash = ?`
+      )
+      .get(tokenHash);
+
+    if (
+      !row ||
+      row.client_id !== clientId ||
+      row.revoked_at ||
+      Date.parse(row.expires_at) <= Date.now()
+    ) {
+      return { error: 'invalid-refresh-token' };
+    }
+
+    const client = getOAuthClient(clientId);
+    if (!client || !scopeIncludes(row.scope, 'mcp') || !scopeAllows(client.scope, row.scope)) {
+      return { error: 'invalid-refresh-token' };
+    }
+
+    const consumed = db
+      .prepare(
+        'UPDATE oauth_refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL'
+      )
+      .run(nowIso(), tokenHash);
+    if (consumed.changes !== 1) {
+      return { error: 'invalid-refresh-token' };
+    }
+
+    return createAccessToken({ clientId, scope: row.scope, username: row.username });
+  });
+
+  return rotate();
 }
 
 export function authenticateAccessToken(token, requiredScope = DEFAULT_SCOPE) {
@@ -355,19 +410,31 @@ export function authenticateAccessToken(token, requiredScope = DEFAULT_SCOPE) {
   };
 }
 
-export function revokeAccessToken(token) {
+export function revokeOAuthToken(token) {
   ensureDatabaseReady();
 
-  const result = getDatabase()
+  const db = getDatabase();
+  const tokenHash = sha256(token);
+  const revokedAt = nowIso();
+  const accessResult = db
     .prepare(
       `UPDATE oauth_access_tokens
           SET revoked_at = ?
         WHERE token_hash = ?
           AND revoked_at IS NULL`
     )
-    .run(nowIso(), sha256(token));
+    .run(revokedAt, tokenHash);
 
-  return result.changes > 0;
+  const refreshResult = db
+    .prepare(
+      `UPDATE oauth_refresh_tokens
+          SET revoked_at = ?
+        WHERE token_hash = ?
+          AND revoked_at IS NULL`
+    )
+    .run(revokedAt, tokenHash);
+
+  return accessResult.changes + refreshResult.changes > 0;
 }
 
 export default {
@@ -375,10 +442,11 @@ export default {
   createAccessToken,
   createAuthorizationCode,
   exchangeAuthorizationCode,
+  exchangeRefreshToken,
   getOAuthClient,
   getOAuthIssuerOverride,
   getOAuthServerSettings,
   isOAuthEnabled,
   listOAuthClients,
-  revokeAccessToken,
+  revokeOAuthToken,
 };

@@ -76,9 +76,14 @@ The MCP interface includes tools for:
 - understanding the recommended workflow (`get_agent_workflow`)
 - checking current system readiness (`diagnose_agent_readiness`)
 - listing providers, channels, canonical channels, bindings, guide bindings, and output profiles
+- adding providers with optional XMLTV EPG (`create_provider`) and updating individual providers by stable ID (`update_provider`), preserving other sources
 - reading guide data and source status
 - updating preferred streams, guide bindings, canonical publish state, and output-profile channel settings
 - reloading channels and EPG data
+
+To add a channel source, call `create_provider` with `name`, `url`, optional `type` (`m3u` by default, or `hdhomerun`), and optional `epg` XMLTV URL. The URL can be an M3U playlist, a direct HLS manifest, or an HDHomeRun base URL. HTTP(S), `file://` URLs, and LAN addresses are supported. Provider results contain IDs and status fields but omit upstream URLs, which may contain credentials.
+
+Provider changes save configuration without fetching upstream data. Call `reload_channels` afterward to rebuild discovery and refresh the in-memory stream lookup. Inspect `list_canonical_channels` and `list_guide_bindings`; for a direct HLS source without a `tvg-id`, select its matching XMLTV channel using `set_canonical_channel_guide_binding`. Configure its enabled state and guide number with the output-profile tools, then call `reload_epg` and verify the guide. `update_provider` accepts `provider_id` from `list_providers` plus only the fields to change; setting `epg` to `""` removes its guide URL. Renaming preserves the provider ID. Renaming playlists whose channels lack `tvg-id`, or changing a playlist URL, may change discovered channel identities, so inspect bindings after reloading.
 
 ### Authentication
 
@@ -106,6 +111,9 @@ The server currently supports:
 - PKCE (`S256` and `plain`)
 - public clients (`token_endpoint_auth_method: none`)
 - opaque bearer access tokens for the `mcp` scope
+- rotating refresh tokens that keep the client authorized for 30 days after its last successful refresh
+
+Access tokens retain their configured lifetime (one hour by default). The token response now includes a `refresh_token`. OAuth clients that support refresh tokens can exchange it for a new access token and replacement refresh token without opening the login page. Each refresh token can be used only once. If the client does not refresh for 30 days, is disabled, loses its `mcp` scope, or the token is revoked, authorization must start again. Existing grants need one new authorization to receive a refresh token.
 
 ### OAuth configuration
 
@@ -163,6 +171,16 @@ curl http://localhost:34400/.well-known/oauth-authorization-server
 curl -X POST http://localhost:34400/oauth/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=authorization_code&client_id=chatgpt&code=YOUR_CODE&redirect_uri=https%3A%2F%2Fchat.openai.com%2Faip%2Foauth%2Fcallback&code_verifier=YOUR_CODE_VERIFIER"
+```
+
+### Renew MCP access
+
+Use the latest refresh token returned by `/oauth/token`:
+
+```bash
+curl -X POST http://localhost:34400/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=refresh_token&client_id=chatgpt&refresh_token=YOUR_LATEST_REFRESH_TOKEN"
 ```
 
 ### Ask the MCP interface how to operate
@@ -318,7 +336,7 @@ admin_auth:
   ```
 - Minimum length is 32 characters. Shorter values are ignored and a new secret is auto-generated
 - If writing to `app.yaml` fails (e.g., read-only filesystem), a warning is logged and a per-process random secret is used — existing session cookies will be invalidated on each restart because the signing key changes
-- Note: even with a persistent secret, session _data_ (login state) is held in memory and lost on restart because the default MemoryStore is used. This is acceptable for single-instance deployments.
+- Admin sessions (including login and CSRF state) are stored in `data/iptv-proxy.sqlite`, or the directory set by `DATA_PATH`. Keep this database and `app.yaml` on persistent storage so login survives server restarts and container replacements. Login lasts for 30 days since the last authenticated request; each request renews the browser cookie and saved session expiry. An open admin tab checks the session every minute and keeps it active. Logout removes the saved session. Existing eight-hour cookies retain their original expiry until the user signs in again.
 
 **Password Hashing:**
 
@@ -763,6 +781,8 @@ Backups are stored under `data/backups/`, include the SQLite database snapshot p
 ### Stream Usage History
 
 In addition to the active stream view, a history of recently completed stream sessions is available.
+
+The Usage tab and `/api/usage/active` can show an optional authenticated viewer ID and friendly account name. Set `IPTV_USAGE_IDENTITY_SECRET` to the same strong, independent value on IPTV Proxy and a trusted authentication gateway. The gateway sends `X-IPTV-Identity-Secret`, `X-IPTV-User-Id`, and optionally `X-IPTV-User-Name` on upstream media requests after it authenticates the viewer. ID and name values are UTF-8 percent-encoded. The gateway must replace any incoming copies of these headers. IPTV Proxy ignores identity metadata when the secret is absent or incorrect and continues to group anonymous usage by IP and channel. Identity metadata is for usage display only; it never authorizes playback. Keep the proxy's media port private when using a gateway.
 
 **View recently completed sessions:**
 

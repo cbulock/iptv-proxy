@@ -1,6 +1,12 @@
 import express from 'express';
 import RateLimit from 'express-rate-limit';
-import { isAuthEnabled, hashPassword, verifyCredentials, requireAuth, invalidateAuthCache } from './auth.js';
+import {
+  isAuthEnabled,
+  hashPassword,
+  verifyCredentials,
+  requireAuth,
+  invalidateAuthCache,
+} from './auth.js';
 import { loadAppConfigFromStore, replaceAppConfig } from '../libs/app-settings-service.js';
 import { ensureCsrfToken } from './csrf.js';
 
@@ -11,14 +17,14 @@ function getSessionExpiresAt(req) {
     return null;
   }
 
-  const expires = req.session.cookie?.expires;
-  if (expires) {
-    return new Date(expires).toISOString();
-  }
-
   const originalMaxAge = Number(req.session.cookie?.originalMaxAge);
   if (Number.isFinite(originalMaxAge) && originalMaxAge > 0) {
     return new Date(Date.now() + originalMaxAge).toISOString();
+  }
+
+  const expires = req.session.cookie?.expires;
+  if (expires) {
+    return new Date(expires).toISOString();
   }
 
   return null;

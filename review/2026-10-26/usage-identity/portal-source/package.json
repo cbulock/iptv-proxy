@@ -1,0 +1,35 @@
+{
+  "name": "bulock-media",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host 127.0.0.1",
+    "build": "nuxt build",
+    "start": "node .output/server/index.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "typecheck": "nuxt prepare && node scripts/verify-types.mjs",
+    "restore-invalidate": "node --experimental-strip-types scripts/invalidate-restored.ts",
+    "dev:local": "node scripts/dev-local.mjs",
+    "test:integration": "node --test tests/integration/*.test.ts"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.3.0",
+    "cindor-ui-core": "^0.4.0",
+    "cindor-ui-vue": "^0.4.0",
+    "fast-xml-parser": "^5.11.2",
+    "lucide-vue-next": "^0.468.0",
+    "nodemailer": "^10.2.1",
+    "vue": "^3.5.22",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^7.0.0",
+    "nuxt": "^4.6.2",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

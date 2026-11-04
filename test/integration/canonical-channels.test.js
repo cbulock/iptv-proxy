@@ -63,6 +63,22 @@ describe('canonical channel persistence', () => {
     await fs.rm(dataDir, { recursive: true, force: true });
   });
 
+  it('assigns guide data from a provider not bound to the channel and retains it after rebuilding', async () => {
+    nock('http://canonical.example').get('/one.m3u').reply(200,
+      '#EXTM3U\n#EXTINF:-1 tvg-id="one",Independent One\nhttp://streams.example/one');
+    nock('http://canonical.example').get('/two.m3u').reply(200,
+      '#EXTM3U\n#EXTINF:-1 tvg-id="two",Independent Two\nhttp://streams.example/two');
+    await parseM3UModule.parseAll();
+    const guides = canonicalService.listGuideBindings();
+    const first = guides[0];
+    const other = guides.find(binding => binding.canonical.id !== first.canonical.id);
+    const result = canonicalService.setCanonicalChannelGuideBinding(first.canonical.id, other.source.id, 'external.guide');
+    expect(result).to.include({ selected: true, epgChannelId: 'external.guide' });
+    canonicalService.rebuildCanonicalChannels();
+    expect(canonicalService.listGuideBindings().filter(binding => binding.canonical.id === first.canonical.id && binding.selected))
+      .to.have.lengthOf(1).and.satisfy(bindings => bindings[0].source.id === other.source.id && bindings[0].epgChannelId === 'external.guide');
+  });
+
   it('builds canonical channels and bindings from discovered source channels', async () => {
     nock('http://canonical.example')
       .get('/one.m3u')

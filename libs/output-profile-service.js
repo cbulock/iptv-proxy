@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getDatabase, initDatabase, transaction } from './database.js';
+import { setCanonicalChannelPreferredStream, setCanonicalChannelGuideBinding } from './canonical-channel-service.js';
 
 const DEFAULT_PROFILE_NAME = 'Default Output';
 const DEFAULT_PROFILE_SLUG = 'default';
@@ -562,17 +563,17 @@ export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
     if (change.preferredSourceChannelId !== undefined) {
       const binding = db
         .prepare(
-          'SELECT id FROM channel_bindings WHERE canonical_channel_id = ? AND source_channel_id = ?'
+          'SELECT id FROM source_channels WHERE id = ?'
         )
-        .get(change.id, change.preferredSourceChannelId);
+        .get(change.preferredSourceChannelId);
       if (!binding) return { error: 'binding-not-found', canonicalId: change.id };
     }
     if (change.guideBinding !== undefined) {
       const binding = db
         .prepare(
-          'SELECT id FROM guide_bindings WHERE canonical_channel_id = ? AND source_id = ?'
+          "SELECT id FROM sources WHERE id = ? AND TRIM(COALESCE(epg_url, '')) != ''"
         )
-        .get(change.id, change.guideBinding?.sourceId);
+        .get(change.guideBinding?.sourceId);
       if (!binding || !String(change.guideBinding?.epgChannelId || '').trim()) {
         return { error: 'guide-binding-not-found', canonicalId: change.id };
       }
@@ -599,12 +600,6 @@ export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
       profile.id
     );
     const updateName = db.prepare('UPDATE canonical_channels SET custom_name = ?, updated_at = ? WHERE id = ?');
-    const updatePreferred = db.prepare(
-      'UPDATE channel_bindings SET is_preferred_stream = CASE WHEN source_channel_id = ? THEN 1 ELSE 0 END WHERE canonical_channel_id = ?'
-    );
-    const updateGuide = db.prepare(
-      'UPDATE guide_bindings SET epg_channel_id = CASE WHEN source_id = ? THEN ? ELSE epg_channel_id END, priority = CASE WHEN source_id = ? THEN 0 ELSE 1 END WHERE canonical_channel_id = ?'
-    );
     for (const change of canonicalChanges) {
       if (Object.hasOwn(change, 'customName')) {
         updateName.run(
@@ -615,13 +610,12 @@ export function saveOutputProfile(slug = DEFAULT_PROFILE_SLUG, changes = {}) {
           change.id
         );
       }
-      if (change.preferredSourceChannelId !== undefined) updatePreferred.run(change.preferredSourceChannelId, change.id);
+      if (change.preferredSourceChannelId !== undefined) setCanonicalChannelPreferredStream(change.id, change.preferredSourceChannelId);
       if (change.guideBinding !== undefined) {
-        updateGuide.run(
+        setCanonicalChannelGuideBinding(
+          change.id,
           change.guideBinding.sourceId,
-          change.guideBinding.epgChannelId,
-          change.guideBinding.sourceId,
-          change.id
+          change.guideBinding.epgChannelId
         );
       }
     }

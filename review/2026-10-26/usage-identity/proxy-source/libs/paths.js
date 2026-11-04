@@ -1,0 +1,40 @@
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get the directory of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Project root is one level up from libs/
+export const PROJECT_ROOT = join(__dirname, '..');
+
+// Config directory - use CONFIG_PATH env var if set, otherwise default to PROJECT_ROOT/config
+export const CONFIG_DIR = process.env.CONFIG_PATH || join(PROJECT_ROOT, 'config');
+
+// Data directory - use DATA_PATH env var if set, otherwise default to PROJECT_ROOT/data
+export const DATA_DIR = process.env.DATA_PATH || join(PROJECT_ROOT, 'data');
+
+// Helper function to get config file path
+export function getConfigPath(filename) {
+  // Read CONFIG_PATH at call time to allow test isolation via process.env.CONFIG_PATH
+  const dir = process.env.CONFIG_PATH || join(PROJECT_ROOT, 'config');
+  return join(dir, filename);
+}
+
+export function getDataDir() {
+  return process.env.DATA_PATH || join(PROJECT_ROOT, 'data');
+}
+
+// Helper function to get data file path
+export function getDataPath(filename) {
+  return join(getDataDir(), filename);
+}
+
+export default {
+  PROJECT_ROOT,
+  CONFIG_DIR,
+  DATA_DIR,
+  getConfigPath,
+  getDataDir,
+  getDataPath,
+};

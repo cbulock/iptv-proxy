@@ -207,6 +207,55 @@ const MIGRATIONS = [
       ALTER TABLE canonical_channels ADD COLUMN custom_name TEXT;
     `,
   },
+  {
+    id: '006-admin-sessions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS admin_sessions (
+        sid TEXT PRIMARY KEY,
+        data_json TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
+    `,
+  },
+  {
+    id: '007-oauth-refresh-tokens',
+    sql: `
+      CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+        token_hash TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        username TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_client_id
+        ON oauth_refresh_tokens(client_id);
+      CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires_at
+        ON oauth_refresh_tokens(expires_at);
+    `,
+  },
+  {
+    id: '008-playback-history',
+    sql: `
+      CREATE TABLE IF NOT EXISTS playback_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        user_name TEXT NOT NULL,
+        name TEXT NOT NULL,
+        tvg_id TEXT NOT NULL,
+        user_agent TEXT NOT NULL,
+        client TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL,
+        duration_seconds INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_playback_history_ended_at ON playback_history(ended_at DESC);
+    `,
+  },
 ];
 
 let database = null;
@@ -237,7 +286,12 @@ function ensureMigrationTable(db) {
 function applyMigrations(db) {
   ensureMigrationTable(db);
 
-  const applied = new Set(db.prepare('SELECT id FROM schema_migrations').all().map(row => row.id));
+  const applied = new Set(
+    db
+      .prepare('SELECT id FROM schema_migrations')
+      .all()
+      .map(row => row.id)
+  );
   const insertMigration = db.prepare(
     'INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)'
   );

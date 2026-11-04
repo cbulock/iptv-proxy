@@ -1,0 +1,93 @@
+import fs from 'fs/promises';
+import express from 'express';
+import RateLimit from 'express-rate-limit';
+import { getChannels } from '../libs/channels-cache.js';
+import { getDataPath } from '../libs/paths.js';
+import { loadChannelMapFromStore } from '../libs/channel-map-service.js';
+
+const router = express.Router();
+
+const STATUS_FILE = getDataPath('lineup_status.json');
+
+let channelMapCache = null;
+let channelMapKeySet = null;
+let mappedTvgIdSet = null;
+
+function ensureChannelMapCache() {
+  if (channelMapCache !== null && channelMapKeySet && mappedTvgIdSet) {
+    return;
+  }
+
+  const channelMap = loadChannelMapFromStore();
+  channelMapCache = channelMap;
+  channelMapKeySet = new Set(Object.keys(channelMap));
+
+  const tvgIdSet = new Set();
+  for (const value of Object.values(channelMap)) {
+    if (value && value.tvg_id) {
+      tvgIdSet.add(value.tvg_id);
+    }
+  }
+  mappedTvgIdSet = tvgIdSet;
+}
+
+const limiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  skip: req => req.ip === '::1' || req.ip === '127.0.0.1',
+  keyGenerator: req => req.ip || 'unknown',
+});
+
+router.get('/', limiter, async (req, res) => {
+  try {
+    const channels = getChannels();
+    let filtered = channels;
+
+    if (req.query.status === 'online') {
+      let statusMap = {};
+      try {
+        statusMap = JSON.parse(await fs.readFile(STATUS_FILE, 'utf8'));
+      } catch (err) {
+        return res.status(500).json({ error: 'Status data unavailable' });
+      }
+
+      filtered = channels.filter(c => statusMap[c.tvg_id] === 'online');
+    }
+
+    if (req.query.mapped_only === 'true' || req.query.mapped_only === '1') {
+      ensureChannelMapCache();
+      filtered = filtered.filter(channel => {
+        const name = channel?.name || '';
+        const tvgId = channel?.tvg_id || '';
+
+        if (channelMapKeySet.has(name)) {
+          return true;
+        }
+
+        if (tvgId) {
+          if (channelMapKeySet.has(tvgId)) {
+            return true;
+          }
+          if (mappedTvgIdSet.has(tvgId)) {
+            return true;
+          }
+        }
+
+        return false;
+      });
+    }
+
+    res.json(filtered);
+  } catch (err) {
+    console.error('Error loading channels:', err);
+    res.status(500).json({ error: 'Failed to load channels' });
+  }
+});
+
+export function invalidateChannelMapCache() {
+  channelMapCache = null;
+  channelMapKeySet = null;
+  mappedTvgIdSet = null;
+}
+
+export default router;

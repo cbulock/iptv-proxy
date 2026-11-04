@@ -1,12 +1,13 @@
+import { getPublishedChannelsData, getPublishedGuideData } from './live-tv.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as z from 'zod';
-import { getChannels } from '../libs/channels-cache.js';
+import { getChannels, invalidateCache } from '../libs/channels-cache.js';
 import { getGuideData, hasEPGRefresh, refreshEPG } from './epg.js';
 import { getSourceStatus } from './status.js';
 import { parseAll } from '../scripts/parseM3U.js';
 import { requireMcpBearerAuth } from './oauth.js';
-import { listSources } from '../libs/source-service.js';
+import { listSources, replaceProvidersConfig } from '../libs/source-service.js';
 import {
   listCanonicalChannels,
   listChannelBindings,
@@ -30,6 +31,101 @@ import {
 import { invalidateLineupCaches } from './lineup.js';
 
 const SERVER_INFO = { name: 'iptv-proxy', version: '1.0.0' };
+
+// LAN tuners and local XMLTV/playlist files are supported source locations.
+const PROVIDER_URL_SCHEMA = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(value => {
+    try {
+      const url = new URL(value);
+      return ['http:', 'https:', 'file:'].includes(url.protocol);
+    } catch {
+      return false;
+    }
+  }, 'Expected an HTTP(S) or file URL');
+const PROVIDER_FIELDS = {
+  name: z.string().trim().min(1).describe('Unique provider display name'),
+  url: PROVIDER_URL_SCHEMA.describe(
+    'M3U playlist, direct HLS stream, or HDHomeRun base URL; LAN addresses are supported'
+  ),
+  type: z.enum(['m3u', 'hdhomerun']).describe('Use m3u for playlists and direct HLS streams'),
+  epg: z
+    .union([PROVIDER_URL_SCHEMA, z.literal('')])
+    .describe('XMLTV guide URL; an empty string removes the guide URL'),
+};
+
+function saveProvider(tool, { provider_id, ...changes }) {
+  try {
+    const providers = listSources();
+    const current = provider_id ? providers.find(provider => provider.id === provider_id) : null;
+    if (provider_id && !current) {
+      return createError(tool, {
+        code: 'provider-not-found',
+        message: `Provider not found: ${provider_id}`,
+        nextSuggestedTools: ['list_providers'],
+      });
+    }
+    if (current && Object.keys(changes).length === 0) {
+      return createError(tool, {
+        code: 'empty-provider-update',
+        message: 'Supply at least one provider field to update.',
+        nextSuggestedTools: ['list_providers'],
+      });
+    }
+    const next = { ...current, ...changes };
+    if (
+      providers.some(
+        provider =>
+          provider.id !== current?.id && provider.name.toLowerCase() === next.name.toLowerCase()
+      )
+    ) {
+      return createError(tool, {
+        code: 'provider-name-conflict',
+        message: 'A provider with that name already exists.',
+        nextSuggestedTools: ['list_providers'],
+      });
+    }
+    replaceProvidersConfig({
+      providers: current
+        ? providers.map(provider => (provider.id === current.id ? next : provider))
+        : [...providers, next],
+    });
+    const saved = listSources().find(provider =>
+      current ? provider.id === current.id : provider.name === next.name
+    );
+    return createSuccess(
+      tool,
+      {
+        id: saved.id,
+        name: saved.name,
+        type: saved.type,
+        hasEpg: Boolean(saved.epg),
+        enabled: saved.enabled,
+      },
+      {
+        summary: `${current ? 'Updated' : 'Created'} provider ${saved.name}. Reload channels and EPG to apply the configuration.`,
+        sideEffects: [
+          'Provider configuration was saved to SQLite and exported to providers.yaml.',
+          'Channels and guide data were not reloaded.',
+        ],
+        nextSuggestedTools: [
+          'reload_channels',
+          ...(saved.epg || current?.epg ? ['reload_epg'] : []),
+          'diagnose_agent_readiness',
+        ],
+      }
+    );
+  } catch (_error) {
+    return createError(tool, {
+      code: 'provider-save-failed',
+      message:
+        'Failed to save provider configuration. Inspect the server logs and configuration storage.',
+      nextSuggestedTools: ['list_providers'],
+    });
+  }
+}
 
 const WORKFLOW_STEP_SCHEMA = z.object({
   step: z.string(),
@@ -100,6 +196,13 @@ function buildWorkflowOverview() {
   return {
     server: SERVER_INFO,
     recommendedEntryTool: 'diagnose_agent_readiness',
+    adminOnlyEndpoints: ['/api/usage/active', '/api/usage/history'],
+    playbackHistory: {
+      endpoint: '/api/usage/history',
+      access: 'admin session',
+      retention: 'most recent 1000 completed sessions in SQLite',
+      fields: ['id', 'ip', 'channelId', 'userId', 'userName', 'name', 'tvg_id', 'client', 'userAgent', 'startedAt', 'endedAt', 'durationSeconds'],
+    },
     toolGroups: {
       overview: ['get_agent_workflow', 'diagnose_agent_readiness', 'get_status'],
       discovery: [
@@ -113,6 +216,8 @@ function buildWorkflowOverview() {
         'get_output_profile_channels',
       ],
       mutation: [
+        'create_provider',
+        'update_provider',
         'create_output_profile',
         'update_output_profile',
         'save_output_profile',
@@ -159,6 +264,8 @@ function buildWorkflowOverview() {
         rationale:
           'Adjust canonical publish state, preferred streams, guide bindings, or per-profile channel settings only after inspecting current state.',
         suggestedTools: [
+          'create_provider',
+          'update_provider',
           'set_canonical_channel_published',
           'set_canonical_channel_name',
           'set_canonical_channel_preferred_stream',
@@ -175,6 +282,14 @@ function buildWorkflowOverview() {
       },
     ],
     mutationSideEffects: {
+      create_provider: [
+        'Appends one provider without changing existing sources.',
+        'Saves configuration only; reload_channels and reload_epg apply it.',
+      ],
+      update_provider: [
+        'Updates only supplied fields on one provider, preserving its ID and other sources.',
+        'Saves configuration only; reload_channels and reload_epg apply it.',
+      ],
       create_output_profile: ['Creates profile state and syncs initial output entries.'],
       update_output_profile: ['Updates profile metadata only.'],
       save_output_profile: [
@@ -207,7 +322,9 @@ function buildWorkflowOverview() {
         'Invalidates lineup caches.',
         'May trigger an EPG refresh when EPG refresh support is available.',
       ],
-      reload_channels: ['Reloads discovered channels from configured sources.'],
+      reload_channels: [
+        'Reloads discovered channels from configured sources and refreshes the in-memory channel lookup and lineup caches.',
+      ],
       reload_epg: ['Reloads guide data from configured XMLTV sources.'],
     },
   };
@@ -225,9 +342,7 @@ function buildAgentReadiness() {
     const entries = listOutputProfileEntries(profile.slug);
     const enabledEntries = entries.filter(entry => entry.enabled);
     const missingGuideNumberEntries = entries.filter(
-      entry =>
-        !String(entry.guideNumberOverride || entry.canonical?.guideNumber || '')
-          .trim()
+      entry => !String(entry.guideNumberOverride || entry.canonical?.guideNumber || '').trim()
     );
 
     return {
@@ -248,9 +363,7 @@ function buildAgentReadiness() {
       .filter(binding => binding.isPreferredStream)
       .map(binding => binding.canonical.id)
   );
-  const canonicalIdsWithGuideBindings = new Set(
-    guideBindings.map(binding => binding.canonical.id)
-  );
+  const canonicalIdsWithGuideBindings = new Set(guideBindings.map(binding => binding.canonical.id));
   const canonicalChannelsWithoutPreferredStreams = canonicalChannels.filter(
     channel => !canonicalIdsWithPreferredStreams.has(channel.id)
   );
@@ -322,7 +435,8 @@ function buildAgentReadiness() {
     issues.push({
       code: 'no-enabled-output-profiles',
       severity: 'error',
-      message: 'No output profiles are enabled, so no lineup is currently published through profiles.',
+      message:
+        'No output profiles are enabled, so no lineup is currently published through profiles.',
       recommendedTools: ['list_output_profiles', 'update_output_profile'],
     });
   }
@@ -393,8 +507,7 @@ function createMcpServer() {
         workflow: [
           {
             step: 'Start with readiness',
-            rationale:
-              'Use the diagnostic summary before performing detailed reads or mutations.',
+            rationale: 'Use the diagnostic summary before performing detailed reads or mutations.',
             suggestedTools: ['diagnose_agent_readiness'],
           },
           {
@@ -477,6 +590,40 @@ function createMcpServer() {
 
   registerJsonTool(
     server,
+    'get_published_channels',
+    'Read the default published viewer channel projection with relative stream, transcode, and artwork paths. Transcode paths encode H.264/AAC and deinterlace frames flagged as interlaced, preserving field-rate motion.',
+    {},
+    async () =>
+      createSuccess('get_published_channels', getPublishedChannelsData(), {
+        summary: 'Read the published viewer lineup.',
+        nextSuggestedTools: ['get_published_guide'],
+      })
+  );
+  registerJsonTool(
+    server,
+    'get_published_guide',
+    'Read all default published guide records in revision-bound pages of up to 1000. Repeat using nextCursor until null; restart on GUIDE_CHANGED.',
+    { hours: z.number().int().min(1).max(48).optional(), cursor: z.string().max(2048).optional() },
+    async ({ hours, cursor }) => {
+      const { status, ...data } = getPublishedGuideData({
+        ...(hours === undefined ? {} : { hours }),
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+      if (status)
+        return createError('get_published_guide', {
+          code: data.code,
+          message: data.error,
+          nextSuggestedTools: ['get_published_guide'],
+        });
+      return createSuccess('get_published_guide', data, {
+        summary: 'Read a published guide page.',
+        nextSuggestedTools: data.nextCursor ? ['get_published_guide'] : [],
+      });
+    }
+  );
+
+  registerJsonTool(
+    server,
     'get_guide',
     'Get EPG programme guide data for a specific channel.',
     {
@@ -495,8 +642,7 @@ function createMcpServer() {
         if (data === null) {
           return createError('get_guide', {
             code: 'epg-not-loaded',
-            message:
-              'EPG data is not available yet. Try again after the EPG has been loaded.',
+            message: 'EPG data is not available yet. Try again after the EPG has been loaded.',
             nextSuggestedTools: ['get_status', 'reload_epg'],
           });
         }
@@ -537,6 +683,33 @@ function createMcpServer() {
         nextSuggestedTools: ['list_channels', 'get_status', 'diagnose_agent_readiness'],
       });
     }
+  );
+
+  registerJsonTool(
+    server,
+    'create_provider',
+    'Add one M3U playlist, direct HLS stream, or HDHomeRun provider with optional XMLTV EPG. Preserves existing sources. Saves configuration only: call reload_channels, inspect canonical channels and guide bindings, then reload_epg. For a direct HLS stream, use set_canonical_channel_guide_binding with the matching XMLTV channel ID and output-profile tools for its guide number. Results omit upstream URLs.',
+    {
+      name: PROVIDER_FIELDS.name,
+      url: PROVIDER_FIELDS.url,
+      type: PROVIDER_FIELDS.type.default('m3u'),
+      epg: PROVIDER_FIELDS.epg.optional(),
+    },
+    async args => saveProvider('create_provider', args)
+  );
+
+  registerJsonTool(
+    server,
+    'update_provider',
+    'Update supplied fields of one provider by stable ID, preserving other fields and all other sources. An empty epg removes its guide URL. Saves configuration only; call reload_channels and reload_epg afterward. Use list_providers to find the ID. Results omit upstream URLs.',
+    {
+      provider_id: z.string().min(1).describe('Provider ID from list_providers'),
+      name: PROVIDER_FIELDS.name.optional(),
+      url: PROVIDER_FIELDS.url.optional(),
+      type: PROVIDER_FIELDS.type.optional(),
+      epg: PROVIDER_FIELDS.epg.optional(),
+    },
+    async args => saveProvider('update_provider', args)
   );
 
   registerJsonTool(
@@ -605,10 +778,7 @@ function createMcpServer() {
     'Create a new output profile, optionally copying channel settings from an existing profile.',
     {
       name: z.string().min(1).describe('Display name for the new output profile'),
-      copyFromSlug: z
-        .string()
-        .optional()
-        .describe('Existing output profile slug to clone from'),
+      copyFromSlug: z.string().optional().describe('Existing output profile slug to clone from'),
       enabled: z.boolean().optional().describe('Whether the new output profile should be enabled'),
     },
     async ({ name, copyFromSlug, enabled }) => {
@@ -898,7 +1068,7 @@ function createMcpServer() {
   registerJsonTool(
     server,
     'set_canonical_channel_preferred_stream',
-    'Choose which bound source channel should be the preferred stream for a canonical channel.',
+    'Choose any discovered source channel as the preferred stream for a canonical channel, creating a persistent manual binding when needed.',
     {
       canonical_id: z.string().min(1).describe('Canonical channel ID'),
       source_channel_id: z.string().min(1).describe('Source channel ID to prefer'),
@@ -917,7 +1087,7 @@ function createMcpServer() {
         if (binding?.error === 'binding-not-found') {
           return createError('set_canonical_channel_preferred_stream', {
             code: 'binding-not-found',
-            message: `Binding not found for canonical channel ${canonical_id} and source channel ${source_channel_id}`,
+            message: `Discovered source channel not found: ${source_channel_id}`,
             details: { canonical_id, source_channel_id },
             nextSuggestedTools: ['list_channel_bindings'],
           });
@@ -932,6 +1102,7 @@ function createMcpServer() {
           summary: `Updated preferred stream for canonical channel ${canonical_id}.`,
           sideEffects: [
             'Preferred stream selection was updated.',
+            'A persistent manual binding is created when the stream was not already bound to this channel.',
             'Lineup caches were invalidated.',
             ...epgRefreshSideEffect(),
           ],
@@ -955,7 +1126,7 @@ function createMcpServer() {
   registerJsonTool(
     server,
     'set_canonical_channel_guide_binding',
-    'Choose which source guide binding and EPG channel ID should drive a canonical channel.',
+    'Choose an EPG-enabled provider and EPG channel ID for a canonical channel, creating a persistent guide binding when needed.',
     {
       canonical_id: z.string().min(1).describe('Canonical channel ID'),
       source_id: z.string().min(1).describe('Source ID to use for guide data'),
@@ -975,7 +1146,7 @@ function createMcpServer() {
         if (binding?.error === 'guide-binding-not-found') {
           return createError('set_canonical_channel_guide_binding', {
             code: 'guide-binding-not-found',
-            message: `Guide binding not found for canonical channel ${canonical_id} and source ${source_id}`,
+            message: `EPG-enabled source or non-empty EPG channel ID not found: ${source_id}`,
             details: { canonical_id, source_id, epg_channel_id },
             nextSuggestedTools: ['list_guide_bindings'],
           });
@@ -987,10 +1158,7 @@ function createMcpServer() {
 
         return createSuccess('set_canonical_channel_guide_binding', binding, {
           summary: `Updated guide binding for canonical channel ${canonical_id}.`,
-          sideEffects: [
-            'Guide binding selection was updated.',
-            ...epgRefreshSideEffect(),
-          ],
+          sideEffects: ['Guide binding selection was updated; a persistent binding is created if needed.', ...epgRefreshSideEffect()],
           nextSuggestedTools: ['list_guide_bindings', 'get_guide', 'diagnose_agent_readiness'],
         });
       } catch (error) {
@@ -1103,12 +1271,16 @@ function createMcpServer() {
     async () => {
       try {
         await parseAll();
+        await invalidateCache();
         return createSuccess(
           'reload_channels',
           { triggered: true },
           {
             summary: 'Channel reload triggered successfully.',
-            sideEffects: ['Source channels were reloaded from configured providers.'],
+            sideEffects: [
+              'Source channels were reloaded from configured providers.',
+              'The in-memory channel lookup and lineup caches were refreshed.',
+            ],
             nextSuggestedTools: ['get_status', 'diagnose_agent_readiness', 'list_channels'],
           }
         );
@@ -1171,7 +1343,7 @@ function createMcpServer() {
  *
  * Endpoint: POST /mcp
  * Uses the MCP Streamable HTTP transport in stateless mode.
- * Auth is enforced via requireAuth (respects whether auth is enabled in the SQLite-backed app config).
+ * Auth is enforced via requireMcpBearerAuth (respects whether auth is enabled in the SQLite-backed app config).
  *
  * @param {import('express').Application} app
  */

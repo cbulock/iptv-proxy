@@ -62,6 +62,53 @@ async function loginAndGetCookie(baseUrl, username, password) {
   };
 }
 
+async function issueOAuthTokens(baseUrl) {
+  await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+  const sessionInfo = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+  const verifier = 'refresh-token-test-verifier';
+  const authorize = await axios.get(`${baseUrl}/oauth/authorize`, {
+    params: {
+      response_type: 'code',
+      client_id: 'test-chatgpt',
+      redirect_uri: 'http://127.0.0.1/callback',
+      scope: 'mcp',
+      code_challenge: sha256Base64Url(verifier),
+      code_challenge_method: 'S256',
+    },
+    headers: cookieHeader(sessionInfo),
+    maxRedirects: 0,
+    validateStatus: () => true,
+  });
+  const code = new URL(authorize.headers.location).searchParams.get('code');
+  const response = await axios.post(
+    `${baseUrl}/oauth/token`,
+    new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: 'test-chatgpt',
+      code,
+      redirect_uri: 'http://127.0.0.1/callback',
+      code_verifier: verifier,
+    }).toString(),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+  return response.data;
+}
+
+async function refreshOAuthTokens(baseUrl, refreshToken, clientId = 'test-chatgpt') {
+  return axios.post(
+    `${baseUrl}/oauth/token`,
+    new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      refresh_token: refreshToken,
+    }).toString(),
+    {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      validateStatus: () => true,
+    }
+  );
+}
+
 function cookieHeader({ cookie, csrfToken }) {
   return {
     Cookie: cookie,
@@ -87,6 +134,7 @@ describe('OAuth Integration', () => {
   let originalConfigPath;
   let originalDataPath;
   let closeDatabase;
+  let getDatabase;
   let invalidateAuthCache;
   let replaceAppConfig;
   let loadAppConfigFromStore;
@@ -99,18 +147,26 @@ describe('OAuth Integration', () => {
     process.env.CONFIG_PATH = tmpConfigDir;
     process.env.DATA_PATH = tmpDataDir;
 
-    const [{ default: authRouter }, { default: oauthRouter }, { setupMCPRoutes }, { csrfMiddleware }, databaseModule, authModule, appSettingsModule] =
-      await Promise.all([
-        import('../../server/auth-routes.js'),
-        import('../../server/oauth.js'),
-        import('../../server/mcp.js'),
-        import('../../server/csrf.js'),
-        import('../../libs/database.js'),
-        import('../../server/auth.js'),
-        import('../../libs/app-settings-service.js'),
-      ]);
+    const [
+      { default: authRouter },
+      { default: oauthRouter },
+      { setupMCPRoutes },
+      { csrfMiddleware },
+      databaseModule,
+      authModule,
+      appSettingsModule,
+    ] = await Promise.all([
+      import('../../server/auth-routes.js'),
+      import('../../server/oauth.js'),
+      import('../../server/mcp.js'),
+      import('../../server/csrf.js'),
+      import('../../libs/database.js'),
+      import('../../server/auth.js'),
+      import('../../libs/app-settings-service.js'),
+    ]);
 
     closeDatabase = databaseModule.closeDatabase;
+    getDatabase = databaseModule.getDatabase;
     invalidateAuthCache = authModule.invalidateAuthCache;
     replaceAppConfig = appSettingsModule.replaceAppConfig;
     loadAppConfigFromStore = appSettingsModule.loadAppConfigFromStore;
@@ -168,9 +224,10 @@ describe('OAuth Integration', () => {
     await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
     const res = await axios.get(`${baseUrl}/.well-known/oauth-authorization-server`);
     expect(res.status).to.equal(200);
-    expect(res.data.authorization_endpoint).to.equal(`${baseUrl}/oauth/authorize`);
-    expect(res.data.token_endpoint).to.equal(`${baseUrl}/oauth/token`);
+    expect(res.data.authorization_endpoint).to.equal(`${res.data.issuer}/oauth/authorize`);
+    expect(res.data.token_endpoint).to.equal(`${res.data.issuer}/oauth/token`);
     expect(res.data.code_challenge_methods_supported).to.include('S256');
+    expect(res.data.grant_types_supported).to.include('refresh_token');
   });
 
   it('redirects unauthenticated authorize requests to the admin login page', async () => {
@@ -239,6 +296,7 @@ describe('OAuth Integration', () => {
     expect(tokenRes.data.token_type).to.equal('Bearer');
     expect(tokenRes.data.scope).to.equal('mcp');
     expect(tokenRes.data.access_token).to.be.a('string');
+    expect(tokenRes.data.refresh_token).to.be.a('string').with.length.greaterThan(10);
 
     const unauthenticatedMcp = await axios.post(
       `${baseUrl}/mcp`,
@@ -273,6 +331,122 @@ describe('OAuth Integration', () => {
     const events = parseSSE(mcpRes.data);
     const toolList = events.find(event => event.id === 2);
     expect(toolList.result.tools.map(tool => tool.name)).to.include('get_agent_workflow');
+  });
+
+  it('rotates refresh tokens and keeps MCP access working after a database restart', async () => {
+    const initial = await issueOAuthTokens(baseUrl);
+    expect(initial.refresh_token).to.be.a('string').with.length.greaterThan(10);
+    const hash = crypto.createHash('sha256').update(initial.refresh_token).digest('hex');
+    const stored = getDatabase()
+      .prepare('SELECT expires_at FROM oauth_refresh_tokens WHERE token_hash = ?')
+      .get(hash);
+    expect(stored).to.exist;
+    expect(Date.parse(stored.expires_at) - Date.now()).to.be.within(
+      29 * 24 * 60 * 60 * 1000,
+      30 * 24 * 60 * 60 * 1000
+    );
+    expect(
+      getDatabase()
+        .prepare('SELECT token_hash FROM oauth_refresh_tokens WHERE token_hash = ?')
+        .get(initial.refresh_token)
+    ).to.be.undefined;
+
+    getDatabase()
+      .prepare('UPDATE oauth_refresh_tokens SET expires_at = ? WHERE token_hash = ?')
+      .run(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), hash);
+    const accessHash = crypto.createHash('sha256').update(initial.access_token).digest('hex');
+    getDatabase()
+      .prepare('UPDATE oauth_access_tokens SET expires_at = ? WHERE token_hash = ?')
+      .run(new Date(Date.now() - 1000).toISOString(), accessHash);
+
+    closeDatabase();
+    const renewed = await refreshOAuthTokens(baseUrl, initial.refresh_token);
+    expect(renewed.status).to.equal(200);
+    expect(renewed.data.access_token).to.be.a('string');
+    expect(renewed.data.refresh_token).to.be.a('string').and.not.equal(initial.refresh_token);
+    const replacementHash = crypto
+      .createHash('sha256')
+      .update(renewed.data.refresh_token)
+      .digest('hex');
+    const replacement = getDatabase()
+      .prepare('SELECT expires_at FROM oauth_refresh_tokens WHERE token_hash = ?')
+      .get(replacementHash);
+    expect(Date.parse(replacement.expires_at) - Date.now()).to.be.greaterThan(
+      29 * 24 * 60 * 60 * 1000
+    );
+
+    const replay = await refreshOAuthTokens(baseUrl, initial.refresh_token);
+    expect(replay.status).to.equal(400);
+    expect(replay.data.error).to.equal('invalid_grant');
+
+    const mcp = await axios.post(
+      `${baseUrl}/mcp`,
+      { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+      {
+        headers: {
+          Accept: 'application/json, text/event-stream',
+          Authorization: `Bearer ${renewed.data.access_token}`,
+        },
+        validateStatus: () => true,
+      }
+    );
+    expect(mcp.status).to.equal(200);
+
+    const next = await refreshOAuthTokens(baseUrl, renewed.data.refresh_token);
+    expect(next.status).to.equal(200);
+  });
+
+  it('rejects refresh for the wrong client or a client without MCP scope', async () => {
+    const initial = await issueOAuthTokens(baseUrl);
+    const wrongClient = await refreshOAuthTokens(baseUrl, initial.refresh_token, 'other-client');
+    expect(wrongClient.status).to.equal(401);
+
+    const configured = loadAppConfigFromStore();
+    const client = configured.oauth.clients[0];
+    replaceAppConfig({
+      ...configured,
+      oauth: { ...configured.oauth, clients: [{ ...client, scope: 'other' }] },
+    });
+    const scopeLost = await refreshOAuthTokens(baseUrl, initial.refresh_token);
+    expect(scopeLost.status).to.equal(400);
+    expect(scopeLost.data.error).to.equal('invalid_grant');
+
+    replaceAppConfig({
+      ...configured,
+      oauth: { ...configured.oauth, clients: [{ ...client, enabled: false }] },
+    });
+    const disabled = await refreshOAuthTokens(baseUrl, initial.refresh_token);
+    expect(disabled.status).to.equal(404);
+
+    replaceAppConfig(configured);
+    const restored = await refreshOAuthTokens(baseUrl, initial.refresh_token);
+    expect(restored.status).to.equal(200);
+  });
+
+  it('rejects an expired refresh token', async () => {
+    const initial = await issueOAuthTokens(baseUrl);
+    const hash = crypto.createHash('sha256').update(initial.refresh_token).digest('hex');
+    getDatabase()
+      .prepare('UPDATE oauth_refresh_tokens SET expires_at = ? WHERE token_hash = ?')
+      .run(new Date(Date.now() - 1000).toISOString(), hash);
+
+    const expired = await refreshOAuthTokens(baseUrl, initial.refresh_token);
+    expect(expired.status).to.equal(400);
+    expect(expired.data.error).to.equal('invalid_grant');
+  });
+
+  it('revokes a refresh token through the OAuth revocation endpoint', async () => {
+    const initial = await issueOAuthTokens(baseUrl);
+    const revoked = await axios.post(
+      `${baseUrl}/oauth/revoke`,
+      new URLSearchParams({ token: initial.refresh_token }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    expect(revoked.status).to.equal(200);
+
+    const refresh = await refreshOAuthTokens(baseUrl, initial.refresh_token);
+    expect(refresh.status).to.equal(400);
+    expect(refresh.data.error).to.equal('invalid_grant');
   });
 
   it('invalidates removed or scope-disabled client credentials without affecting other clients', async () => {

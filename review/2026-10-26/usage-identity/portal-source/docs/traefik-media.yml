@@ -1,0 +1,23 @@
+http:
+  routers:
+    bulock-media:
+      rule: Host(`media.bulock.house`)
+      service: bulock-media
+      tls:
+        certResolver: default
+    bulock-media-internal-deny:
+      rule: Host(`media.bulock.house`) && PathPrefix(`/api/internal`)
+      priority: 100
+      service: noop@internal
+      middlewares: [bulock-deny-all]
+      tls:
+        certResolver: default
+  services:
+    bulock-media:
+      loadBalancer:
+        servers:
+          - url: http://plex:3300
+  middlewares:
+    bulock-deny-all:
+      ipAllowList:
+        sourceRange: ["192.0.2.1/32"]

@@ -1,18 +1,19 @@
 import express from 'express';
-import { loadChannelSnapshot } from '../libs/channel-snapshot-service.js';
+import { timingSafeEqual } from 'node:crypto';
+import { getDatabase, initDatabase } from '../libs/database.js';
 import { requireAuth } from './auth.js';
 
 const router = express.Router();
-const ACTIVE = new Map(); // key: session id -> { ip, channelId, name, tvg_id, userAgent, client, startedAt, lastSeen }
+const ACTIVE = new Map(); // key: viewer identity or IP plus channel
+const ACTIVE_REFERENCES = new Map(); // number of overlapping stream requests per key
 // Short grace period to smooth HLS segment request gaps.
 const ACTIVE_IDLE_TTL_MS = 45 * 1000;
-// Ring buffer for recently-completed stream sessions.
-const HISTORY = [];
-const HISTORY_MAX = 100;
+const HISTORY_MAX = 1000;
 let channelsCache = [];
 
 async function loadChannels() {
-  channelsCache = loadChannelSnapshot();
+  const row = usageDatabase().prepare('SELECT channels_json FROM channel_snapshots WHERE id = 1').get();
+  channelsCache = row?.channels_json ? JSON.parse(row.channels_json) : [];
 }
 
 function findChannelMeta(channelId) {
@@ -52,17 +53,56 @@ function normalizeIp(ip) {
   return first;
 }
 
-export async function registerUsage({ ip, channelId, userAgent = '' }) {
+function decodeIdentityHeader(value, maxLength) {
+  if (typeof value !== 'string' || value.length > maxLength * 4) return null;
+  try {
+    const decoded = decodeURIComponent(value).trim();
+    const hasControlCharacter = Array.from(decoded).some(character => {
+      const code = character.codePointAt(0);
+      return code <= 31 || code === 127;
+    });
+    return decoded.length <= maxLength && !hasControlCharacter ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readUsageIdentity(req, secret = process.env.IPTV_USAGE_IDENTITY_SECRET) {
+  if (typeof secret !== 'string' || !secret) return null;
+  const supplied = req.headers['x-iptv-identity-secret'];
+  if (typeof supplied !== 'string') return null;
+  const actual = Buffer.from(supplied);
+  const expected = Buffer.from(secret);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+  const userId = decodeIdentityHeader(req.headers['x-iptv-user-id'], 256);
+  const userNameHeader = req.headers['x-iptv-user-name'];
+  const userName = userNameHeader === undefined ? '' : decodeIdentityHeader(userNameHeader, 256);
+  return userId && userName !== null ? { userId, userName } : null;
+}
+
+export async function registerUsage({
+  ip,
+  channelId,
+  userAgent = '',
+  userId = '',
+  userName = '',
+  transient = false,
+}) {
   if (!channelsCache.length) await loadChannels();
+  pruneIdleUsage();
   const meta = findChannelMeta(channelId);
   const now = new Date().toISOString();
   const normalizedIp = normalizeIp(ip);
-  const key = `${normalizedIp}|${channelId}`;
+  const key = JSON.stringify(
+    userId ? ['user', userId, normalizedIp, channelId] : ['ip', normalizedIp, channelId]
+  );
   const existing = ACTIVE.get(key);
   if (existing) {
+    if (!transient) ACTIVE_REFERENCES.set(key, (ACTIVE_REFERENCES.get(key) || 0) + 1);
     existing.lastSeen = now;
     if (!existing.name && meta.name) existing.name = meta.name;
     if (!existing.tvg_id && meta.tvg_id) existing.tvg_id = meta.tvg_id;
+    if (userName) existing.userName = userName;
     if (!existing.userAgent && userAgent) {
       existing.userAgent = userAgent;
       existing.client = parseClientName(userAgent);
@@ -73,12 +113,15 @@ export async function registerUsage({ ip, channelId, userAgent = '' }) {
   ACTIVE.set(key, {
     ip: normalizedIp,
     channelId,
+    userId,
+    userName,
     ...meta,
     userAgent,
     client,
     startedAt: now,
     lastSeen: now,
   });
+  ACTIVE_REFERENCES.set(key, transient ? 0 : 1);
   return key;
 }
 
@@ -90,22 +133,66 @@ export function touchUsage(key) {
 export function unregisterUsage(key) {
   const entry = ACTIVE.get(key);
   if (entry) {
-    const endedAt = new Date().toISOString();
-    const durationSeconds = Math.round(
-      (new Date(endedAt).getTime() - new Date(entry.startedAt).getTime()) / 1000
-    );
-    HISTORY.push({ ...entry, endedAt, durationSeconds });
-    if (HISTORY.length > HISTORY_MAX) HISTORY.shift();
+    const references = ACTIVE_REFERENCES.get(key) ?? 1;
+    if (references > 1) {
+      ACTIVE_REFERENCES.set(key, references - 1);
+      return;
+    }
+    completeUsage(entry);
   }
   ACTIVE.delete(key);
+  ACTIVE_REFERENCES.delete(key);
+}
+
+function completeUsage(entry, endedAt = new Date().toISOString()) {
+  const durationSeconds = Math.max(
+    0,
+    Math.round((Date.parse(endedAt) - Date.parse(entry.startedAt)) / 1000)
+  );
+  const db = usageDatabase();
+  db.prepare(
+    `INSERT INTO playback_history
+    (ip, channel_id, user_id, user_name, name, tvg_id, user_agent, client, started_at, ended_at, duration_seconds)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    entry.ip,
+    String(entry.channelId),
+    entry.userId,
+    entry.userName,
+    entry.name || '',
+    entry.tvg_id || '',
+    entry.userAgent,
+    entry.client,
+    entry.startedAt,
+    endedAt,
+    durationSeconds
+  );
+  db.prepare(
+    'DELETE FROM playback_history WHERE id NOT IN (SELECT id FROM playback_history ORDER BY id DESC LIMIT ?)'
+  ).run(HISTORY_MAX);
+}
+
+function usageDatabase() {
+  try {
+    return getDatabase();
+  } catch {
+    return initDatabase();
+  }
+}
+
+function pruneIdleUsage() {
+  const cutoff = Date.now() - ACTIVE_IDLE_TTL_MS;
+  for (const [key, entry] of ACTIVE.entries()) {
+    if (Date.parse(entry.lastSeen) < cutoff) {
+      completeUsage(entry, entry.lastSeen);
+      ACTIVE.delete(key);
+      ACTIVE_REFERENCES.delete(key);
+    }
+  }
 }
 
 router.get('/api/usage/active', requireAuth, (req, res) => {
-  // prune entries idle beyond grace window
-  const cutoff = Date.now() - ACTIVE_IDLE_TTL_MS;
-  for (const [k, v] of ACTIVE.entries()) {
-    if (new Date(v.lastSeen).getTime() < cutoff) ACTIVE.delete(k);
-  }
+  pruneIdleUsage();
   const list = Array.from(ACTIVE.values()).map(entry => ({
     ...entry,
     // keep both field names for backward compatibility
@@ -115,8 +202,15 @@ router.get('/api/usage/active', requireAuth, (req, res) => {
 });
 
 router.get('/api/usage/history', requireAuth, (req, res) => {
-  // Return a copy in reverse-chronological order (most recent first)
-  const list = [...HISTORY].reverse();
+  pruneIdleUsage();
+  const list = usageDatabase()
+    .prepare(
+      `SELECT id, ip, channel_id AS channelId, user_id AS userId,
+    user_name AS userName, name, tvg_id, user_agent AS userAgent, client,
+    started_at AS startedAt, ended_at AS endedAt, duration_seconds AS durationSeconds
+    FROM playback_history ORDER BY id DESC LIMIT ?`
+    )
+    .all(HISTORY_MAX);
   res.json({ history: list, count: list.length });
 });
 

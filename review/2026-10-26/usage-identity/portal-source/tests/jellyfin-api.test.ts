@@ -1,0 +1,6 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {JellyfinApi} from '../server/core/jellyfin.ts';
+test('Jellyfin uses the supported MediaBrowser authorization header',async()=>{let authorization;const server=createServer((req,res)=>{authorization=req.headers.authorization;res.writeHead(200,{'Content-Type':'application/json'});res.end('[]');});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));try{await new JellyfinApi(`http://127.0.0.1:${(server.address() as any).port}`,'test-only').libraries();assert.equal(authorization,'MediaBrowser Token="test-only"');}finally{server.closeAllConnections();server.close();}});
+test('setting a chosen Jellyfin password uses NewPw without the reset-to-empty branch',async()=>{let payload:any;const server=createServer(async(req,res)=>{let body='';for await(const chunk of req)body+=chunk;payload=JSON.parse(body);res.writeHead(204);res.end();});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));try{const api=new JellyfinApi(`http://127.0.0.1:${(server.address() as any).port}`,'test-only');await api.password('user','chosen-password-123');assert.equal(payload.NewPw,'chosen-password-123');assert.equal(payload.ResetPassword,false);}finally{server.closeAllConnections();server.close();}});

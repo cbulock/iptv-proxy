@@ -5,10 +5,11 @@ import {
   authenticateAccessToken,
   createAuthorizationCode,
   exchangeAuthorizationCode,
+  exchangeRefreshToken,
   getOAuthClient,
   getOAuthIssuerOverride,
   isOAuthEnabled,
-  revokeAccessToken,
+  revokeOAuthToken,
 } from '../libs/oauth-service.js';
 import { loadAppConfigFromStore } from '../libs/app-settings-service.js';
 import resolveRequestBaseUrl from '../libs/getBaseUrl.js';
@@ -47,7 +48,7 @@ function getMetadata(req) {
     token_endpoint: `${issuer}/oauth/token`,
     revocation_endpoint: `${issuer}/oauth/revoke`,
     response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code'],
+    grant_types_supported: ['authorization_code', 'refresh_token'],
     token_endpoint_auth_methods_supported: ['none'],
     code_challenge_methods_supported: ['S256', 'plain'],
     scopes_supported: ['mcp'],
@@ -123,7 +124,8 @@ export function requireMcpBearerAuth(req, res, next) {
       return res.status(401).json({ error: 'Invalid or expired bearer token' });
     }
     return res.status(503).json({
-      error: 'OAuth is not configured for MCP access. Add oauth.clients to app.yaml or the app settings store.',
+      error:
+        'OAuth is not configured for MCP access. Add oauth.clients to app.yaml or the app settings store.',
     });
   }
 
@@ -178,7 +180,9 @@ router.get('/oauth/authorize', oauthLimiter, (req, res) => {
   }
 
   if (!isAuthEnabled()) {
-    return res.status(503).send('Admin authentication must be configured before OAuth can be used.');
+    return res
+      .status(503)
+      .send('Admin authentication must be configured before OAuth can be used.');
   }
 
   const responseType = String(req.query.response_type || '');
@@ -282,12 +286,12 @@ router.post('/oauth/token', oauthLimiter, (req, res) => {
   const codeVerifier = String(req.body?.code_verifier || '');
   const client = getOAuthClient(clientId);
 
-  if (grantType !== 'authorization_code') {
+  if (grantType !== 'authorization_code' && grantType !== 'refresh_token') {
     return sendTokenError(
       res,
       400,
       'unsupported_grant_type',
-      'Only authorization_code is supported.'
+      'Only authorization_code and refresh_token are supported.'
     );
   }
 
@@ -295,8 +299,27 @@ router.post('/oauth/token', oauthLimiter, (req, res) => {
     return sendTokenError(res, 401, 'invalid_client', 'Unknown client_id.');
   }
 
+  if (grantType === 'refresh_token') {
+    const refreshToken = String(req.body?.refresh_token || '');
+    if (!refreshToken) {
+      return sendTokenError(res, 400, 'invalid_request', 'refresh_token is required.');
+    }
+    const tokenResponse = exchangeRefreshToken({ refreshToken, clientId });
+    if (tokenResponse?.error) {
+      return sendTokenError(res, 400, 'invalid_grant', 'Refresh token is invalid or expired.');
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    return res.json(tokenResponse);
+  }
+
   if (!client.redirect_uris.includes(redirectUri)) {
-    return sendTokenError(res, 400, 'invalid_grant', 'redirect_uri does not match the original request.');
+    return sendTokenError(
+      res,
+      400,
+      'invalid_grant',
+      'redirect_uri does not match the original request.'
+    );
   }
 
   if (!code || !codeVerifier) {
@@ -315,7 +338,12 @@ router.post('/oauth/token', oauthLimiter, (req, res) => {
   }
 
   if (tokenResponse?.error === 'invalid-code-verifier') {
-    return sendTokenError(res, 400, 'invalid_grant', 'code_verifier did not match the original code_challenge.');
+    return sendTokenError(
+      res,
+      400,
+      'invalid_grant',
+      'code_verifier did not match the original code_challenge.'
+    );
   }
 
   res.setHeader('Cache-Control', 'no-store');
@@ -330,7 +358,7 @@ router.post('/oauth/revoke', oauthLimiter, (req, res) => {
 
   const token = String(req.body?.token || '');
   if (token) {
-    revokeAccessToken(token);
+    revokeOAuthToken(token);
   }
 
   res.status(200).send('');

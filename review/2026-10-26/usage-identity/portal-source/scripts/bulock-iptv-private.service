@@ -1,0 +1,13 @@
+[Unit]
+Description=Private access to IPTV proxy backend ports
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/media-user-center/scripts/iptv-private-access.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=docker.service

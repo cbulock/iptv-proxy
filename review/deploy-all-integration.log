@@ -1,0 +1,1172 @@
+
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-GpQ7qi\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-GpQ7qi\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 58ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-uPMBCF\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-uPMBCF\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-JDPnJ4\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-JDPnJ4\channel-map.yaml
+Processing source: IPTV One...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-app-config-EzNU8E\app.yaml
+Processing source: IPTV Two...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 44ms
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 47ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-O1F20d\providers.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-app-config-FWe1Mn\app.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-O1F20d\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+
+  app config SQLite compatibility routes
+    √ reads app config from the SQLite-backed store
+    √ writes app config through SQLite while preserving admin_auth compatibility data
+
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 40ms
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-JDPnJ4\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-LG1q7q\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-LG1q7q\channel-map.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-jcvI30\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-jcvI30\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 33ms
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-HHMAEg\channel-map.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-HHMAEg\channel-map.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 32ms
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-HHMAEg\channel-map.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-e19XID\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-e19XID\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-jcvI30\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-WTvx2t\channel-map.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-WTvx2t\providers.yaml
+Parsed 0 channels and updated database snapshot in 2ms
+[Cache] Cache invalidated, reloaded 0 channels
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-WTvx2t\providers.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Processed 1 channels from IPTV Two
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-jcvI30\channel-map.yaml
+Parsed 2 channels and updated database snapshot in 38ms
+Processing source: IPTV One...
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-WTvx2t\channel-map.yaml
+Processing source: IPTV Two...
+Parsed 0 channels and updated database snapshot in 5ms
+[Cache] Cache invalidated, reloaded 0 channels
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-WTvx2t\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-WTvx2t\channel-map.yaml
+Parsed 0 channels and updated database snapshot in 2ms
+[Cache] Cache invalidated, reloaded 0 channels
+Parsed 2 channels and updated database snapshot in 32ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-channel-map-routes-config-WTvx2t\providers.yaml
+Parsed 0 channels and updated database snapshot in 1ms
+[Cache] Cache invalidated, reloaded 0 channels
+
+  channel map SQLite-backed routes
+    √ reads and replaces the channel map through the SQLite-backed config endpoint
+    √ persists mapping CRUD endpoints through the SQLite-backed store
+    √ persists channel management updates through the SQLite-backed mapping store
+
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-V1oKRg\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-V1oKRg\channel-map.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Parsed 2 channels and updated database snapshot in 31ms
+
+  EPG/XMLTV Integration
+    XMLTV Parsing
+      √ should parse valid XMLTV file
+      √ should extract channel information from XMLTV
+      √ should extract programme information from XMLTV
+      √ should handle channel icons in XMLTV
+    XMLTV Generation
+      √ should generate valid XMLTV structure
+      √ should handle channels without icons
+      √ should handle programmes without descriptions
+      √ should generate empty XMLTV when no data provided
+    XMLTV Validation
+      √ should validate well-formed XMLTV structure
+      √ should handle potentially malformed XML
+      √ should detect missing required attributes
+      √ should validate programme time attributes
+    EPG Merging Logic
+      √ deduplicates channel and programme conflicts deterministically while retaining language-tagged titles
+      √ should merge multiple EPG sources correctly
+      √ should filter channels by tvg_id
+      √ should filter programmes by channel id
+
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-guide-test-AitXWi\app.yaml
+EPG cache initialized with TTL: 21600s
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 26ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-guide-test-AitXWi\providers.yaml
+Loading EPG: GuideProvider (file:///C:/Users/camer/AppData/Local/Temp/iptv-guide-test-AitXWi/guide-test.xml)
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-PyPLac\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-PyPLac\channel-map.yaml
+Loaded 3 programmes from GuideProvider
+Processing source: IPTV One...
+EPG merge completed in 6ms (2 channels, 3 programmes)
+Processing source: IPTV Two...
+Loading EPG: GuideProvider (file:///C:/Users/camer/AppData/Local/Temp/iptv-guide-test-AitXWi/guide-test.xml)
+Loaded 0 programmes from GuideProvider
+[EPG] EPG refresh returned no programmes; retained the previous guide.
+Loading EPG: GuideProvider (file:///C:/Users/camer/AppData/Local/Temp/iptv-guide-test-AitXWi/guide-test.xml)
+Loaded 3 programmes from GuideProvider
+EPG merge completed in 1ms (2 channels, 3 programmes)
+Loading EPG: GuideProvider (file:///C:/Users/camer/AppData/Local/Temp/iptv-guide-test-AitXWi/guide-test.xml)
+Loaded 3 programmes from GuideProvider
+EPG merge completed in 1ms (2 channels, 3 programmes)
+Loading EPG: GuideProvider (file:///C:/Users/camer/AppData/Local/Temp/iptv-guide-test-AitXWi/guide-test.xml)
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-6Y6tBj\providers.yaml
+Loaded 3 programmes from GuideProvider
+EPG merge completed in 1ms (2 channels, 3 programmes)
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-6Y6tBj\channel-map.yaml
+Processing source: IPTV One...
+Loading EPG: GuideProvider (file:///C:/Users/camer/AppData/Local/Temp/iptv-guide-test-AitXWi/guide-test.xml)
+Processing source: IPTV Two...
+❌ Failed to load EPG from GuideProvider: Failed to read file: ENOENT: no such file or directory, open 'C:\Users\camer\AppData\Local\Temp\iptv-guide-test-AitXWi\guide-test.xml'
+   💡 Fix: Local file error
+      • Verify the file exists at: C:\Users\camer\AppData\Local\Temp\iptv-guide-test-AitXWi\guide-test.xml
+      • Check file permissions (must be readable)
+      • Ensure the path is correct (relative to project root)
+[EPG] All configured EPG sources failed; retained the previous guide.
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-PyPLac\channel-map.yaml
+Parsed 2 channels and updated database snapshot in 38ms
+
+  GET /api/guide
+    √ returns 200 with programmes for a known tvgId
+    √ returns both the currently-airing and the upcoming programme
+    √ programmes are sorted by start time ascending
+    √ filters by tvgId — does not return programmes from other channels
+    √ returns programmes from all channels when tvgId is omitted
+    √ returns 200 with an empty array for an unknown tvgId
+    √ keeps the published guide when a refresh returns no programmes
+    √ retains last-known-good guide data on source failure and reports recovery
+
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 31ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-HHVpdO\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-HHVpdO\channel-map.yaml
+Processing source: NAS Stream...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-FtaSqO\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-FtaSqO\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Detected direct stream manifest for NAS Stream; created a single channel
+Processed 1 channels from NAS Stream
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-config-HHVpdO\channel-map.yaml
+Parsed 1 channels and updated database snapshot in 32ms
+
+  canonical channel persistence
+    √ assigns guide data from a provider not bound to the channel and retains it after rebuilding (61ms)
+    √ builds canonical channels and bindings from discovered source channels (45ms)
+    √ preserves the preferred binding across reloads (74ms)
+    √ preserves the selected guide binding and epg channel id across reloads (70ms)
+    √ assigns unique slugs when multiple canonical channels normalize to the same base slug (40ms)
+    √ creates guide bindings for direct stream channels when the source has EPG configured
+
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 30ms
+Processing source: IPTV One...
+Processing source: IPTV Two...
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\providers.yaml
+   Using default configuration for Providers config
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\channel-map.yaml
+   Using default configuration for Channel map
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\providers.yaml
+   Using default configuration for Providers config
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\channel-map.yaml
+   Using default configuration for Channel map
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 35ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-4YrvNY\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-4YrvNY\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+[Cache] Cache invalidated, reloaded 0 channels
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-legacy-config-eHwgfw\app.yaml
+   Using default configuration for App config
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-legacy-config-eHwgfw\providers.yaml
+Parsed 2 channels and updated database snapshot in 37ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\channel-map.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 21ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-legacy-config-L6OAco\providers.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-3fJvNX\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-3fJvNX\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 21ms
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-legacy-config-ECxqy5\providers.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 24ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+[Cache] Cache invalidated, reloaded 0 channels
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-legacy-config-6JL4EJ\providers.yaml
+Error saving legacy EPG config view: Error: Unknown source in EPG config: Unknown Source
+    at replaceEPGConfig (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/libs/source-service.js:276:11)
+    at file:///C:/Users/camer/Documents/GitHub/iptv-proxy/server/config.js?test=1793034539191:165:5
+    at Layer.handleRequest (C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\router\lib\layer.js:152:17)
+    at next (C:\Users\camer\Documents\GitHub\iptv-proxy\node_modules\router\lib\route.js:157:13)
+    at file:///C:/Users/camer/Documents/GitHub/iptv-proxy/node_modules/express-rate-limit/dist/index.mjs:678:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///C:/Users/camer/Documents/GitHub/iptv-proxy/node_modules/express-rate-limit/dist/index.mjs:663:5
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\app.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\channel-map.yaml
+
+  legacy config compatibility routes
+    √ synthesizes /api/config/m3u and /api/config/epg from the source store
+    √ updates provider-backed source state through the legacy compatibility endpoints
+    √ keeps source relationships when the primary provider configuration is saved
+    √ rejects legacy EPG updates for unknown source names
+
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-yYA2Vf\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-yYA2Vf\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+[Cache] Initialized with 6 channels from database snapshot
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-lineup-config-IRpmZt\app.yaml
+Lineup caches initialized with TTL: 3600s
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-lineup-config-IRpmZt\channel-map.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-lineup-config-IRpmZt\channel-map.yaml
+[stream] Antenna/WLNS-TV -> http://antenna.example/auto/v6.1
+[stream] Antenna/WLNS-TV upstream status=200 content-type="video/mp2t" hdhomerun=true requestedHlsMode=false isHlsResponse=false
+Processed 1 channels from IPTV One
+[stream] Antenna/WLNS-TV ready in 2ms
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 36ms
+[stream] Antenna/WLNS-TV -> http://antenna.example/auto/v6.1?streamMode=hls
+Processing source: IPTV One...
+Processing source: IPTV Two...
+[stream] Antenna/WLNS-TV upstream status=200 content-type="application/vnd.apple.mpegurl" hdhomerun=true requestedHlsMode=true isHlsResponse=true
+[Cache] Cache invalidated, reloaded 0 channels
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\app.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\channel-map.yaml
+Processed 1 channels from IPTV One
+[stream] Antenna/WLNS-TV playlist rewritten in 30ms
+Processed 1 channels from IPTV Two
+[stream] Antenna/WLNS-TV -> http://antenna.example/auto/v6.1?streamMode=hls
+Parsed 2 channels and updated database snapshot in 26ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+[stream] Antenna/WLNS-TV upstream status=200 content-type="video/mp2t" hdhomerun=true requestedHlsMode=true isHlsResponse=false
+[stream] Antenna/WLNS-TV ready in 14ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-SBWx7m\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-backup-test-EB5gxx\channel-map.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-SBWx7m\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+[stream] Antenna/WLNS-TV -> http://antenna.example/auto/v6.1
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 38ms
+[stream] Antenna/WLNS-TV upstream status=200 content-type="(empty)" hdhomerun=true requestedHlsMode=false isHlsResponse=false
+[stream] Antenna/WLNS-TV ready in 29ms
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-canonical-routes-config-SBWx7m\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+[stream] OctetSource/Octet Stream Channel -> http://octet.example/stream.m3u8
+[stream] OctetSource/Octet Stream Channel upstream status=200 content-type="application/octet-stream" hdhomerun=false requestedHlsMode=false isHlsResponse=true
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 34ms
+[stream] failed OctetSource/Octet Stream Channel: Response exceeds maximum playlist size (1 MB); not an HLS playlist { status: undefined, code: undefined }
+
+  canonical model routes
+    √ returns canonical channels and bindings
+    1) returns discovered channels even when no channel-map entries exist
+    √ rebuilds stale canonical data on read when source channels already exist
+    √ returns output profiles and their enabled channels
+    √ updates canonical publish state and preserves it across a reload (47ms)
+    √ updates the custom channel name and preserves it across a reload
+    √ updates the preferred stream and preserves it across a reload
+    √ updates the guide binding and preserves it across a reload
+    2) preserves canonical settings when a mapping is renamed or renumbered
+
+[stream] Tunarr/HLS Channel -> http://tunarr.example/stream/channels/channel-1?streamMode=hls
+[stream] Tunarr/HLS Channel upstream status=200 content-type="application/vnd.apple.mpegurl" hdhomerun=false requestedHlsMode=false isHlsResponse=true
+[stream] Tunarr/HLS Channel playlist rewritten in 2ms
+[stream] Tunarr/HLS Channel -> http://tunarr.example/stream/channels/channel-1/hls/data000004.ts
+[stream] Tunarr/HLS Channel upstream status=200 content-type="video/mp2t" hdhomerun=false requestedHlsMode=false isHlsResponse=false
+[stream] Tunarr/HLS Channel ready in 3ms
+[stream] Antenna/WLNS-TV -> http://antenna.example/auto/v6.1/hls/seg000001.ts
+[stream] Antenna/WLNS-TV upstream status=200 content-type="video/mp2t" hdhomerun=true requestedHlsMode=false isHlsResponse=false
+[stream] Antenna/WLNS-TV ready in 5ms
+[stream] Antenna/WLNS-TV -> http://antenna.example:80/auto/v6.1/hls/seg000002.ts
+[stream] Antenna/WLNS-TV upstream status=200 content-type="video/mp2t" hdhomerun=true requestedHlsMode=false isHlsResponse=false
+[stream] Antenna/WLNS-TV ready in 14ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-webhook-test-2SPxQU\config\app.yaml
+[stream] TunarrInternal/Redirect Channel -> http://tunarr-internal.example:8000/stream/channels/redirect-uuid
+
+  Published Live TV projection
+    √ projects stable IDs and only relative protected paths without provider secrets
+    √ paginates all published records and binds cursor to revision, window and membership
+    √ rejects cursors after a selected source snapshot changes
+    √ decodes text and converts UTC without inventing duration for unknown stops
+    √ only resolves current published artwork IDs and forbids arbitrary path URLs
+    √ rejects unapproved destinations, userinfo and metadata hosts
+    √ denies redirects, non-raster MIME and oversized images
+
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-webhook-test-2SPxQU\config\app.yaml
+[Webhooks] Delivered "channels.refreshed" to http://example.com/hook
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-webhook-test-2SPxQU\config\app.yaml
+[stream] TunarrInternal/Redirect Channel upstream status=200 content-type="application/vnd.apple.mpegurl" hdhomerun=false requestedHlsMode=false isHlsResponse=true
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-webhook-test-2SPxQU\config\app.yaml
+[Webhooks] Delivered "channels.refreshed" to http://example.com/channels-only
+[stream] TunarrInternal/Redirect Channel playlist rewritten in 46ms
+[stream] TunarrInternal/Redirect Channel -> https://tunarr-external.example/stream/channels/redirect-uuid/hls/data000000.ts
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channels-mapped-test-Imixeg\channel-map.yaml
+[stream] TunarrInternal/Redirect Channel upstream status=200 content-type="video/mp2t" hdhomerun=false requestedHlsMode=false isHlsResponse=false
+[stream] TunarrInternal/Redirect Channel ready in 15ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+[Cache] Initialized with 3 channels from database snapshot
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channels-hdhr-test-lkczMT\channel-map.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+
+  Lineup Route Integration
+    √ returns a valid M3U response for /lineup.m3u
+    √ excludes unmapped channels from /lineup.m3u by default
+    √ uses guideNumber as GuideNumber for HDHomeRun channels in /lineup.json
+    √ excludes unmapped HDHomeRun channels from /lineup.json without include_unmapped
+    √ excludes unmapped HDHomeRun channels from /lineup.m3u without include_unmapped
+    √ proxies HDHomeRun MPEG-TS streams directly without adding ?streamMode=hls by default
+    √ requests HLS from HDHomeRun and rewrites the playlist when ?streamMode=hls is in the client request
+    √ pipes HDHomeRun MPEG-TS directly when device ignores ?streamMode=hls (content-type video/mp2t)
+    √ pipes HDHomeRun streams directly even when the device redirects to an .m3u8 URL (49ms)
+    √ returns 502 when a generic content-type response exceeds the 1 MB playlist size cap
+    √ rewrites HLS playlist URIs to proxy stream URLs
+    √ rejects ?upstream= URLs pointing to a different origin (SSRF protection)
+    √ allows ?upstream= URLs on the same origin as the channel
+    √ treats http://host and http://host:80 as the same origin (default port normalization)
+    √ allows segment requests after manifest redirect to different origin (79ms)
+
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-channels-hdhr-test-lkczMT\channel-map.yaml
+
+  PORT environment variable
+    √ defaults to 34400 when PORT is not set
+    √ honours the PORT env variable when set
+
+  Config Backup API
+    √ POST /api/config/backup creates a backup directory
+    √ GET /api/config/backups lists created backups
+    √ POST /api/config/backups/:name/restore restores files (56ms)
+    √ keeps the SQLite database available after creating a backup
+    √ restores SQLite-backed app state from the database snapshot instead of stale YAML exports (84ms)
+    √ restores canonical bindings and output settings from a database snapshot (64ms)
+    √ DELETE /api/config/backups/:name deletes a backup
+    √ GET /api/config/backups/:name/download returns a zip file (68ms)
+    √ GET /api/config/backups/:name/download returns 404 for unknown backup
+    √ GET /api/config/backups/:name/download returns 400 for invalid backup name
+    √ POST /api/config/backups/:name/restore returns 404 for unknown backup
+    √ rejects backup names that could cause path traversal
+
+  Usage History
+    √ GET /api/usage/history returns an array
+    √ completed stream appears in history with durationSeconds
+    √ history is returned in reverse-chronological order
+
+  Webhook notifications
+    √ does nothing when no webhooks are configured
+    √ calls the configured webhook URL with correct payload
+    √ respects the events filter – skips hooks not subscribed to the event
+    √ delivers to hooks subscribed to the matching event
+
+  Rate limiting
+    √ allows requests under the rate limit
+    √ returns 429 after exceeding the rate limit
+    √ localhost is skipped by the production rate limiter configuration
+
+  Reverse proxy trust
+    √ ignores forged forwarded identity, host, and protocol headers by default
+    √ honors forwarded headers when the direct peer is an explicitly trusted proxy
+
+  GET /channels?mapped_only=true
+    √ returns all channels when mapped_only is not set
+    √ returns only mapped channels when mapped_only=true
+    √ excludes unmapped channels when mapped_only=true
+
+  GET /channels?mapped_only=true with HDHomeRun channels
+    √ returns all 3 channels when mapped_only is not set
+    √ excludes HDHomeRun channels that are not in the channel map when mapped_only=true
+    √ excludes unmapped M3U channels when mapped_only=true
+    √ returns only the mapped M3U channel when mapped_only=true
+    √ includes an HDHomeRun channel when it is explicitly added to the channel map
+
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-UNJzOM\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-UNJzOM\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 31ms
+[Cache] Initialized with 2 channels from database snapshot
+[Cache] Initialized with 3 channels from database snapshot
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-mcp-config-5rQ5od\providers.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-UNJzOM\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-UNJzOM/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-UNJzOM/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 5ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-UNJzOM/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-UNJzOM/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 9ms (2 channels, 2 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-UNJzOM/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-UNJzOM/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 1ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-UNJzOM/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-UNJzOM/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 1ms (2 channels, 2 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-eMWFXf\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-eMWFXf\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 34ms
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-eMWFXf\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-eMWFXf/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-eMWFXf/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-eMWFXf/one.xml)
+Loaded 0 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-eMWFXf/two.xml)
+Loaded 1 programmes from IPTV Two
+EPG merge completed in 1ms (1 channels, 1 programmes)
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 26ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-6M4uhD\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-6M4uhD\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 35ms
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-6M4uhD\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-6M4uhD/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-6M4uhD/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-6M4uhD/one.xml)
+Loaded 0 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-6M4uhD/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 1ms (2 channels, 2 programmes)
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-uK836K\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-uK836K\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-mcp-config-5rQ5od\channel-map.yaml
+   Using default configuration for Channel map
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 42ms
+[Cache] Initialized with 2 channels from database snapshot
+   Using default configuration for Channel map
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-mcp-config-5rQ5od\channel-map.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-uK836K\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-uK836K/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-uK836K/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 3ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-uK836K/one.xml)
+Loaded 0 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-uK836K/two.xml)
+Loaded 1 programmes from IPTV Two
+EPG merge completed in 2ms (1 channels, 1 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-LBBV0V\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-LBBV0V\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-mcp-config-5rQ5od\providers.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 42ms
+[Cache] Initialized with 2 channels from database snapshot
+   Using default configuration for Channel map
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-mcp-config-5rQ5od\channel-map.yaml
+Processing source: Direct Stream...
+Detected direct stream manifest for Direct Stream; created a single channel
+Processed 1 channels from Direct Stream
+   Using default configuration for Channel map
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-mcp-config-5rQ5od\channel-map.yaml
+Parsed 1 channels and updated database snapshot in 5ms
+[Cache] Cache invalidated, reloaded 1 channels
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-LBBV0V\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-LBBV0V/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-LBBV0V/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-LBBV0V/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-LBBV0V/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-LBBV0V/one.xml)
+[Cache] Cache invalidated, reloaded 3 channels
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-LBBV0V/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 10ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-LBBV0V/one.xml)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-LBBV0V/two.xml)
+
+  MCP Route Integration
+    √ GET /mcp returns 405 Method Not Allowed
+    √ tools/list returns all registered tools
+    √ published viewer tools return protected channel paths and guide paging metadata
+    √ get_agent_workflow returns workflow guidance for agents
+    √ diagnose_agent_readiness returns a readiness summary
+    √ list_channels returns all channels without filters
+    √ list_channels filters by source
+    √ list_channels filters by name search
+    √ list_channels respects the limit parameter
+    √ list_providers returns configured providers
+    √ provider tools create a LAN stream with EPG and update by stable ID without changing other sources
+    √ provider updates preserve a disabled source and accept HDHomeRun, HTTPS, and file URLs without returning secrets (57ms)
+    √ provider tools reject duplicate names, missing IDs, empty updates, and unsupported URL schemes without mutation (58ms)
+    √ list_canonical_channels returns canonical channel rows
+    √ list_channel_bindings returns binding rows
+    √ list_guide_bindings returns guide binding rows
+    √ list_output_profiles returns output profiles
+    √ save_output_profile atomically saves profile state through MCP
+    √ create_output_profile, update_output_profile, and delete_output_profile manage named profiles
+    √ get_output_profile_channels returns channels for the default profile
+    √ list_output_profile_entries returns output profile entry rows
+    √ set_canonical_channel_published returns an error for an unknown channel
+    √ set_canonical_channel_name returns an error for an unknown channel
+    √ assigns discovered streams and previously unbound guide providers through MCP
+    √ set_canonical_channel_preferred_stream returns an error for an unknown channel
+    √ set_canonical_channel_guide_binding returns an error for an unknown channel
+    √ update_output_profile_channels returns an error for an unknown profile
+    √ get_status returns channel count and source info
+    √ get_guide returns an error message when EPG is not loaded
+    √ reload_channels refreshes the in-memory channel lookup for a newly created direct stream (52ms)
+
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 8ms (2 channels, 2 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-pqM1GS\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-config-pqM1GS\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-qEcs8Y\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-qEcs8Y\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 44ms
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 36ms
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-nT2gvt\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-config-nT2gvt\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-qEcs8Y\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-qEcs8Y/one.xml)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-qEcs8Y/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 4ms (2 channels, 2 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 34ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-nT2gvt\app.yaml
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-config-nT2gvt/one.xml)
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-Z3S1NH\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-Z3S1NH\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Loaded 0 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-config-nT2gvt/two.xml)
+Loaded 1 programmes from IPTV Two
+EPG merge completed in 5ms (1 channels, 1 programmes)
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 34ms
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-x11xAi\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-config-x11xAi\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-Z3S1NH\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-Z3S1NH/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-Z3S1NH/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-Z3S1NH/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-Z3S1NH/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 1ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-Z3S1NH/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-Z3S1NH/two.xml)
+Processed 1 channels from IPTV One
+Loaded 2 programmes from IPTV Two
+Processed 1 channels from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Parsed 2 channels and updated database snapshot in 26ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-x11xAi\app.yaml
+EPG cache initialized with TTL: 21600s
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-config-x11xAi/one.xml)
+Loaded 0 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-config-x11xAi/two.xml)
+Loaded 1 programmes from IPTV Two
+EPG merge completed in 2ms (1 channels, 1 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-38jVFj\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-38jVFj\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-SGlEbb\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-config-SGlEbb\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 28ms
+Parsed 2 channels and updated database snapshot in 35ms
+[Cache] Initialized with 2 channels from database snapshot
+   Using default configuration for App config
+⚠️  Config file not found: C:\Users\camer\AppData\Local\Temp\iptv-output-config-SGlEbb\app.yaml
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-config-SGlEbb/fanout.xml)
+Loaded 4 programmes from IPTV One
+EPG merge completed in 2ms (2 channels, 2 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-oauth-config-rKSv71\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-38jVFj\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 1ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 1ms (2 channels, 2 programmes)
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-PNqhQs\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-config-PNqhQs\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/one.xml)
+Loaded 0 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-38jVFj/two.xml)
+Loaded 1 programmes from IPTV Two
+EPG merge completed in 2ms (1 channels, 1 programmes)
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 25ms
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-j6yy6W\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-j6yy6W\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 30ms
+Parsed 2 channels and updated database snapshot in 32ms
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-j6yy6W\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-j6yy6W/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-j6yy6W/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-ko3Elj\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-config-ko3Elj\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-j6yy6W/one.xml)
+Loaded 0 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-j6yy6W/two.xml)
+Loaded 0 programmes from IPTV Two
+EPG merge completed in 4ms (0 channels, 0 programmes)
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 38ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-config-ko3Elj\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Processing source: IPTV Three...
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-L7Njgs\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-L7Njgs\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+
+  OAuth Integration
+    3) publishes OAuth discovery metadata
+    √ redirects unauthenticated authorize requests to the admin login page (83ms)
+    √ completes the authorization-code PKCE flow and authorizes /mcp with bearer tokens (200ms)
+    √ invalidates removed or scope-disabled client credentials without affecting other clients (215ms)
+    √ rejects token exchange when the PKCE verifier does not match (142ms)
+
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Processed 1 channels from IPTV Three
+Parsed 3 channels and updated database snapshot in 29ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-e28Rbl\providers.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-e28Rbl\channel-map.yaml
+Processing source: Test IPTV...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 42ms
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-config-QdOmm5\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-config-QdOmm5\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-L7Njgs\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-L7Njgs/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-L7Njgs/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Processed 2 channels from Test IPTV
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-e28Rbl\channel-map.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Parsed 2 channels and updated database snapshot in 35ms
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-L7Njgs/one.xml)
+Loaded 0 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-L7Njgs/two.xml)
+Loaded 0 programmes from IPTV Two
+EPG merge completed in 1ms (0 channels, 0 programmes)
+Processed 1 channels from IPTV One
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Processed 1 channels from IPTV Two
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-jmwMU9\providers.yaml
+Parsed 2 channels and updated database snapshot in 35ms
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-jmwMU9\channel-map.yaml
+Processing source: OTA...
+
+  output profile persistence
+    √ creates a default output profile backed by canonical channels (46ms)
+    √ filters merged XMLTV output to the published default profile when available (50ms)
+    √ uses the selected guide binding source and rewrites XMLTV ids to the canonical channel id (38ms)
+    √ fans one selected source guide channel out to every canonical output and deduplicates it (39ms)
+    √ preserves output profile entry settings across reloads (59ms)
+    √ supports creating, updating, deleting, and resyncing named output profiles (71ms)
+    √ treats channels without a guide number as disabled in output profiles
+
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-ry7dcM\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-ry7dcM\channel-map.yaml
+Processing source: IPTV One...
+Processing source: IPTV Two...
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+Parsed 2 channels and updated database snapshot in 38ms
+[Cache] Initialized with 2 channels from database snapshot
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-ry7dcM\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-ry7dcM/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-ry7dcM/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 2ms (2 channels, 2 programmes)
+Processed 1 channels from OTA
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-ry7dcM/one.xml)
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-jmwMU9\channel-map.yaml
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-ry7dcM/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 1ms (2 channels, 2 programmes)
+Parsed 1 channels and updated database snapshot in 70ms
+
+  M3U Parser Integration
+    M3U Playlist Parsing
+      √ should parse valid M3U playlist correctly
+      √ should handle malformed M3U playlist gracefully
+      √ should extract channel metadata from EXTINF line
+      √ should handle EXTINF line without optional attributes
+    URL Validation
+      √ should accept http:// as valid protocol
+      √ should accept https:// as valid protocol
+      √ should accept rtsp:// as valid protocol
+      √ should accept rtp:// as valid protocol
+      √ should accept udp:// as valid protocol
+      √ should reject invalid protocols
+    M3U Generation Helpers
+      √ should generate valid M3U playlist from channel data
+      √ should handle channels without optional metadata
+    Mock HTTP Responses
+      √ should mock M3U playlist fetch successfully
+      √ should handle 404 response from M3U source
+      √ should handle timeout errors
+
+[stream] IPTV One/Source One -> http://streams.example/one
+[stream] IPTV One/Source One upstream status=200 content-type="video/mp2t" hdhomerun=false requestedHlsMode=false isHlsResponse=false
+[Cache] Initialized with 2 channels from database snapshot
+[stream] IPTV One/Source One ready in 7ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-Xdi1iC\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-Xdi1iC\channel-map.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\stream-probe-test-DnCLWK\app.yaml
+Processing source: Healthy IPTV...
+Processing source: Stalled OTA...
+[stream-probe] Antenna/OTA Channel hdhomerun=true probeUrl=http://hdhomerun-probe.local/auto/v6.1
+❌ Failed to process Stalled OTA: timeout of 50ms exceeded
+   💡 Fix: HDHomeRun device error
+      • Verify device is powered on and connected to network
+      • Test access: curl http://stalled-hdhr.example/discover.json
+      • Check device IP address hasn't changed
+Processed 1 channels from Healthy IPTV
+[stream-probe] Antenna/OTA Channel upstream status=200 content-type="video/mp2t"
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-Xdi1iC\channel-map.yaml
+[stream-probe] Antenna/OTA Channel read 376 bytes isMpegTsContentType=true syncOffset=0
+[stream-probe] Antenna/OTA Channel -> container=mpeg-ts browserCompatible=false video=0x02 audio=0x81
+Parsed 2 channels and updated database snapshot in 9ms
+[stream-probe] IPTV/IP Channel hdhomerun=false probeUrl=http://iptv-probe.local/stream/ch1
+[stream-probe] IPTV/IP Channel upstream status=200 content-type="video/mp2t"
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+[stream-probe] IPTV/IP Channel read 376 bytes isMpegTsContentType=true syncOffset=0
+[stream-probe] IPTV/IP Channel -> container=mpeg-ts browserCompatible=true video=0x1b audio=0x0f
+[stream-probe] IPTV/IP Channel hdhomerun=false probeUrl=http://iptv-probe.local/stream/ch1
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-juRaSw\providers.yaml
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-uQXbOF\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-juRaSw\channel-map.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-uQXbOF\channel-map.yaml
+Processing source: IPTV One...
+[stream-probe] IPTV/IP Channel upstream status=200 content-type="application/vnd.apple.mpegurl"
+[stream-probe] IPTV/IP Channel -> container=hls browserCompatible=true
+Processing source: Healthy IPTV...
+Processing source: IPTV Two...
+Processing source: Stalled OTA...
+[stream-probe] IPTV/IP Channel hdhomerun=false probeUrl=http://iptv-probe.local/stream/ch1
+[stream-probe] upstream fetch failed IPTV/IP Channel: connection refused
+[stream-probe] IPTV/IP Channel hdhomerun=false probeUrl=http://iptv-probe.local/stream/ch1
+[stream-probe] IPTV/IP Channel upstream status=200 content-type="video/mp2t"
+Processed 1 channels from Healthy IPTV
+Processed 1 channels from IPTV One
+Processed 1 channels from IPTV Two
+❌ Failed to process Stalled OTA: timeout of 50ms exceeded
+   💡 Fix: HDHomeRun device error
+      • Verify device is powered on and connected to network
+      • Test access: curl http://stalled-hdhr.example/discover.json
+      • Check device IP address hasn't changed
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-uQXbOF\channel-map.yaml
+Parsed 2 channels and updated database snapshot in 42ms
+[Cache] Initialized with 2 channels from database snapshot
+Parsed 2 channels and updated database snapshot in 35ms
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-output-routes-config-juRaSw\app.yaml
+Lineup caches initialized with TTL: 3600s
+EPG cache initialized with TTL: 21600s
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-juRaSw/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-juRaSw/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 3ms (2 channels, 2 programmes)
+[stream-probe] IPTV/IP Channel read 376 bytes isMpegTsContentType=true syncOffset=0
+[stream-probe] IPTV/IP Channel -> container=mpeg-ts browserCompatible=true (no PAT/PMT found)
+Loading EPG: IPTV One (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-juRaSw/one.xml)
+Loaded 1 programmes from IPTV One
+Loading EPG: IPTV Two (file:///C:/Users/camer/AppData/Local/Temp/iptv-output-routes-config-juRaSw/two.xml)
+Loaded 2 programmes from IPTV Two
+EPG merge completed in 1ms (2 channels, 2 programmes)
+[404] GET /profiles/guest-room/lineup.json: Output profile not found
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+
+  output profile routes
+    √ publishes viewer JSON from only the default profile and complete EPG index
+    √ lists output profile entries and applies updates that persist across reloads
+    √ assigns an unbound discovered stream through the draft save and retains it after a rebuild
+    √ atomically saves profile metadata, canonical edits, and output entries
+    √ creates, updates, and deletes named output profiles
+    √ proxies output profile channel logos for preview consumers
+    √ serves profile-specific lineup and XMLTV routes for enabled named profiles
+    √ isolates XMLTV by profile and intersects source and channel filters with profile membership
+    √ keeps default aliases empty after an MCP update disables every profile entry
+    √ keeps default aliases empty after an MCP update removes every effective guide number
+    √ uses a custom canonical name in published outputs without changing the stream lookup path
+    √ returns 404 for disabled named profile public routes
+
+
+  parseMpegTsCodecs
+    √ identifies MPEG-2 video + AC-3 audio as browser-incompatible
+    √ identifies H.264 video + AAC audio as browser-compatible
+    √ identifies MPEG-1 video as browser-incompatible
+    √ identifies E-AC-3 audio as browser-incompatible
+    √ returns null for a buffer that is not MPEG-TS
+    √ returns null for an empty buffer
+    √ handles a buffer that begins with one full packet of null padding before the sync boundary
+
+  Stream Probe Route Integration
+    √ returns 404 for an unknown channel
+    √ returns { container: mpeg-ts, browserCompatible: false } for MPEG-2/AC-3 stream
+    √ returns { container: mpeg-ts, browserCompatible: true } for H.264/AAC stream
+    √ returns { container: hls, browserCompatible: true } for an HLS response
+    √ returns 502 when the upstream stream is unreachable
+    √ returns { container: mpeg-ts, browserCompatible: true } when PAT/PMT not found
+
+✓ Loaded and validated App config from C:\Users\camer\Documents\GitHub\iptv-proxy\config\app.yaml
+[Cache] Initialized with 1 channels from database snapshot
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-czoj2H\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-czoj2H\channel-map.yaml
+Processing source: NAS Stream...
+[transcode] Starting Antenna/OTA Channel
+
+  Usage Route Integration
+    √ deduplicates sessions per ip/channel and returns lastSeenAt
+    √ stores client and userAgent fields in the active usage API response
+    √ backfills userAgent and client on subsequent registerUsage calls when initially absent
+
+[transcode] Starting Antenna/OTA Channel
+Detected direct stream manifest for NAS Stream; created a single channel
+Processed 1 channels from NAS Stream
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-czoj2H\channel-map.yaml
+Parsed 1 channels and updated database snapshot in 27ms
+✓ Loaded and validated Providers config from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-cisMqd\providers.yaml
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-cisMqd\channel-map.yaml
+Processing source: NAS Titled Stream...
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+Detected direct stream manifest for NAS Titled Stream; created a single channel
+Processed 1 channels from NAS Titled Stream
+✓ Loaded and validated Channel map from C:\Users\camer\AppData\Local\Temp\iptv-parse-config-cisMqd\channel-map.yaml
+Parsed 1 channels and updated database snapshot in 34ms
+
+  parseAll SQLite persistence
+    √ persists discovered source channels and a successful sync run
+    √ does not promote HDHomeRun tuning numbers into guide_number (71ms)
+    √ keeps cached tuner channels available when HDHomeRun discover.json stalls
+    √ keeps cached tuner channels available when HDHomeRun lineup.json stalls (45ms)
+    √ treats a direct HLS manifest as a single discovered channel
+    √ treats a titled direct HLS manifest as a single discovered channel
+
+[transcode] Starting Antenna/OTA Channel
+[transcode] Starting Antenna/OTA Channel
+
+  Transcode Route Integration
+    √ returns 404 for an unknown channel
+    √ returns 503 when ffmpeg is not installed (ENOENT)
+    √ returns 502 when ffmpeg exits non-zero before writing any output (96ms)
+    √ pipes ffmpeg stdout to the response (100ms)
+    √ passes browser-compatible encoding flags to ffmpeg (103ms)
+
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+✓ Loaded and validated App config from C:\Users\camer\AppData\Local\Temp\iptv-auth-test-w22naO\app.yaml
+
+  Auth Routes Integration
+    GET /api/auth/status
+      √ returns configured: false when no credentials are set
+      √ returns configured: true after credentials are set (101ms)
+    GET /api/auth/session
+      √ accepts the same login cookie and CSRF token after a server and database restart (170ms)
+      √ returns authenticated: false when no session exists
+      √ returns authenticated: true after a successful login (148ms)
+    POST /api/auth/login
+      √ returns 200 and a session cookie with valid credentials (72ms)
+      √ returns 401 with invalid credentials (84ms)
+      √ returns 400 when username or password is missing
+      √ returns csrfToken in the login response (73ms)
+    POST /api/auth/logout
+      √ destroys the session and returns logged_out (153ms)
+    GET /api/auth/csrf-token
+      √ returns 401 when not authenticated (77ms)
+      √ returns a csrfToken when authenticated (183ms)
+      √ returns the same token on repeated calls (155ms)
+    POST /api/auth/setup
+      √ returns 200 and saves credentials when auth is not configured (81ms)
+      √ returns 403 when auth is already configured (76ms)
+      √ returns 400 when username is missing
+      √ returns 400 when username is empty string
+      √ returns 400 when username exceeds 50 characters
+      √ returns 400 when username contains invalid characters
+      √ returns 400 when password is too short
+      √ returns 400 when password exceeds 128 characters
+      √ does not expose internal error details in successful responses (76ms)
+    PUT /api/auth/password
+      √ returns 401 when no session cookie is provided
+      √ successfully updates password with a valid session (124ms)
+      √ returns 401 when current password is incorrect (70ms)
+      √ returns 400 when new password is too short
+      √ returns 400 when new password exceeds 128 characters
+      √ returns 400 when currentPassword field is missing
+      √ does not expose internal error details in error responses (60ms)
+
+
+  226 passing (4s)
+  3 failing
+
+  1) canonical model routes
+       returns discovered channels even when no channel-map entries exist:
+
+      AssertionError: expected false to equal true
+      + expected - actual
+
+      -false
+      +true
+      
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/integration/canonical-routes.test.js:169:98)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+  2) canonical model routes
+       preserves canonical settings when a mapping is renamed or renumbered:
+     AssertionError: expected [ { …(12) } ] to deep include { …(6) }
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/integration/canonical-routes.test.js:480:52)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+  3) OAuth Integration
+       publishes OAuth discovery metadata:
+
+      AssertionError: expected 'http://localhost:63175/oauth/authorize' to equal 'http://127.0.0.1:63175/oauth/authorize'
+      + expected - actual
+
+      -http://localhost:63175/oauth/authorize
+      +http://127.0.0.1:63175/oauth/authorize
+      
+      at Context.<anonymous> (file:///C:/Users/camer/Documents/GitHub/iptv-proxy/test/integration/oauth.test.js:171:48)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+
+
