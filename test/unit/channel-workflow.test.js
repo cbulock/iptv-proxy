@@ -1,5 +1,6 @@
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
+import * as channelWorkflow from '../../admin/src/utils/channel-workflow.js';
 import {
   matchesChannelSearch,
   getChannelSetupIssues,
@@ -10,6 +11,26 @@ import {
 } from '../../admin/src/utils/channel-workflow.js';
 
 describe('channel authoring workflow', () => {
+  it('only flags included channels for attention while excluded channels remain available', () => {
+    const incomplete = { outputEnabled: false };
+    const ready = {
+      outputEnabled: true,
+      effectiveGuideNumber: '6',
+      preferredStreamOptions: [{ value: 'a' }],
+      preferredSourceChannelId: 'a',
+      guideBindingOptions: [{ value: 'g' }],
+      selectedGuideBindingValue: 'g',
+    };
+    const matches = channelWorkflow.matchesChannelFilter;
+    expect(matches(incomplete, 'setup')).to.equal(false);
+    expect(matches({ ...incomplete, outputEnabled: true }, 'setup')).to.equal(true);
+    expect(matches(ready, 'setup')).to.equal(false);
+    expect(matches(incomplete, 'disabled')).to.equal(true);
+    expect(matches(incomplete, 'all')).to.equal(true);
+    expect(matches(ready, 'enabled')).to.equal(true);
+    expect(matches({ ...ready, hasDraftChanges: true }, 'changed')).to.equal(true);
+  });
+
   it('finds the number shown in the lineup as well as names and source references', () => {
     const row = {
       name: 'MeTV',

@@ -1,62 +1,23 @@
 <template>
   <div class="tab-panel">
-    <div
-      v-if="authConfigured"
-      class="security-section"
-      role="region"
-      aria-labelledby="app-settings-security-title"
-    >
-      <h3 id="app-settings-security-title" class="section-title">Security</h3>
-      <p id="app-settings-security-copy" class="section-copy">
-        Update the admin password here. New passwords must be between 8 and 128 characters.
-      </p>
-      <CindorForm
-        class="security-form"
-        :aria-busy="savingPassword ? 'true' : undefined"
-        aria-describedby="app-settings-security-copy"
-      >
-        <CindorFormField label="Current Password">
-          <CindorPasswordInput
-            v-model="passwordCurrent"
-            name="current-password"
-            autocomplete="current-password"
-            placeholder="Enter current password"
-            :disabled="savingPassword"
-            aria-describedby="app-settings-security-copy"
-          />
-        </CindorFormField>
-        <CindorFormField label="New Password">
-          <CindorPasswordInput
-            v-model="passwordNew"
-            name="new-password"
-            autocomplete="new-password"
-            placeholder="Min. 8 characters"
-            :disabled="savingPassword"
-            aria-describedby="app-settings-security-copy"
-          />
-        </CindorFormField>
-        <CindorFormField label="Confirm New Password">
-          <CindorPasswordInput
-            v-model="passwordConfirm"
-            name="confirm-password"
-            autocomplete="new-password"
-            placeholder="Repeat new password"
-            :disabled="savingPassword"
-            aria-describedby="app-settings-security-copy"
-          />
-        </CindorFormField>
-        <CindorStack direction="horizontal" gap="sm" wrap role="group" aria-label="Password actions">
-          <CindorButton
-            :disabled="savingPassword"
-            :aria-busy="savingPassword ? 'true' : undefined"
-            aria-describedby="app-settings-security-copy"
-            @click="changePassword"
-          >
-            {{ savingPassword ? 'Saving...' : 'Change Password' }}
-          </CindorButton>
-        </CindorStack>
-      </CindorForm>
-    </div>
+    <header class="page-header">
+      <div>
+        <h1>Settings</h1>
+        <p>Manage public links, MCP access, and admin security.</p>
+      </div>
+      <CindorButton
+        class="action-button"
+        :disabled="savingApp"
+        :aria-busy="savingApp ? 'true' : undefined"
+        aria-describedby="settings-save-copy"
+        @click="saveApp"
+        >
+{{ savingApp ? 'Saving...' : 'Save app settings' }}
+</CindorButton>
+    </header>
+    <p id="settings-save-copy" class="save-copy">
+      Save applies your core settings and MCP client changes. Password changes are saved separately.
+    </p>
 
     <CindorForm
       class="settings-form app-settings-form"
@@ -64,218 +25,313 @@
       aria-labelledby="app-settings-core-title"
       aria-describedby="app-settings-core-copy"
     >
-      <h3 id="app-settings-core-title" class="section-title">Core Settings</h3>
+      <h3 id="app-settings-core-title" class="section-title">Public links</h3>
       <p id="app-settings-core-copy" class="section-copy">
         Set the public base URL used for generated links and OAuth defaults when the proxy sits
         behind a reverse proxy or custom hostname.
       </p>
       <CindorFormField label="Base URL">
-        <CindorInput v-model="appBaseUrl" placeholder="https://example.com" aria-describedby="app-settings-core-copy" />
+        <CindorInput
+          v-model="appBaseUrl"
+          placeholder="https://example.com"
+          aria-describedby="app-settings-core-copy"
+        />
       </CindorFormField>
 
-      <div
+      <details
         class="oauth-section"
-        role="region"
         aria-labelledby="app-settings-oauth-title"
         aria-describedby="app-settings-oauth-copy"
       >
-        <div class="section-header">
-          <div>
-            <h3 id="app-settings-oauth-title" class="section-title">MCP OAuth Clients (/mcp only)</h3>
-            <p id="app-settings-oauth-copy" class="section-copy">
-              Configure the built-in OAuth server used only by `/mcp` clients. This does not change
-              admin sign-in, which continues to use the normal session-based login.
-            </p>
-          </div>
-        </div>
-
-        <div class="section-actions" role="group" aria-label="OAuth client actions">
-          <CindorButton
-            class="action-button"
-            :disabled="savingApp"
-            :aria-busy="savingApp ? 'true' : undefined"
-            :aria-describedby="oauthClients.length ? 'app-settings-oauth-copy oauth-client-summary' : 'app-settings-oauth-copy'"
-            @click="addClient"
-          >
-            Add MCP Client
-          </CindorButton>
-        </div>
-
-        <p id="oauth-preset-summary" class="section-copy" role="status" aria-live="polite">
-          {{ oauthPresetCountSummary }}
-        </p>
-        <div class="preset-grid" role="list" aria-label="OAuth client presets" aria-describedby="oauth-preset-summary">
-          <div
-            v-for="preset in oauthClientPresets"
-            :key="preset.key"
-            class="preset-card"
-            role="listitem"
-            :aria-labelledby="buildPresetTitleId(preset)"
-            :aria-describedby="buildPresetDescriptionId(preset)"
-          >
-            <div :id="buildPresetTitleId(preset)" class="preset-card-title">{{ preset.label }}</div>
-            <div class="preset-card-meta">
-              {{ preset.verified ? 'Verified callbacks' : 'Template - add your own callback URI' }}
+        <summary id="app-settings-oauth-title">
+          <span>MCP clients</span><span class="disclosure-copy">Advanced · {{ oauthClients.length }} configured</span>
+        </summary>
+        <div class="disclosure-content">
+          <div class="section-header">
+            <div>
+              <p id="app-settings-oauth-copy" class="section-copy">
+                Configure the built-in OAuth server used only by `/mcp` clients. This does not
+                change admin sign-in, which continues to use the normal session-based login.
+              </p>
             </div>
-            <p :id="buildPresetDescriptionId(preset)" class="preset-card-copy">{{ preset.description }}</p>
+          </div>
+
+          <div class="section-actions" role="group" aria-label="OAuth client actions">
             <CindorButton
-              class="preset-button"
+              class="action-button"
               :disabled="savingApp"
               :aria-busy="savingApp ? 'true' : undefined"
-              :aria-label="`Use ${preset.label} OAuth client preset`"
-              :aria-describedby="`oauth-preset-summary ${buildPresetDescriptionId(preset)}`"
-              @click="addPresetClient(preset.key)"
+              :aria-describedby="
+                oauthClients.length
+                  ? 'app-settings-oauth-copy oauth-client-summary'
+                  : 'app-settings-oauth-copy'
+              "
+              @click="addClient"
             >
-              Use Preset
+              Add MCP Client
             </CindorButton>
           </div>
-        </div>
 
-        <p id="app-settings-oauth-fields-copy" class="field-copy">
-          OAuth issuer should usually match the public base URL. Adjust token lifetimes only if your
-          MCP clients need shorter or longer authorization windows.
-        </p>
-        <div class="oauth-grid">
-          <CindorFormField label="OAuth Issuer">
-            <CindorInput
-              v-model="oauthIssuer"
-              placeholder="https://iptv.example.com"
-              aria-describedby="app-settings-oauth-fields-copy"
-            />
-          </CindorFormField>
-          <CindorFormField label="Authorization Code TTL (seconds)">
-            <CindorInput
-              v-model="oauthAuthorizationCodeTtl"
-              type="number"
-              inputmode="numeric"
-              min="60"
-              max="1800"
-              placeholder="300"
-              aria-describedby="app-settings-oauth-fields-copy"
-            />
-          </CindorFormField>
-          <CindorFormField label="Access Token TTL (seconds)">
-            <CindorInput
-              v-model="oauthAccessTokenTtl"
-              type="number"
-              inputmode="numeric"
-              min="60"
-              max="86400"
-              placeholder="3600"
-              aria-describedby="app-settings-oauth-fields-copy"
-            />
-          </CindorFormField>
-        </div>
-
-        <p v-if="oauthClients.length" id="oauth-client-summary" class="section-copy oauth-client-summary" role="status" aria-live="polite">
-          {{ oauthClientCountSummary }}
-        </p>
-        <div
-          v-if="oauthClients.length"
-          class="oauth-client-list"
-          role="list"
-          aria-label="Configured OAuth clients"
-          aria-describedby="oauth-client-summary"
-        >
+          <p id="oauth-preset-summary" class="section-copy" role="status" aria-live="polite">
+            {{ oauthPresetCountSummary }}
+          </p>
           <div
-            v-for="(client, index) in oauthClients"
-            :key="client._id || index"
-            class="oauth-client-card"
-            role="listitem"
-            :aria-labelledby="buildClientTitleId(index, client)"
-            :aria-describedby="buildClientDescriptionId(index, client)"
+            class="preset-grid"
+            role="list"
+            aria-label="OAuth client presets"
+            aria-describedby="oauth-preset-summary"
           >
-            <div class="client-card-header">
-              <div>
-                <div :id="buildClientTitleId(index, client)" class="client-card-title">
-                  {{ client.client_name || client.client_id || `OAuth Client ${index + 1}` }}
-                </div>
-                <div :id="buildClientDescriptionId(index, client)" class="client-card-copy">
-                  Public OAuth client for `/mcp` authorization-code + PKCE only.
-                </div>
+            <div
+              v-for="preset in oauthClientPresets"
+              :key="preset.key"
+              class="preset-card"
+              role="listitem"
+              :aria-labelledby="buildPresetTitleId(preset)"
+              :aria-describedby="buildPresetDescriptionId(preset)"
+            >
+              <div :id="buildPresetTitleId(preset)" class="preset-card-title">
+                {{ preset.label }}
               </div>
+              <div class="preset-card-meta">
+                {{
+                  preset.verified ? 'Verified callbacks' : 'Template - add your own callback URI'
+                }}
+              </div>
+              <p :id="buildPresetDescriptionId(preset)" class="preset-card-copy">
+                {{ preset.description }}
+              </p>
               <CindorButton
-                class="remove-button"
+                class="preset-button"
                 :disabled="savingApp"
                 :aria-busy="savingApp ? 'true' : undefined"
-                :aria-label="`Remove MCP client ${client.client_name || client.client_id || index + 1}`"
-                :aria-describedby="buildClientDescriptionId(index, client)"
-                @click="removeClient(index)"
+                :aria-label="`Use ${preset.label} OAuth client preset`"
+                :aria-describedby="`oauth-preset-summary ${buildPresetDescriptionId(preset)}`"
+                @click="addPresetClient(preset.key)"
               >
-                Remove Client
+                Use Preset
               </CindorButton>
             </div>
+          </div>
 
-            <div class="oauth-grid">
-              <CindorFormField label="Client ID">
-                <CindorInput
-                  :model-value="client.client_id"
-                  placeholder="chatgpt"
-                  :aria-describedby="buildClientFieldDescribedBy(index, client)"
-                  @update:model-value="updateClient(index, { client_id: $event })"
-                />
-              </CindorFormField>
-              <CindorFormField label="Client Name">
-                <CindorInput
-                  :model-value="client.client_name"
-                  placeholder="ChatGPT"
-                  :aria-describedby="buildClientFieldDescribedBy(index, client)"
-                  @update:model-value="updateClient(index, { client_name: $event })"
-                />
-              </CindorFormField>
-              <CindorFormField label="Scope">
-                <CindorInput
-                  :model-value="client.scope"
-                  placeholder="mcp"
-                  :aria-describedby="buildClientFieldDescribedBy(index, client)"
-                  @update:model-value="updateClient(index, { scope: $event })"
-                />
-              </CindorFormField>
-            </div>
-
-            <CindorFormField label="Redirect URIs">
-              <CindorTextarea
-                :model-value="client.redirectUrisText"
-                rows="4"
-                placeholder="One absolute callback URL per line"
-                :aria-describedby="buildClientFieldDescribedBy(index, client)"
-                @update:model-value="updateClient(index, { redirectUrisText: $event })"
+          <p id="app-settings-oauth-fields-copy" class="field-copy">
+            OAuth issuer should usually match the public base URL. Adjust token lifetimes only if
+            your MCP clients need shorter or longer authorization windows.
+          </p>
+          <div class="oauth-grid">
+            <CindorFormField label="OAuth Issuer">
+              <CindorInput
+                v-model="oauthIssuer"
+                placeholder="https://iptv.example.com"
+                aria-describedby="app-settings-oauth-fields-copy"
               />
             </CindorFormField>
-            <p :id="buildClientRedirectHelpId(index, client)" class="field-copy">
-              Enter one redirect URI per line. The MCP client must send one of these exact callback
-              URLs when authorizing against `/mcp`.
-            </p>
+            <CindorFormField label="Authorization Code TTL (seconds)">
+              <CindorInput
+                v-model="oauthAuthorizationCodeTtl"
+                type="number"
+                inputmode="numeric"
+                min="60"
+                max="1800"
+                placeholder="300"
+                aria-describedby="app-settings-oauth-fields-copy"
+              />
+            </CindorFormField>
+            <CindorFormField label="Access Token TTL (seconds)">
+              <CindorInput
+                v-model="oauthAccessTokenTtl"
+                type="number"
+                inputmode="numeric"
+                min="60"
+                max="86400"
+                placeholder="3600"
+                aria-describedby="app-settings-oauth-fields-copy"
+              />
+            </CindorFormField>
           </div>
-        </div>
-        <div v-else class="empty-note" role="status" aria-live="polite">
-          No MCP OAuth clients configured yet. Add a client or start with one of the presets above.
-        </div>
 
-        <CindorStack
-          class="oauth-save-actions"
-          direction="horizontal"
-          gap="sm"
-          wrap
-          role="group"
-          aria-label="App settings actions"
-        >
-          <CindorButton
-            class="action-button"
-            :disabled="savingApp"
-            :aria-busy="savingApp ? 'true' : undefined"
-            :aria-describedby="
-              oauthClients.length
-                ? 'app-settings-oauth-copy app-settings-oauth-fields-copy oauth-client-summary'
-                : 'app-settings-oauth-copy app-settings-oauth-fields-copy'
-            "
-            @click="saveApp"
+          <p
+            v-if="oauthClients.length"
+            id="oauth-client-summary"
+            class="section-copy oauth-client-summary"
+            role="status"
+            aria-live="polite"
           >
-            {{ savingApp ? 'Saving...' : 'Save App Settings' }}
-          </CindorButton>
-        </CindorStack>
-      </div>
+            {{ oauthClientCountSummary }}
+          </p>
+          <div
+            v-if="oauthClients.length"
+            class="oauth-client-list"
+            role="list"
+            aria-label="Configured OAuth clients"
+            aria-describedby="oauth-client-summary"
+          >
+            <div
+              v-for="(client, index) in oauthClients"
+              :key="client._id || index"
+              class="oauth-client-card"
+              role="listitem"
+              :aria-labelledby="buildClientTitleId(index, client)"
+              :aria-describedby="buildClientDescriptionId(index, client)"
+            >
+              <div class="client-card-header">
+                <div>
+                  <div :id="buildClientTitleId(index, client)" class="client-card-title">
+                    {{ client.client_name || client.client_id || `OAuth Client ${index + 1}` }}
+                  </div>
+                  <div :id="buildClientDescriptionId(index, client)" class="client-card-copy">
+                    Public OAuth client for `/mcp` authorization-code + PKCE only.
+                  </div>
+                </div>
+                <CindorButton
+                  class="remove-button"
+                  :disabled="savingApp"
+                  :aria-busy="savingApp ? 'true' : undefined"
+                  :aria-label="`Remove MCP client ${client.client_name || client.client_id || index + 1}`"
+                  :aria-describedby="buildClientDescriptionId(index, client)"
+                  @click="removeClient(index)"
+                >
+                  Remove Client
+                </CindorButton>
+              </div>
+
+              <div class="oauth-grid">
+                <CindorFormField label="Client ID">
+                  <CindorInput
+                    :model-value="client.client_id"
+                    placeholder="chatgpt"
+                    :aria-describedby="buildClientFieldDescribedBy(index, client)"
+                    @update:model-value="updateClient(index, { client_id: $event })"
+                  />
+                </CindorFormField>
+                <CindorFormField label="Client Name">
+                  <CindorInput
+                    :model-value="client.client_name"
+                    placeholder="ChatGPT"
+                    :aria-describedby="buildClientFieldDescribedBy(index, client)"
+                    @update:model-value="updateClient(index, { client_name: $event })"
+                  />
+                </CindorFormField>
+                <CindorFormField label="Scope">
+                  <CindorInput
+                    :model-value="client.scope"
+                    placeholder="mcp"
+                    :aria-describedby="buildClientFieldDescribedBy(index, client)"
+                    @update:model-value="updateClient(index, { scope: $event })"
+                  />
+                </CindorFormField>
+              </div>
+
+              <CindorFormField label="Redirect URIs">
+                <CindorTextarea
+                  :model-value="client.redirectUrisText"
+                  rows="4"
+                  placeholder="One absolute callback URL per line"
+                  :aria-describedby="buildClientFieldDescribedBy(index, client)"
+                  @update:model-value="updateClient(index, { redirectUrisText: $event })"
+                />
+              </CindorFormField>
+              <p :id="buildClientRedirectHelpId(index, client)" class="field-copy">
+                Enter one redirect URI per line. The MCP client must send one of these exact
+                callback URLs when authorizing against `/mcp`.
+              </p>
+            </div>
+          </div>
+          <div v-else class="empty-note" role="status" aria-live="polite">
+            No MCP OAuth clients configured yet. Add a client or start with one of the presets
+            above.
+          </div>
+
+          <CindorStack
+            class="oauth-save-actions"
+            direction="horizontal"
+            gap="sm"
+            wrap
+            role="group"
+            aria-label="App settings actions"
+          >
+            <CindorButton
+              class="action-button"
+              :disabled="savingApp"
+              :aria-busy="savingApp ? 'true' : undefined"
+              :aria-describedby="
+                oauthClients.length
+                  ? 'app-settings-oauth-copy app-settings-oauth-fields-copy oauth-client-summary'
+                  : 'app-settings-oauth-copy app-settings-oauth-fields-copy'
+              "
+              @click="saveApp"
+            >
+              {{ savingApp ? 'Saving...' : 'Save app settings' }}
+            </CindorButton>
+          </CindorStack>
+        </div>
+      </details>
     </CindorForm>
+    <details
+      v-if="authConfigured"
+      class="security-section"
+      aria-labelledby="app-settings-security-title"
+    >
+      <summary id="app-settings-security-title">
+        <span>Security</span><span class="disclosure-copy">Change admin password</span>
+      </summary>
+      <div class="disclosure-content">
+        <p id="app-settings-security-copy" class="section-copy">
+          Update the admin password here. New passwords must be between 8 and 128 characters.
+        </p>
+        <CindorForm
+          class="security-form"
+          :aria-busy="savingPassword ? 'true' : undefined"
+          aria-describedby="app-settings-security-copy"
+        >
+          <CindorFormField label="Current Password">
+            <CindorPasswordInput
+              v-model="passwordCurrent"
+              name="current-password"
+              autocomplete="current-password"
+              placeholder="Enter current password"
+              :disabled="savingPassword"
+              aria-describedby="app-settings-security-copy"
+            />
+          </CindorFormField>
+          <CindorFormField label="New Password">
+            <CindorPasswordInput
+              v-model="passwordNew"
+              name="new-password"
+              autocomplete="new-password"
+              placeholder="Min. 8 characters"
+              :disabled="savingPassword"
+              aria-describedby="app-settings-security-copy"
+            />
+          </CindorFormField>
+          <CindorFormField label="Confirm New Password">
+            <CindorPasswordInput
+              v-model="passwordConfirm"
+              name="confirm-password"
+              autocomplete="new-password"
+              placeholder="Repeat new password"
+              :disabled="savingPassword"
+              aria-describedby="app-settings-security-copy"
+            />
+          </CindorFormField>
+          <CindorStack
+            direction="horizontal"
+            gap="sm"
+            wrap
+            role="group"
+            aria-label="Password actions"
+          >
+            <CindorButton
+              :disabled="savingPassword"
+              :aria-busy="savingPassword ? 'true' : undefined"
+              aria-describedby="app-settings-security-copy"
+              @click="changePassword"
+            >
+              {{ savingPassword ? 'Saving...' : 'Change Password' }}
+            </CindorButton>
+          </CindorStack>
+        </CindorForm>
+      </div>
+    </details>
   </div>
 </template>
 
@@ -393,7 +449,8 @@ const oauthPresetCountSummary = `${oauthClientPresets.length} OAuth client prese
   oauthClientPresets.length === 1 ? '' : 's'
 } available.`;
 const oauthClientCountSummary = computed(
-  () => `${props.oauthClients.length} MCP OAuth client${props.oauthClients.length === 1 ? '' : 's'} configured.`
+  () =>
+    `${props.oauthClients.length} MCP OAuth client${props.oauthClients.length === 1 ? '' : 's'} configured.`
 );
 
 const passwordCurrent = computed({
@@ -483,8 +540,8 @@ async function removeClient(index) {
   const client = props.oauthClients[index];
   const hasContent = Boolean(
     String(client?.client_id || '').trim() ||
-      String(client?.client_name || '').trim() ||
-      String(client?.redirectUrisText || '').trim()
+    String(client?.client_name || '').trim() ||
+    String(client?.redirectUrisText || '').trim()
   );
 
   if (hasContent) {
@@ -500,7 +557,71 @@ async function removeClient(index) {
 
 <style scoped>
 .tab-panel {
-  padding: 28px 32px 32px;
+  padding: 8px 4px;
+  min-width: 0;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.page-header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+.page-header p,
+.save-copy {
+  margin: 0;
+  color: var(--muted, #b5b5b5);
+}
+.save-copy {
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+.app-settings-form > cindor-form-field {
+  max-width: 700px;
+}
+details > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::before {
+  content: '›';
+  color: var(--accent, #ff9a3c);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
+details > summary:focus-visible {
+  outline: 2px solid var(--accent, #ff9a3c);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+.disclosure-copy {
+  margin-left: auto;
+  color: var(--muted, #b5b5b5);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+.disclosure-content {
+  padding: 0 1rem 1rem;
+}
+.disclosure-content > .section-copy {
+  margin-bottom: 1rem;
 }
 
 .settings-form,
@@ -513,11 +634,10 @@ async function removeClient(index) {
 }
 
 .security-section {
-  margin-top: 2rem;
-}
-
-.security-section + .app-settings-form {
-  margin-top: 2rem;
+  margin-top: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .section-header {
@@ -537,15 +657,14 @@ async function removeClient(index) {
 .section-copy,
 .field-copy {
   margin: 0;
-  opacity: 0.72;
+  color: var(--muted, #b5b5b5);
   font-size: 0.92rem;
 }
 
 .oauth-section {
-  margin-top: 2rem;
-  padding: 1rem 1rem 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  margin-top: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
 }
 
@@ -657,7 +776,7 @@ async function removeClient(index) {
 
 @media (max-width: 1100px) {
   .tab-panel {
-    padding: 24px 24px 28px;
+    padding: 8px 4px 16px;
   }
 
   .section-actions {
@@ -679,7 +798,15 @@ async function removeClient(index) {
 
 @media (max-width: 900px) {
   .tab-panel {
-    padding: 20px 20px 20px;
+    padding: 8px 4px;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .disclosure-copy {
+    margin-left: 0;
   }
 
   .section-header,

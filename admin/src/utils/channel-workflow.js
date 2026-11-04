@@ -34,6 +34,16 @@ export function getChannelSetupIssues(row) {
   return issues;
 }
 
+/** Attention is actionable for included channels; setup advice remains available for all. */
+export function matchesChannelFilter(row, filter) {
+  if (filter === 'enabled') return Boolean(row.outputEnabled);
+  if (filter === 'disabled') return !row.outputEnabled;
+  if (filter === 'setup')
+    return Boolean(row.outputEnabled) && getChannelSetupIssues(row).length > 0;
+  if (filter === 'changed') return Boolean(row.hasDraftChanges);
+  return true;
+}
+
 export function buildChannelChangeReview(rows, profile = {}, savedProfile = {}) {
   const result = { shared: [], lineup: [], profile: [] };
   const change = (field, before, after) => ({ field, before, after });

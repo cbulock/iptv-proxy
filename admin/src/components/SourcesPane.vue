@@ -1,5 +1,9 @@
 <template>
   <div class="tab-panel">
+    <header class="page-header">
+      <h1>Sources</h1>
+      <p>Add feeds and tuners, then save to refresh channels and guide data.</p>
+    </header>
     <CindorStack
       class="sources-toolbar"
       direction="horizontal"
@@ -9,14 +13,16 @@
       role="group"
       aria-label="Source actions"
     >
-      <CindorButton variant="ghost" aria-describedby="sources-toolbar-summary" @click="addProvider">Add Source</CindorButton>
+      <CindorButton variant="ghost" aria-describedby="sources-toolbar-summary" @click="addSource">
+Add source
+</CindorButton>
       <CindorButton
         :disabled="savingProviders || !providersCanSave"
         :aria-busy="savingProviders ? 'true' : undefined"
         aria-describedby="sources-toolbar-summary"
         @click="saveProviders"
       >
-        {{ savingProviders ? 'Saving...' : 'Save Sources' }}
+        {{ savingProviders ? 'Saving and refreshing...' : 'Save and refresh' }}
       </CindorButton>
       <CindorButton
         variant="ghost"
@@ -40,8 +46,8 @@
     >
       <div id="sources-guide-title" class="guide-title">Getting started</div>
       <div id="sources-guide-copy" class="guide-copy">
-        Add at least one source here, save it, then reload channels and validate guide data before
-        tuning your output profiles.
+        Add an M3U playlist or HDHomeRun tuner. Saving refreshes channels and guide data; then
+        choose which channels to include in your lineups.
       </div>
       <div class="guide-steps" role="list" aria-label="Source setup steps">
         <span role="listitem">1. Add an M3U or HDHomeRun source.</span>
@@ -83,7 +89,12 @@
         <span v-if="epgValidation.valid" class="epg-validation-state success">✓ Valid</span>
         <span v-else class="epg-validation-state danger">✗ Invalid</span>
       </div>
-      <div id="sources-epg-validation-summary" class="collection-summary" role="status" aria-live="polite">
+      <div
+        id="sources-epg-validation-summary"
+        class="collection-summary"
+        role="status"
+        aria-live="polite"
+      >
         {{ epgValidationSummary }}
       </div>
       <div class="epg-validation-summary" role="list" aria-label="EPG validation summary">
@@ -119,7 +130,10 @@
               'epg-validation-metric-value',
               epgValidation.sources?.failed > 0 ? 'danger' : 'success',
             ]"
-            >{{ epgValidation.sources?.valid || 0 }}/{{ epgValidation.sources?.total || 0 }} loaded</span>
+            >{{ epgValidation.sources?.valid || 0 }}/{{
+              epgValidation.sources?.total || 0
+            }}
+            loaded</span>
         </div>
         <div role="listitem">
           <span class="epg-validation-label">Warnings:</span>
@@ -144,19 +158,18 @@
         <div id="epg-failed-sources-summary" class="validation-summary">
           {{ epgFailedSourcesSummary }}
         </div>
-        <div
-          role="list"
-          aria-label="Failed EPG sources"
-        >
+        <div role="list" aria-label="Failed EPG sources">
           <div
-          v-for="(source, idx) in epgValidation.sources.results.filter(result => result.status === 'error')"
-          :key="idx"
-          class="epg-validation-source"
-          role="listitem"
-        >
-          <div>{{ source.source }} — {{ source.error }}</div>
-          <div class="epg-validation-url">{{ source.url }}</div>
-        </div>
+            v-for="(source, idx) in epgValidation.sources.results.filter(
+              result => result.status === 'error'
+            )"
+            :key="idx"
+            class="epg-validation-source"
+            role="listitem"
+          >
+            <div>{{ source.source }} — {{ source.error }}</div>
+            <div class="epg-validation-url">{{ source.url }}</div>
+          </div>
         </div>
       </div>
       <div
@@ -191,19 +204,16 @@
           <div id="epg-missing-summary" class="validation-summary">
             {{ epgMissingCoverageSummary }}
           </div>
-          <div
-            role="list"
-            aria-label="Channels missing EPG"
-          >
+          <div role="list" aria-label="Channels missing EPG">
             <div
-            v-for="(channel, idx) in epgValidation.coverage.channelsWithoutEPG"
-            :key="idx"
-            class="epg-validation-message"
-            role="listitem"
-          >
-            {{ channel.name }}
-            <span class="epg-validation-meta">({{ channel.tvg_id || 'no tvg-id' }})</span>
-          </div>
+              v-for="(channel, idx) in epgValidation.coverage.channelsWithoutEPG"
+              :key="idx"
+              class="epg-validation-message"
+              role="listitem"
+            >
+              {{ channel.name }}
+              <span class="epg-validation-meta">({{ channel.tvg_id || 'no tvg-id' }})</span>
+            </div>
           </div>
         </div>
       </div>
@@ -220,20 +230,20 @@
         </div>
         <div role="list" aria-label="EPG validation errors">
           <div
-          v-for="(error, idx) in epgValidation.errors.slice(0, 10)"
-          :key="idx"
-          class="epg-validation-message"
-          role="listitem"
-        >
-          {{ error }}
-        </div>
+            v-for="(error, idx) in epgValidation.errors.slice(0, 10)"
+            :key="idx"
+            class="epg-validation-message"
+            role="listitem"
+          >
+            {{ error }}
+          </div>
           <div
-          v-if="epgValidation.errors.length > 10"
-          class="epg-validation-message"
-          role="listitem"
-        >
-          ... and {{ epgValidation.errors.length - 10 }} more
-        </div>
+            v-if="epgValidation.errors.length > 10"
+            class="epg-validation-message"
+            role="listitem"
+          >
+            ... and {{ epgValidation.errors.length - 10 }} more
+          </div>
         </div>
       </div>
       <div
@@ -249,35 +259,123 @@
         </div>
         <div role="list" aria-label="EPG validation warnings">
           <div
-          v-for="(warning, idx) in epgValidation.warnings.slice(0, 10)"
-          :key="idx"
-          class="epg-validation-message"
-          role="listitem"
-        >
-          {{ warning }}
-        </div>
+            v-for="(warning, idx) in epgValidation.warnings.slice(0, 10)"
+            :key="idx"
+            class="epg-validation-message"
+            role="listitem"
+          >
+            {{ warning }}
+          </div>
           <div
-          v-if="epgValidation.warnings.length > 10"
-          class="epg-validation-message"
-          role="listitem"
-        >
-          ... and {{ epgValidation.warnings.length - 10 }} more
-        </div>
+            v-if="epgValidation.warnings.length > 10"
+            class="epg-validation-message"
+            role="listitem"
+          >
+            ... and {{ epgValidation.warnings.length - 10 }} more
+          </div>
         </div>
       </div>
     </div>
-    <div v-if="Array.isArray(providers) && providers.length" class="data-collection" role="region" aria-label="Configured sources">
+    <div
+      v-if="Array.isArray(providers) && providers.length"
+      class="data-collection"
+      role="region"
+      aria-label="Configured sources"
+    >
       <div class="collection-summary" role="status" aria-live="polite">
         {{ providerCountSummary }}
       </div>
-      <CindorDataTable
-        row-id-key="_id"
-        density="compact"
-        :columns="providerColumns"
-        :rows="providers"
-        @cell-edit="$emit('cell-edit', $event)"
-        @row-action="$emit('row-action', $event)"
-      />
+      <article v-for="(provider, index) in providers" :key="provider._id" class="source-card">
+        <div class="source-card-header">
+          <div class="source-heading">
+            <h3>{{ sourceName(provider, index) }}</h3>
+            <span class="source-type">{{
+              provider.type === 'hdhomerun' ? 'HDHomeRun' : 'M3U playlist'
+            }}</span>
+            <span v-if="sourceIssues(provider).length" class="source-issue-count">Needs attention</span>
+          </div>
+          <CindorButton
+            variant="ghost"
+            :aria-label="`${expandedSourceId === provider._id ? 'Close editor for' : 'Edit'} ${sourceName(provider, index)}`"
+            :aria-expanded="expandedSourceId === provider._id ? 'true' : 'false'"
+            :aria-controls="`source-editor-${provider._id}`"
+            @click="toggleSource(provider)"
+            >
+{{ expandedSourceId === provider._id ? 'Close editor' : 'Edit' }}
+</CindorButton>
+        </div>
+        <dl v-if="expandedSourceId !== provider._id" class="source-addresses">
+          <div>
+            <dt>{{ provider.type === 'hdhomerun' ? 'Tuner URL' : 'Playlist URL' }}</dt>
+            <dd>{{ provider.url || 'Required — add a source URL' }}</dd>
+          </div>
+          <div>
+            <dt>Guide URL</dt>
+            <dd :class="{ 'optional-value': !provider.epg }">
+              {{ provider.epg || 'Not configured' }}
+            </dd>
+          </div>
+        </dl>
+        <div
+          v-show="expandedSourceId === provider._id"
+          :id="`source-editor-${provider._id}`"
+          class="source-editor"
+        >
+          <div class="source-fields">
+            <div
+              v-for="field in sourceFields"
+              :key="field.key"
+              class="source-field"
+              :class="{ 'url-field': field.key === 'url' || field.key === 'epg' }"
+            >
+              <label :for="`source-${provider._id}-${field.key}`">{{ field.label }}</label>
+              <select
+                v-if="field.key === 'type'"
+                :id="`source-${provider._id}-${field.key}`"
+                :value="provider.type"
+                :aria-label="`${field.label} for ${sourceName(provider, index)}`"
+                @change="updateSource(provider, field.key, $event.target.value)"
+              >
+                <option value="m3u">M3U playlist</option>
+                <option value="hdhomerun">HDHomeRun tuner</option>
+              </select>
+              <input
+                v-else
+                :id="`source-${provider._id}-${field.key}`"
+                :value="provider[field.key]"
+                :placeholder="field.placeholder"
+                :aria-label="`${field.label} for ${sourceName(provider, index)}`"
+                :aria-invalid="fieldIssue(provider, field.key) ? 'true' : undefined"
+                :aria-describedby="
+                  fieldIssue(provider, field.key)
+                    ? `source-error-${provider._id}-${field.key}`
+                    : undefined
+                "
+                :required="field.key === 'name' || field.key === 'url'"
+                :inputmode="field.key === 'name' ? 'text' : 'url'"
+                @input="updateSource(provider, field.key, $event.target.value)"
+              >
+              <p
+                v-if="fieldIssue(provider, field.key)"
+                :id="`source-error-${provider._id}-${field.key}`"
+                class="field-error"
+              >
+                {{ fieldIssue(provider, field.key).message }}
+              </p>
+            </div>
+          </div>
+          <div class="source-editor-footer">
+            <span>Changes stay in your draft until you save and refresh.</span>
+            <CindorButton
+              variant="ghost"
+              :aria-label="`Remove ${sourceName(provider, index)}`"
+              @click="emit('row-action', { detail: { actionKey: 'remove', rowId: provider._id } })"
+              >
+Remove source
+</CindorButton>
+          </div>
+        </div>
+      </article>
     </div>
     <div v-else class="empty-note" role="status" aria-live="polite">
       No sources configured yet. Add a source, then save to reload channels and guide data.
@@ -286,8 +384,8 @@
 </template>
 
 <script setup>
-import { CindorButton, CindorDataTable, CindorStack } from 'cindor-ui-vue';
-import { computed } from 'vue';
+import { CindorButton, CindorStack } from 'cindor-ui-vue';
+import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
   providers: { type: Array, required: true },
@@ -302,9 +400,38 @@ const props = defineProps({
   loadEPGValidation: { type: Function, required: true },
 });
 
-defineEmits(['cell-edit', 'row-action']);
+const emit = defineEmits(['cell-edit', 'row-action']);
+const expandedSourceId = ref(null);
+const sourceFields = [
+  { key: 'name', label: 'Source name', placeholder: 'Living room tuner' },
+  { key: 'type', label: 'Source type' },
+  { key: 'url', label: 'Source URL', placeholder: 'Playlist URL or HDHomeRun base URL' },
+  { key: 'epg', label: 'Guide URL (optional)', placeholder: 'XMLTV guide URL' },
+];
+const sourceName = (provider, index) => provider.name || `Source ${index + 1}`;
+const sourceIssues = provider =>
+  props.providerValidation.issues.filter(issue => String(issue.rowId) === String(provider._id));
+const fieldIssue = (provider, field) => sourceIssues(provider).find(issue => issue.field === field);
+function updateSource(provider, columnKey, value) {
+  emit('cell-edit', { detail: { rowId: provider._id, columnKey, value } });
+}
+async function toggleSource(provider) {
+  expandedSourceId.value = expandedSourceId.value === provider._id ? null : provider._id;
+  if (expandedSourceId.value) {
+    await nextTick();
+    document.getElementById(`source-${provider._id}-name`)?.focus();
+  }
+}
+async function addSource() {
+  props.addProvider();
+  await nextTick();
+  const provider = props.providers[props.providers.length - 1];
+  if (provider) await toggleSource(provider);
+}
 
-const showGettingStarted = computed(() => !Array.isArray(props.providers) || props.providers.length === 0);
+const showGettingStarted = computed(
+  () => !Array.isArray(props.providers) || props.providers.length === 0
+);
 const providerCountSummary = computed(
   () => `${props.providers.length} source${props.providers.length === 1 ? '' : 's'} configured.`
 );
@@ -365,16 +492,139 @@ const epgMissingCoverageSummary = computed(() => {
   return `${coverage.withoutEPG} channel${coverage.withoutEPG === 1 ? '' : 's'} below are still missing guide matches.`;
 });
 const epgErrorsSummary = computed(
-  () => `${props.epgValidation?.errors?.length || 0} validation error${props.epgValidation?.errors?.length === 1 ? '' : 's'} listed below.`
+  () =>
+    `${props.epgValidation?.errors?.length || 0} validation error${props.epgValidation?.errors?.length === 1 ? '' : 's'} listed below.`
 );
 const epgWarningsSummary = computed(
-  () => `${props.epgValidation?.warnings?.length || 0} validation warning${props.epgValidation?.warnings?.length === 1 ? '' : 's'} listed below.`
+  () =>
+    `${props.epgValidation?.warnings?.length || 0} validation warning${props.epgValidation?.warnings?.length === 1 ? '' : 's'} listed below.`
 );
 </script>
 
 <style scoped>
 .tab-panel {
-  padding: 28px 32px 32px;
+  padding: 8px 4px;
+  min-width: 0;
+}
+
+.page-header {
+  margin-bottom: 1rem;
+}
+.page-header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+.page-header p {
+  margin: 0;
+  color: var(--muted, #b5b5b5);
+}
+.source-card {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.025);
+}
+.source-card-header,
+.source-heading,
+.source-editor-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.source-card-header,
+.source-editor-footer {
+  justify-content: space-between;
+}
+.source-heading {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.source-heading h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+.source-type {
+  padding: 0.2rem 0.5rem;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.075);
+  font-size: 0.8rem;
+}
+.source-issue-count,
+.field-error {
+  color: var(--warning, #f7bc6d);
+  font-size: 0.85rem;
+}
+.source-addresses {
+  margin: 0.75rem 0 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.source-addresses > div {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+.source-addresses dt,
+.optional-value {
+  color: var(--muted, #b5b5b5);
+}
+.source-addresses dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.source-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.source-field {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.source-field label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.source-field input,
+.source-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: inherit;
+  background: #202022;
+  font: inherit;
+}
+.source-field input:focus-visible,
+.source-field select:focus-visible {
+  outline: 2px solid var(--accent, #ff9a3c);
+  outline-offset: 2px;
+}
+.source-field input[aria-invalid='true'] {
+  border-color: var(--warning, #f7bc6d);
+}
+.source-field input::placeholder {
+  color: #a5a5aa;
+}
+.url-field {
+  grid-column: 1 / -1;
+}
+.field-error {
+  margin: 0;
+}
+.source-editor-footer {
+  margin-top: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: var(--muted, #b5b5b5);
 }
 
 .validation-panel,
@@ -393,6 +643,7 @@ const epgWarningsSummary = computed(
 .data-collection {
   display: grid;
   gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .collection-summary {
@@ -568,13 +819,21 @@ const epgWarningsSummary = computed(
 
 @media (max-width: 1100px) {
   .tab-panel {
-    padding: 24px 24px 28px;
+    padding: 8px 4px 16px;
   }
 }
 
 @media (max-width: 900px) {
   .tab-panel {
-    padding: 20px 20px 20px;
+    padding: 8px 4px;
+  }
+
+  .source-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .source-addresses > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
   }
 
   .sources-toolbar :deep(cindor-button) {
@@ -589,6 +848,5 @@ const epgWarningsSummary = computed(
   .epg-validation-summary {
     grid-template-columns: 1fr;
   }
-
 }
 </style>

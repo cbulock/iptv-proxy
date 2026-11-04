@@ -172,64 +172,22 @@
               <span class="status-banner-message">{{ status }}</span>
             </div>
             <label class="mobile-section-picker"><span>Section</span>
-              <CindorSelect v-model="tab" :value.attr="tab" aria-label="Section">
-                <option value="app">{{ appTabLabel }}</option>
-                <option value="providers">{{ providersTabLabel }}</option>
+              <select v-model="tab" aria-label="Section">
                 <option value="channels">{{ channelsTabLabel }}</option>
+                <option value="providers">{{ providersTabLabel }}</option>
                 <option value="preview">Preview</option>
                 <option value="health">Health</option>
                 <option value="usage">{{ usageTabLabel }}</option>
                 <option value="tasks">Tasks</option>
                 <option value="backups">Backups</option>
-              </CindorSelect>
+                <option value="app">{{ appTabLabel }}</option>
+              </select>
             </label>
             <CindorTabs v-model:value="tab" class="admin-tabs">
-            <CindorTabPanel value="app" :label="appTabLabel">
-              <app-settings-pane
-                :app-base-url="app.base_url"
-                :oauth-issuer="app.oauth.issuer"
-                :oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds"
-                :oauth-access-token-ttl="app.oauth.access_token_ttl_seconds"
-                :oauth-clients="app.oauth.clients"
-                :auth-configured="authConfigured"
-                :password-current="passwordForm.current"
-                :password-new="passwordForm.newPass"
-                :password-confirm="passwordForm.confirm"
-                :saving-app="savingApp"
-                :saving-password="savingPassword"
-                :confirm-remove-client="confirmRemoveOAuthClient"
-                :save-app="saveApp"
-                :change-password="changePassword"
-                @update:app-base-url="app.base_url = $event"
-                @update:oauth-issuer="app.oauth.issuer = $event"
-                @update:oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds = $event"
-                @update:oauth-access-token-ttl="app.oauth.access_token_ttl_seconds = $event"
-                @update:oauth-clients="app.oauth.clients = $event"
-                @update:password-current="passwordForm.current = $event"
-                @update:password-new="passwordForm.newPass = $event"
-                @update:password-confirm="passwordForm.confirm = $event"
-              />
-            </CindorTabPanel>
-
-            <CindorTabPanel value="providers" :label="providersTabLabel">
-              <sources-pane
-                :providers="providers"
-                :epg-validation="epgValidation"
-                :provider-validation="providerValidation"
-                :provider-columns="providerColumns"
-                :providers-can-save="providersCanSave"
-                :saving-providers="savingProviders || channelActionsBusy"
-                :loading-e-p-g-validation="loadingEPGValidation"
-                :add-provider="addProvider"
-                :save-providers="saveProviders"
-                :load-e-p-g-validation="loadEPGValidation"
-                @cell-edit="handleProviderCellEdit"
-                @row-action="handleProviderRowAction"
-              />
-            </CindorTabPanel>
-
             <CindorTabPanel value="channels" :label="channelsTabLabel">
               <channels-pane
+                ref="channelsPaneRef"
+                :preview-channel="previewSavedChannel"
                 :profiles="outputProfiles"
                 :selected-profile-slug="selectedOutputProfileSlug"
                 :selected-profile="selectedOutputProfile"
@@ -267,7 +225,37 @@
               />
             </CindorTabPanel>
 
+
+            <CindorTabPanel value="providers" :label="providersTabLabel">
+              <section v-if="state.sourceSaveComplete" class="operation-summary" aria-label="Source refresh results">
+                <strong>Sources saved</strong>
+                <div v-for="(result, stage) in state.sourceRefresh" :key="stage" class="operation-stage" :class="result.status">
+                  <span role="status">{{ stage === 'channels' ? 'Channel discovery' : 'TV guide' }}: {{ result.status === 'running' ? 'Refreshing…' : result.status === 'success' ? 'Updated' : 'Failed' }}</span>
+                  <span v-if="result.message">{{ result.message }}</span>
+                  <CindorButton v-if="result.status === 'error'" variant="ghost" :disabled="savingProviders || channelActionsBusy" @click="refreshSavedSources(stage)">
+                    Retry {{ stage === 'channels' ? 'channel discovery' : 'TV guide' }}
+                  </CindorButton>
+                </div>
+              </section>
+              <sources-pane
+                :providers="providers"
+                :epg-validation="epgValidation"
+                :provider-validation="providerValidation"
+                :provider-columns="providerColumns"
+                :providers-can-save="providersCanSave"
+                :saving-providers="savingProviders || channelActionsBusy"
+                :loading-e-p-g-validation="loadingEPGValidation"
+                :add-provider="addProvider"
+                :save-providers="saveProviders"
+                :load-e-p-g-validation="loadEPGValidation"
+                @cell-edit="handleProviderCellEdit"
+                @row-action="handleProviderRowAction"
+              />
+            </CindorTabPanel>
+
+
             <CindorTabPanel value="preview" label="Preview">
+              <header class="page-heading"><div><h1>Preview</h1><p>Test saved channels and check programme information.</p></div></header>
               <CindorStack
                 class="preview-toolbar"
                 direction="horizontal"
@@ -278,7 +266,8 @@
                 aria-label="Preview actions"
               >
                 <CindorSelect
-                  v-model="previewProfileSlug"
+                  :model-value="previewProfileSlug"
+                  :value.attr="previewProfileSlug"
                   class="preview-profile-select"
                   :disabled="!outputProfiles.length"
                   aria-label="Preview output profile"
@@ -293,7 +282,7 @@
                 <CindorInput
                   v-model="previewSearch"
                   class="preview-search-input"
-                  placeholder="Search channels by name, group, or tvg-id…"
+                  placeholder="Search channel name, number, or source"
                   aria-label="Search preview channels"
                   :aria-describedby="previewChannels.length ? 'preview-toolbar-summary preview-table-summary' : 'preview-toolbar-summary'"
                 />
@@ -313,7 +302,11 @@
                 </span>
               </CindorStack>
               <div id="preview-toolbar-summary" class="tab-meta-copy" role="status" aria-live="polite">
-                Choose an output profile, filter the lineup, then refresh to inspect playable preview channels.
+                Preview uses your saved lineup. Save channel changes before testing them here.
+              </div>
+              <div v-if="state.previewLoadError" class="inline-error" role="alert">
+                <p>{{ state.previewLoadError }}{{ previewChannels.length ? ' Showing the last loaded channels.' : '' }}</p>
+                <CindorButton variant="ghost" :disabled="loadingPreviewChannels" @click="loadPreviewChannels">Retry loading channels</CindorButton>
               </div>
               <div
                 v-if="loadingPreviewChannels && !previewChannels.length"
@@ -323,12 +316,15 @@
               >
                 Loading channels…
               </div>
-              <div v-else-if="!previewChannels.length" class="tab-empty-state" role="status" aria-live="polite">
-                No channels loaded for this profile yet. Save sources, reload channels, then refresh
-                this preview.
+              <div v-else-if="!previewChannels.length && !state.previewLoadError" class="tab-empty-state" role="status" aria-live="polite">
+                <h2>No channels in this lineup</h2><p>Include channels in your lineup and save changes to preview them.</p>
+                <CindorButton variant="ghost" @click="tab = 'channels'">Manage channels</CindorButton>
+              </div>
+              <div v-else-if="previewChannels.length && !filteredPreviewChannels.length" class="tab-empty-state" role="status">
+                <h2>No matching channels</h2><p>Try another name or number.</p><CindorButton variant="ghost" @click="previewSearch = ''">Clear search</CindorButton>
               </div>
               <div
-                v-else
+                v-else-if="previewChannels.length"
                 class="table-scroll-shell"
                 role="region"
                 aria-labelledby="preview-table-title"
@@ -351,6 +347,15 @@
             </CindorTabPanel>
 
             <CindorTabPanel value="health" label="Health">
+              <header class="page-heading"><div><h1>Channel health</h1><p>Find connection problems and open the channel to investigate.</p></div></header>
+              <div v-if="state.healthError" class="inline-error" role="alert">{{ state.healthError }} <CindorButton variant="ghost" :disabled="loadingHealth" @click="loadHealth">Retry status</CindorButton></div>
+              <div class="health-filters">
+                <CindorInput v-model="state.healthSearch" aria-label="Search health results" placeholder="Search channel or source" />
+                <select v-model="state.healthFilter" aria-label="Health status filter">
+                  <option value="offline">Offline ({{ healthDetails.filter(row => row.status === 'offline').length }})</option>
+                  <option value="all">All results ({{ healthDetails.length }})</option>
+                </select>
+              </div>
               <CindorStack
                 class="pane-toolbar"
                 direction="horizontal"
@@ -394,28 +399,30 @@
                 Last updated: {{ formattedHealthUpdated }}
               </div>
               <div id="health-count-summary" v-if="healthDetails.length" class="tab-meta-copy" role="status" aria-live="polite">
-                Showing {{ healthDetails.length }} health result{{ healthDetails.length === 1 ? '' : 's' }}.
+                {{ healthDetails.filter(row => row.status === 'offline').length }} offline · {{ healthDetails.filter(row => row.status === 'online').length }} online. Connection checks do not guarantee browser playback or guide coverage.
               </div>
               <div
-                v-if="healthDetails.length"
+                v-if="filteredHealthDetails.length"
                 class="table-scroll-shell"
                 role="region"
                 aria-label="Health results table"
                 :aria-describedby="formattedHealthUpdated ? 'health-updated-summary health-count-summary' : 'health-count-summary'"
               >
                 <CindorDataTable
-                  row-id-key="id"
+                  row-id-key="key"
                   density="compact"
                   :columns="healthColumns"
-                  :rows="healthDetails"
+                  :rows="filteredHealthDetails"
+                  @row-action="handleHealthRowAction"
                 />
               </div>
               <div id="health-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
-                No health data yet. Run a health check after your sources and channels are configured.
+                {{ loadingHealth ? 'Loading health results…' : state.healthError ? 'Health results could not be loaded.' : healthDetails.length ? 'No channels match these filters.' : 'No health data yet. Run a health check after your sources are configured.' }}
               </div>
             </CindorTabPanel>
 
             <CindorTabPanel value="usage" :label="usageTabLabel">
+              <header class="page-heading"><div><h1>Activity</h1><p>Current viewers and recent playback. Refreshes automatically while this section is open.</p></div></header>
               <CindorStack
                 class="pane-toolbar"
                 direction="horizontal"
@@ -469,6 +476,7 @@
             </CindorTabPanel>
 
             <CindorTabPanel value="tasks" label="Tasks">
+              <header class="page-heading"><div><h1>Scheduled tasks</h1><p>Background maintenance. Schedules use server time; run dates show your local timezone.</p></div></header>
               <CindorStack
                 class="pane-toolbar"
                 direction="horizontal"
@@ -506,12 +514,12 @@
                 />
               </div>
               <div id="tasks-empty-summary" v-else class="tab-empty-copy" role="status" aria-live="polite">
-                No scheduled tasks found. Configure background refresh jobs in app settings if you
-                want automatic channel or EPG updates.
+                {{ loadingTasks ? 'Loading scheduled tasks…' : 'No scheduled tasks were returned by the server. Refresh to check again.' }}
               </div>
             </CindorTabPanel>
 
             <CindorTabPanel value="backups" label="Backups">
+              <header class="page-heading"><div><h1>Backups</h1><p>Save a recovery point before making larger changes. Restoring replaces the current configuration.</p></div></header>
               <CindorStack
                 class="pane-toolbar"
                 direction="horizontal"
@@ -561,6 +569,33 @@
                 No backups yet. Click "Create Backup" to save the current config.
               </div>
             </CindorTabPanel>
+            <CindorTabPanel value="app" :label="appTabLabel">
+              <app-settings-pane
+                :app-base-url="app.base_url"
+                :oauth-issuer="app.oauth.issuer"
+                :oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds"
+                :oauth-access-token-ttl="app.oauth.access_token_ttl_seconds"
+                :oauth-clients="app.oauth.clients"
+                :auth-configured="authConfigured"
+                :password-current="passwordForm.current"
+                :password-new="passwordForm.newPass"
+                :password-confirm="passwordForm.confirm"
+                :saving-app="savingApp"
+                :saving-password="savingPassword"
+                :confirm-remove-client="confirmRemoveOAuthClient"
+                :save-app="saveApp"
+                :change-password="changePassword"
+                @update:app-base-url="app.base_url = $event"
+                @update:oauth-issuer="app.oauth.issuer = $event"
+                @update:oauth-authorization-code-ttl="app.oauth.authorization_code_ttl_seconds = $event"
+                @update:oauth-access-token-ttl="app.oauth.access_token_ttl_seconds = $event"
+                @update:oauth-clients="app.oauth.clients = $event"
+                @update:password-current="passwordForm.current = $event"
+                @update:password-new="passwordForm.newPass = $event"
+                @update:password-confirm="passwordForm.confirm = $event"
+              />
+            </CindorTabPanel>
+
             </CindorTabs>
           </div>
         </main>
@@ -591,6 +626,7 @@
             <div aria-hidden="true" class="preview-player-error-icon">⚠️</div>
             <div class="preview-player-error-text">{{ state.playerError }}</div>
             <div class="preview-player-error-actions" role="group" aria-label="Preview recovery actions">
+              <CindorButton class="compact-button" @click="setupVideoPlayer">Retry playback</CindorButton>
               <CindorButton
                 v-if="showTranscodeButton"
                 class="compact-button preview-player-error-action"
@@ -729,6 +765,10 @@
         >
           <div id="preview-guide-title" class="guide-title-text">Guide</div>
           <div id="preview-guide-loading-summary" v-if="loadingGuide" class="guide-state-copy" role="status" aria-live="polite">Loading guide data…</div>
+          <div v-else-if="state.guideLoadError" class="inline-error" role="alert">
+            <p>{{ state.guideLoadError }}</p>
+            <CindorButton variant="ghost" @click="loadGuide(previewWatchingChannel?.tvg_id)">Retry guide</CindorButton>
+          </div>
           <div id="preview-guide-empty-summary" v-else-if="!previewGuide.length" class="guide-state-copy empty" role="status" aria-live="polite">
             No guide data available for this channel.
           </div>
@@ -880,12 +920,13 @@
 </template>
 
 <script setup>
-import { reactive, toRefs, watch, computed, ref, nextTick } from 'vue';
+import { reactive, toRefs, watch, computed, ref, nextTick, onBeforeUnmount } from 'vue';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
 import AppSettingsPane from './components/AppSettingsPane.vue';
 import ChannelsPane from './components/ChannelsPane.vue';
 import { buildChannelSourceOptions } from './utils/channel-source-options.js';
+import { runRefreshStages, observeNativePlayback, readAdminSection, parseBackupDate, formatDateTime, describeSchedule, resolveHealthChannel, guideRefreshProblem } from './utils/admin-experience.js';
 import { getProviderTypeOptions } from './utils/provider-type-options.js';
 import SourcesPane from './components/SourcesPane.vue';
 import { restoreChannelDrafts, resolveChannelDraftGuard, saveChannelDrafts } from './utils/channel-workflow.js';
@@ -932,6 +973,8 @@ let _authExpiryTimeout = null;
 let _authSessionPollInterval = null;
 let _authRedirectInProgress = false;
 let _draftPersistenceReady = false;
+let statusDismissTimer;
+const channelsPaneRef = ref(null);
 
 function getSessionStorage() {
   if (typeof window === 'undefined') {
@@ -1260,7 +1303,7 @@ function getProviderValidationIssues(provider, index) {
 }
 
 const state = reactive({
-  tab: 'app',
+  tab: readAdminSection(window.location.hash),
   app: normalizeAppConfig(),
   authStateReady: false,
   authConfigured: false,
@@ -1300,11 +1343,16 @@ const state = reactive({
   status: '',
   statusOk: true,
   savingProviders: false,
+  sourceRefresh: {},
+  sourceSaveComplete: false,
   reloadingChannels: false,
   reloadingEPG: false,
   savingApp: false,
   health: {},
   loadingHealth: false,
+  healthError: '',
+  healthFilter: 'offline',
+  healthSearch: '',
   runningHealth: false,
   activeUsage: [],
   usageHistory: [],
@@ -1319,6 +1367,7 @@ const state = reactive({
   deletingBackup: null,
   // Preview tab state
   previewChannels: [],
+  previewLoadError: '',
   loadingPreviewChannels: false,
   previewProfileSlug: 'default',
   previewSearch: '',
@@ -1326,6 +1375,7 @@ const state = reactive({
   showVideoModal: false,
   previewGuide: [],
   loadingGuide: false,
+  guideLoadError: '',
   playerError: null,
   // Player debug info — populated during playback setup so issues can be reported
   showPlayerDebug: false,
@@ -1395,8 +1445,10 @@ async function refreshChannelView() {
 }
 
 function setStatus(msg, ok = true) {
+  clearTimeout(statusDismissTimer);
   state.status = msg;
   state.statusOk = ok;
+  if (ok) statusDismissTimer = setTimeout(() => { state.status = ''; }, 6000);
 }
 
 function normalizeProvider(provider = {}, index = 0) {
@@ -1637,8 +1689,8 @@ async function restorePersistedDraftSnapshot() {
     return;
   }
 
-  if (persisted.tab) {
-    state.tab = persisted.tab;
+  if (persisted.tab && !window.location.hash) {
+    state.tab = readAdminSection(`#${persisted.tab}`);
   }
 
   if (persisted.drafts.app) {
@@ -1831,7 +1883,6 @@ async function loadProviders() {
       normalizeProvider
     );
     savedProvidersDraft.value = cloneProvidersDraft(state.providers);
-    setStatus('Loaded sources');
   } catch (e) {
     setStatus('Failed to load sources: ' + e.message, false);
     message.error(e.message);
@@ -1898,7 +1949,6 @@ async function loadChannelAuthoringData() {
     applyOutputProfileEntries(entriesJson.channels);
     channelSnapshotInvalid.value = false;
     pendingOutputProfileSlug.value = '';
-    setStatus('Channels loaded');
     return true;
   } catch (e) {
     channelLoadError.value = channelSnapshotInvalid.value
@@ -1949,7 +1999,6 @@ async function loadApp() {
     const cfg = await r.json();
     state.app = normalizeAppConfig(cfg || {});
     savedAppDraft.value = cloneAppDraft(state.app);
-    setStatus('Loaded app settings');
   } catch (e) {
     setStatus('Failed to load app config: ' + e.message, false);
     message.error(e.message);
@@ -1970,6 +2019,8 @@ async function saveProviders() {
 
   try {
     state.savingProviders = true;
+    state.sourceSaveComplete = false;
+    state.sourceRefresh = {};
     const cleaned = state.providers.map(p => {
       const entry = {
         name: String(p.name || '').trim(),
@@ -1990,10 +2041,8 @@ async function saveProviders() {
     if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Save sources failed'));
     state.providers = cleaned.map(normalizeProvider);
     savedProvidersDraft.value = cloneProvidersDraft(state.providers);
-    setStatus('Sources saved. Reloading...');
-    message.success('Sources saved');
-    // Reload channels and EPG concurrently after save
-    await Promise.all([reloadChannels({ skipDraftGuard: true }), reloadEPG({ internal: true })]);
+    state.sourceSaveComplete = true;
+    await refreshSavedSources();
   } catch (e) {
     setStatus(e.message, false);
     message.error(e.message);
@@ -2002,21 +2051,35 @@ async function saveProviders() {
   }
 }
 
-async function reloadChannels({ skipDraftGuard = false } = {}) {
+async function refreshSavedSources(onlyStage) {
+  if (onlyStage && channelActionsBusy.value) return;
+  if (onlyStage === 'channels' && !(await guardChannelAction('rescanning sources'))) return;
+  const operations = {
+    channels: () => reloadChannels({ skipDraftGuard: true, quiet: true }),
+    guide: () => reloadEPG({ internal: true, quiet: true }),
+  };
+  const selected = onlyStage ? { [onlyStage]: operations[onlyStage] } : operations;
+  await runRefreshStages(selected, updates => {
+    state.sourceRefresh = { ...state.sourceRefresh, ...updates };
+  });
+}
+
+async function reloadChannels({ skipDraftGuard = false, quiet = false } = {}) {
   if (!skipDraftGuard && !(await guardChannelAction('rescanning sources'))) return;
   try {
     state.reloadingChannels = true;
-    setStatus('Reloading channels...');
+    if (!quiet) setStatus('Rescanning sources…');
     const r = await apiFetch('/api/reload/channels', { method: 'POST' });
     const j = await r.json();
     if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Reload failed'));
-    setStatus(`Reloaded ${j.channels} channels.`);
     const refreshed = await loadChannelAuthoringData();
     if (state.previewChannels.length) {
       await loadPreviewChannels();
     }
-    if (refreshed) message.success('Channels rescanned');
+    if (!refreshed) throw new Error(channelLoadError.value || 'Channels rescanned, but the updated list could not be loaded.');
+    if (!quiet) message.success(`Rescanned ${j.channels} channels`);
   } catch (e) {
+    if (quiet) throw e;
     setStatus(e.message, false);
     message.error(e.message);
   } finally {
@@ -2024,16 +2087,18 @@ async function reloadChannels({ skipDraftGuard = false } = {}) {
   }
 }
 
-async function reloadEPG({ internal = false } = {}) {
+async function reloadEPG({ internal = false, quiet = false } = {}) {
   if (!internal && channelActionsBusy.value) return;
   try {
     state.reloadingEPG = true;
     const r = await apiFetch('/api/reload/epg', { method: 'POST' });
     const j = await r.json();
     if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Reload EPG failed'));
-    setStatus('EPG reloaded.');
-    message.success('EPG reloaded');
+    const problem = guideRefreshProblem(j);
+    if (problem) throw new Error(problem);
+    if (!quiet) message.success('TV guide updated');
   } catch (e) {
+    if (quiet) throw e;
     setStatus(e.message, false);
     message.error(e.message);
   } finally {
@@ -2128,6 +2193,7 @@ async function handleProviderRowAction(event) {
 }
 
 async function loadHealth() {
+  state.healthError = '';
   try {
     state.loadingHealth = true;
     const r = await apiFetch('/api/channel-health');
@@ -2135,7 +2201,7 @@ async function loadHealth() {
     if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Failed to load health'));
     state.health = { summary: j.summary || {}, details: j.details || [], meta: j.meta || null };
   } catch (e) {
-    setStatus(e.message, false);
+    state.healthError = e.message;
     message.error(e.message);
   } finally {
     state.loadingHealth = false;
@@ -2145,6 +2211,7 @@ async function loadHealth() {
 async function runHealth() {
   try {
     state.runningHealth = true;
+    state.healthError = '';
     setStatus('Running health check...');
     const r = await apiFetch('/api/channel-health/run', { method: 'POST' });
     const j = await r.json();
@@ -2152,7 +2219,7 @@ async function runHealth() {
     state.health = { summary: j.summary || {}, details: j.details || [], meta: j.meta || null };
     setStatus('Health check completed');
   } catch (e) {
-    setStatus(e.message, false);
+    state.healthError = e.message;
     message.error(e.message);
   } finally {
     state.runningHealth = false;
@@ -3008,46 +3075,54 @@ function handleBackupRowAction(event) {
 
 // ─── Preview tab ─────────────────────────────────────────────────────────────
 
+let previewRequestVersion = 0;
+let guideRequestVersion = 0;
+
 async function loadPreviewChannels() {
+  const request = ++previewRequestVersion;
+  state.loadingPreviewChannels = true;
+  state.previewLoadError = '';
   try {
-    state.loadingPreviewChannels = true;
     const slug = state.previewProfileSlug || state.selectedOutputProfileSlug || 'default';
-    const r = await apiFetch(`/api/output-profiles/${encodeURIComponent(slug)}/channels`);
+    const r = await apiFetch('/api/output-profiles/' + encodeURIComponent(slug) + '/channels');
     const j = await r.json();
-    if (!r.ok) {
-      throw new Error(buildApiErrorMessage(j, 'Failed to load preview channels'));
-    }
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Could not load this lineup'));
+    if (request !== previewRequestVersion) return false;
     state.previewChannels = Array.isArray(j?.channels) ? j.channels : [];
+    return true;
   } catch (e) {
-    message.error('Failed to load channels: ' + e.message);
+    if (request === previewRequestVersion) state.previewLoadError = e.message;
+    return false;
   } finally {
-    state.loadingPreviewChannels = false;
+    if (request === previewRequestVersion) state.loadingPreviewChannels = false;
   }
 }
 
 async function changePreviewProfile(slug) {
-  if (!slug || slug === state.previewProfileSlug) {
-    return;
-  }
-
+  if (!slug || slug === state.previewProfileSlug) return;
   state.previewProfileSlug = slug;
+  state.previewChannels = [];
   await loadPreviewChannels();
 }
 
 async function loadGuide(tvgId) {
+  const request = ++guideRequestVersion;
+  state.guideLoadError = '';
   if (!tvgId) {
     state.previewGuide = [];
+    state.loadingGuide = false;
     return;
   }
+  state.loadingGuide = true;
   try {
-    state.loadingGuide = true;
-    const r = await apiFetch(`/api/guide?tvgId=${encodeURIComponent(tvgId)}`);
+    const r = await apiFetch('/api/guide?tvgId=' + encodeURIComponent(tvgId));
     const j = await r.json();
-    state.previewGuide = Array.isArray(j.programmes) ? j.programmes : [];
-  } catch (_) {
-    state.previewGuide = [];
+    if (!r.ok) throw new Error(buildApiErrorMessage(j, 'Could not load programme information'));
+    if (request === guideRequestVersion) state.previewGuide = Array.isArray(j.programmes) ? j.programmes : [];
+  } catch (e) {
+    if (request === guideRequestVersion) state.guideLoadError = e.message;
   } finally {
-    state.loadingGuide = false;
+    if (request === guideRequestVersion) state.loadingGuide = false;
   }
 }
 
@@ -3055,6 +3130,7 @@ async function loadGuide(tvgId) {
 const videoPlayerEl = ref(null);
 let hlsInstance = null;
 let mpegtsInstance = null;
+let stopNativePlayback = null;
 
 const ERR_UNSUPPORTED_CODEC =
   'Stream uses a codec not supported by your browser (likely MPEG-2 video or AC-3 audio). Use VLC or another IPTV player to watch this channel.';
@@ -3131,13 +3207,19 @@ function setupMpegtsPlayer(video, streamUrl) {
   });
 }
 
+let playbackAttempt = 0;
 async function setupVideoPlayer() {
+  const attempt = ++playbackAttempt;
   await nextTick();
+  if (attempt !== playbackAttempt) return;
   const video = videoPlayerEl.value;
   if (!video || !state.previewWatchingChannel) return;
 
   const streamUrl = previewStreamUrl.value;
   const ch = state.previewWatchingChannel;
+
+  stopNativePlayback?.();
+  stopNativePlayback = null;
 
   // Destroy any previous instances before resetting state
   if (hlsInstance) {
@@ -3148,6 +3230,10 @@ async function setupVideoPlayer() {
     mpegtsInstance.destroy();
     mpegtsInstance = null;
   }
+
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
 
   // Clear any error and debug state from the previous player session
   state.playerError = null;
@@ -3181,6 +3267,11 @@ async function setupVideoPlayer() {
   if (video.canPlayType('application/vnd.apple.mpegurl') && !ch.hdhomerun) {
     dbgEvent('browser supports HLS natively → video.src');
     dbg.playerMode = 'native-hls';
+    stopNativePlayback = observeNativePlayback(video, failure => {
+      if (state.playerDebug !== dbg) return;
+      dbgEvent(`native playback error: ${failure.kind}`);
+      showPlayerError(failure.kind === 'codec' ? ERR_UNSUPPORTED_CODEC : failure.message);
+    });
     video.src = streamUrl;
     return;
   }
@@ -3220,6 +3311,7 @@ async function setupVideoPlayer() {
   // setupVideoPlayer() was called — used to discard stale async results.
   function isStale() {
     return (
+      attempt !== playbackAttempt ||
       videoPlayerEl.value !== video ||
       state.previewWatchingChannel !== probeChannel ||
       previewStreamUrl.value !== streamUrl
@@ -3348,11 +3440,13 @@ async function setupVideoPlayer() {
     hlsInstance.loadSource(streamUrl);
     hlsInstance.attachMedia(video);
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (isStale()) return;
       dbgEvent('HLS.js MANIFEST_PARSED — stream is live HLS, playing');
       dbg.playerMode = 'hls';
       video.play().catch(() => {});
     });
     hlsInstance.on(Hls.Events.ERROR, (_evt, data) => {
+      if (isStale()) return;
       if (!data || !data.fatal) {
         return;
       }
@@ -3399,10 +3493,17 @@ async function setupVideoPlayer() {
   // Last resort: direct src (works for MP4/MPEG-TS in some browsers)
   dbgEvent('HLS.js not supported — using direct video.src');
   dbg.playerMode = 'direct-src';
+  stopNativePlayback = observeNativePlayback(video, failure => {
+    if (state.playerDebug !== dbg) return;
+    showPlayerError(failure.kind === 'codec' ? ERR_UNSUPPORTED_CODEC : failure.message);
+  });
   video.src = streamUrl;
 }
 
 function stopVideoPlayer() {
+  ++playbackAttempt;
+  stopNativePlayback?.();
+  stopNativePlayback = null;
   if (hlsInstance) {
     hlsInstance.destroy();
     hlsInstance = null;
@@ -3429,9 +3530,13 @@ function stopVideoPlayer() {
  * The resulting stream is played via mpegts.js.
  */
 async function setupTranscodePlayer() {
+  const attempt = ++playbackAttempt;
   await nextTick();
+  if (attempt !== playbackAttempt) return;
   const video = videoPlayerEl.value;
   if (!video || !state.previewWatchingChannel) return;
+  stopNativePlayback?.();
+  stopNativePlayback = null;
 
   // Append a timestamped message to the debug event log.
   // setupTranscodePlayer() may be called from outside setupVideoPlayer() (e.g. via
@@ -3500,10 +3605,25 @@ async function setupTranscodePlayer() {
 }
 
 function watchChannel(channel) {
+  ++guideRequestVersion;
+  state.guideLoadError = '';
+  state.loadingGuide = false;
   state.previewWatchingChannel = channel;
   state.previewGuide = [];
   state.showVideoModal = true;
   if (channel.tvg_id) loadGuide(channel.tvg_id);
+}
+
+async function previewSavedChannel(row) {
+  state.previewProfileSlug = state.selectedOutputProfileSlug;
+  const loaded = await loadPreviewChannels();
+  if (!loaded) { state.tab = 'preview'; return; }
+  const channel = state.previewChannels.find(channel => channel.canonicalId === row.id);
+  if (!channel) {
+    setStatus('This channel is not in the saved lineup yet. Save your changes before previewing it.', false);
+    return;
+  }
+  watchChannel(channel);
 }
 
 function handlePreviewRowAction(event) {
@@ -3567,6 +3687,8 @@ watch(
     if (open) {
       setupVideoPlayer();
     } else {
+      ++guideRequestVersion;
+      state.loadingGuide = false;
       stopVideoPlayer();
       state.previewWatchingChannel = null;
       state.previewGuide = [];
@@ -3580,10 +3702,14 @@ let _usagePollInterval = null;
 watch(
   () => state.tab,
   newTab => {
-    if (newTab === 'preview' && !_previewLoaded) {
-      _previewLoaded = true;
-      loadPreviewChannels();
+    const hash = `#${newTab === 'app' ? 'settings' : newTab}`;
+    if (readAdminSection(window.location.hash) !== newTab || !window.location.hash) {
+      window.history.pushState(null, '', hash);
     }
+    if (newTab === 'preview' && !_previewLoaded) {
+      loadPreviewChannels().then(loaded => { _previewLoaded = loaded; });
+    }
+    if (newTab === 'usage') loadUsage();
   }
 );
 
@@ -3593,7 +3719,7 @@ function startUsagePolling() {
   }
 
   _usagePollInterval = setInterval(() => {
-    loadUsage();
+    if (state.tab === 'usage' && !document.hidden && !state.loadingUsage) loadUsage();
   }, 5000);
 }
 
@@ -3611,8 +3737,23 @@ async function initializeApp() {
   loadUsage();
   loadTasks();
   startUsagePolling();
+  if (state.tab === 'preview' && !_previewLoaded) _previewLoaded = await loadPreviewChannels();
 }
 
+function restoreSectionFromUrl() {
+  state.tab = readAdminSection(window.location.hash);
+}
+window.addEventListener('hashchange', restoreSectionFromUrl);
+onBeforeUnmount(() => {
+  window.removeEventListener('hashchange', restoreSectionFromUrl);
+  clearTimeout(statusDismissTimer);
+  clearTimeout(_authExpiryTimeout);
+  clearInterval(_authSessionPollInterval);
+  clearInterval(_usagePollInterval);
+  ++guideRequestVersion;
+  ++previewRequestVersion;
+  stopVideoPlayer();
+});
 initializeApp();
 
 // Expose reactive fields directly in template
@@ -3676,7 +3817,7 @@ const showLoginView = computed(
 );
 
 const usageTabLabel = computed(() =>
-  activeUsage.value.length > 0 ? `Usage (${Math.min(activeUsage.value.length, 99)})` : 'Usage'
+  activeUsage.value.length > 0 ? `Activity (${Math.min(activeUsage.value.length, 99)})` : 'Activity'
 );
 
 const channelWorkflowsLoading = computed(
@@ -3750,7 +3891,7 @@ const profileDirty = computed(
     channelWorkflowDraftDirty.value
 );
 
-const appTabLabel = computed(() => buildDirtyTabLabel('App', appDirty.value));
+const appTabLabel = computed(() => buildDirtyTabLabel('Settings', appDirty.value));
 const providersTabLabel = computed(() => buildDirtyTabLabel('Sources', providersDirty.value));
 const channelsTabLabel = computed(() => buildDirtyTabLabel('Channels', profileDirty.value));
 const providerValidation = computed(() => ({
@@ -4086,51 +4227,39 @@ const channelWorkflowRows = computed(() => {
     });
 });
 
-const healthDetails = computed(() =>
-  Array.isArray(health.value.details)
-    ? health.value.details.map(d => ({
-      id: d.id,
-      status: d.healthy ? 'online' : 'offline',
-      ms: d.ms,
-      code: d.statusCode,
-      contentType: d.contentType,
-      error: d.error,
-      method: d.method,
-      path: d.path,
-    }))
-    : Object.entries(health.value.summary || {}).map(([id, status]) => ({
-      id,
-      status,
-      ms: '',
-      code: '',
-      contentType: '',
-      error: '',
-      method: '',
-      path: '',
-    }))
-);
+const healthDetails = computed(() => {
+  const details = health.value.details?.length ? health.value.details
+    : Object.entries(health.value.summary || {}).map(([id, status]) => ({ id, healthy: status === 'online' }));
+  return details.map((detail, index) => {
+    const channel = resolveHealthChannel(detail.id, channelWorkflowRows.value);
+    return { ...detail, key: index, channelId: channel?.id, name: channel?.name || detail.id,
+      sources: channel?.sourceBindings.map(binding => binding.sourceChannel?.source).filter(Boolean).filter((name, i, all) => all.indexOf(name) === i).join(', ') || '—',
+      status: detail.healthy ? 'online' : 'offline' };
+  });
+});
+const filteredHealthDetails = computed(() => healthDetails.value.filter(row =>
+  (state.healthFilter === 'all' || row.status === state.healthFilter) &&
+  [row.name, row.id, row.sources].some(value => String(value || '').toLowerCase().includes(state.healthSearch.toLowerCase().trim()))));
+
+async function handleHealthRowAction(event) {
+  const { actionKey, row } = event?.detail || {};
+  if (actionKey !== 'edit' || !row?.channelId) return;
+  state.tab = 'channels';
+  await nextTick();
+  channelsPaneRef.value?.focusChannel(row.channelId);
+}
 
 const healthColumns = [
-  { label: 'Channel ID', key: 'id', sortable: true },
-  {
-    label: 'Status',
-    key: 'status',
-    sortable: true,
-    cellRenderer: ({ row }) => (row.status === 'online' ? 'Online' : 'Offline'),
-  },
-  { label: 'Latency (ms)', key: 'ms', sortable: true },
-  { label: 'Content-Type', key: 'contentType' },
+  { label: 'Channel', key: 'name', sortable: true },
+  { label: 'Source', key: 'sources', sortable: true },
+  { label: 'Status', key: 'status', sortable: true, cellRenderer: ({ row }) => row.status === 'online' ? 'Online' : 'Offline' },
+  { label: 'Response', key: 'ms', sortable: true, cellRenderer: ({ row }) => row.ms == null ? '—' : row.ms < 1000 ? row.ms + ' ms' : (row.ms / 1000).toFixed(1) + ' s' },
   { label: 'Error', key: 'error' },
+  { label: 'Actions', key: 'actions', actions: [{ key: 'edit', label: 'Edit channel', variant: 'ghost', disabled: ({ row }) => !row.channelId }] },
 ];
-
 const formattedHealthUpdated = computed(() => {
   const ended = health.value?.meta?.endedAt || health.value?.meta?.startedAt;
-  if (!ended) return '';
-  try {
-    return new Date(ended).toLocaleString();
-  } catch {
-    return String(ended);
-  }
+  return ended ? formatDateTime(ended) : '';
 });
 
 const usageColumns = [
@@ -4168,7 +4297,7 @@ const usageHistoryColumns = [
 
 const taskColumns = [
   { label: 'Task Name', key: 'name', sortable: true },
-  { label: 'Schedule', key: 'schedule' },
+  { label: 'Schedule', key: 'schedule', cellRenderer: ({ row }) => describeSchedule(row.schedule) },
   {
     label: 'Status',
     key: 'status',
@@ -4185,12 +4314,12 @@ const taskColumns = [
   {
     label: 'Last Run',
     key: 'lastRun',
-    cellRenderer: ({ row }) => (row.lastRun ? new Date(row.lastRun).toLocaleString() : 'Never'),
+    cellRenderer: ({ row }) => formatDateTime(row.lastRun),
   },
   {
     label: 'Duration',
     key: 'lastDuration',
-    cellRenderer: ({ row }) => (row.lastDuration == null ? '—' : `${row.lastDuration}ms`),
+    cellRenderer: ({ row }) => (row.lastDuration == null ? '—' : row.lastDuration < 1000 ? `${row.lastDuration} ms` : `${(row.lastDuration / 1000).toFixed(1)} s`),
   },
   {
     label: 'Actions',
@@ -4254,10 +4383,8 @@ async function confirmRemoveOAuthClient(client) {
  * @returns {string}
  */
 function formatBackupTimestamp(name) {
-  return name
-    .replace(/^backup-/, '')
-    .replace('T', ' ')
-    .replace(/-(\d{2})-(\d{2})-(\d{2})$/, ':$1:$2:$3');
+  const date = parseBackupDate(name);
+  return date ? formatDateTime(date) : name;
 }
 
 const backupColumns = [
@@ -4300,6 +4427,7 @@ const filteredPreviewChannels = computed(() => {
   return state.previewChannels.filter(
     c =>
       (c.name || '').toLowerCase().includes(q) ||
+      String(c.guideNumber || '').toLowerCase().includes(q) ||
       (c.group || '').toLowerCase().includes(q) ||
       (c.tvg_id || '').toLowerCase().includes(q) ||
       (c.source || '').toLowerCase().includes(q)
@@ -4478,6 +4606,15 @@ const previewDebugEventCount = computed(() => state.playerDebug?.events?.length 
 </script>
 
 <style>
+html[data-theme='dark'],
+cindor-provider[data-theme='dark'] {
+  --text-base: 15px;
+  --text-sm: 13px;
+  --text-xs: 12px;
+  --fg-subtle: #a6a18f;
+  --danger: #f08080;
+}
+
 html,
 body,
 #app {
@@ -4499,8 +4636,10 @@ body {
   background: transparent;
 }
 
+.admin-shell::part(layout) { gap: 0; }
+
 .admin-header {
-  padding: 16px 20px;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--border) !important;
   background: rgba(15, 14, 12, 0.9);
   backdrop-filter: blur(10px);
@@ -4548,7 +4687,7 @@ body {
 }
 
 .admin-content {
-  padding: 24px;
+  padding: 16px;
 }
 
 .admin-main {
@@ -4622,6 +4761,7 @@ body {
 
 .workspace-frame.channel-workspace { overflow: clip; }
 .mobile-section-picker { display: none; }
+.mobile-section-picker select { min-width: 0; min-height: 44px; padding: 8px 10px; font: inherit; border: 1px solid var(--border); border-radius: 5px; color: var(--fg); background: var(--surface); color-scheme: dark; }
 .admin-tabs::part(mobile-picker) { display: none; }
 @media (max-width: 640px) {
   .mobile-section-picker { display: grid; gap: 6px; padding: 12px 12px 0; }
@@ -4635,7 +4775,7 @@ body {
 .admin-tabs {
   display: block;
   min-width: 0;
-  padding: 20px;
+  padding: 16px;
   background: var(--bg-subtle);
 }
 
@@ -4644,7 +4784,7 @@ body {
 }
 
 .admin-tabs cindor-tab-panel {
-  padding-top: 12px;
+  padding-top: 8px;
 }
 
 .admin-tabs cindor-data-table {
@@ -4858,6 +4998,7 @@ body {
 
 .preview-player-video {
   width: 100%;
+  min-height: 240px;
   max-height: 360px;
   display: block;
 }
@@ -5167,5 +5308,27 @@ body {
     max-height: 260px;
   }
 
+}
+/* Shared hierarchy and feedback, retaining the existing warm dark palette. */
+.page-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; }
+.page-heading h1 { margin: 0; font-size: 1.35rem; line-height: 1.3; letter-spacing: -0.02em; }
+.page-heading p { margin: 4px 0 0; color: var(--fg-muted); line-height: 1.5; }
+.inline-error, .operation-summary { padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 14px; overflow-wrap: anywhere; }
+.inline-error { border-color: var(--danger); }
+.inline-error p { margin: 0 0 8px; }
+.operation-stage { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+.operation-stage.error { color: var(--danger); }
+.operation-stage.success { color: var(--success); }
+.health-filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.health-filters input, .health-filters select { font: inherit; background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: 5px; min-height: 40px; padding: 8px 10px; max-width: 100%; }
+.health-filters input { flex: 1 1 240px; }
+.health-filters select { color-scheme: dark; }
+:where(button, input, select, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 640px) {
+  .admin-header { padding: 8px 12px; }
+  .admin-content { padding: 8px; }
+  .admin-tabs { padding: 10px; }
+  .mobile-section-picker { padding: 10px 10px 0; gap: 10px; grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+  .page-heading { margin-top: 0; margin-bottom: 12px; }
 }
 </style>

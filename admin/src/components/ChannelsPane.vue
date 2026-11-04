@@ -47,23 +47,23 @@
           <p class="help">Name and availability changes take effect when you save.</p>
           <div class="button-row">
             <CindorButton variant="ghost" :disabled="busy" @click="createProfile">
-New lineup
-</CindorButton>
+              New lineup
+            </CindorButton>
             <CindorButton
               variant="ghost"
               :disabled="busy || !selectedProfile"
               @click="duplicateProfile"
-              >
-Duplicate lineup
-</CindorButton>
+            >
+              Duplicate lineup
+            </CindorButton>
             <CindorButton
               v-if="selectedProfile && !selectedProfile.isDefault"
               variant="ghost"
               :disabled="busy"
               @click="deleteProfile"
-              >
-Delete lineup
-</CindorButton>
+            >
+              Delete lineup
+            </CindorButton>
           </div>
         </div>
       </details>
@@ -81,9 +81,9 @@ Delete lineup
               variant="ghost"
               :aria-label="`Copy ${endpointNames[endpoint.label] || endpoint.label} URL`"
               @click="copyEndpoint(endpoint)"
-              >
-Copy
-</CindorButton>
+            >
+              Copy
+            </CindorButton>
           </div>
           <p v-if="copyStatus" role="status">{{ copyStatus }}</p>
         </div>
@@ -92,25 +92,25 @@ Copy
         <summary>Maintenance</summary>
         <div class="disclosure-content maintenance">
           <div>
-            <CindorButton variant="ghost" :disabled="actionsBusy || loading" @click="refreshChannels">
-Refresh view
-</CindorButton>
+            <CindorButton
+              variant="ghost"
+              :disabled="actionsBusy || loading"
+              @click="refreshChannels"
+            >
+              Refresh view
+            </CindorButton>
             <p>Reread saved channel settings.</p>
           </div>
           <div>
             <CindorButton variant="ghost" :disabled="busy" @click="reloadChannels">
-{{
-              reloadingChannels ? 'Rescanning…' : 'Rescan sources'
-            }}
-</CindorButton>
+              {{ reloadingChannels ? 'Rescanning…' : 'Rescan sources' }}
+            </CindorButton>
             <p>Discover channels again from your sources.</p>
           </div>
           <div>
             <CindorButton variant="ghost" :disabled="busy" @click="reloadEPG">
-{{
-              reloadingEPG ? 'Updating…' : 'Update TV guide'
-            }}
-</CindorButton>
+              {{ reloadingEPG ? 'Updating…' : 'Update TV guide' }}
+            </CindorButton>
             <p>Download programme schedules. Your drafts are kept.</p>
           </div>
         </div>
@@ -120,8 +120,8 @@ Refresh view
     <div v-if="loadError" class="error-message" role="alert">
       <p>{{ loadError }}</p>
       <CindorButton variant="ghost" :disabled="actionsBusy || loading" @click="refreshChannels">
-Retry refresh
-</CindorButton>
+        Retry refresh
+      </CindorButton>
     </div>
     <div v-if="saveError" class="error-message" role="alert">
       {{ saveError }} Your changes are kept for correction.
@@ -134,9 +134,15 @@ Retry refresh
         placeholder="Search name, channel number, or source"
       />
       <CindorButton v-if="search || filter !== 'all'" variant="ghost" @click="clearFilters">
-Clear filters
-</CindorButton>
+        Clear filters
+      </CindorButton>
     </div>
+    <label class="mobile-filter">
+      <span>Show channels</span>
+      <select v-model="filter">
+        <option v-for="item in filters" :key="item.value" :value="item.value">{{ item.label }} ({{ item.count }})</option>
+      </select>
+    </label>
     <div class="filters" role="group" aria-label="Show channels">
       <CindorButton
         v-for="item in filters"
@@ -145,9 +151,9 @@ Clear filters
         :class="{ selected: filter === item.value }"
         :aria-pressed="filter === item.value"
         @click="filter = item.value"
-        >
-{{ item.label }} <span class="filter-count">{{ item.count }}</span>
-</CindorButton>
+      >
+        {{ item.label }} <span class="filter-count">{{ item.count }}</span>
+      </CindorButton>
     </div>
     <p class="results" role="status">
       {{
@@ -205,9 +211,15 @@ Clear filters
             <div
               :id="`setup-${row.id}`"
               class="row-help"
-              :class="{ 'needs-setup': row.setupIssues.length }"
+              :class="{ 'needs-setup': row.outputEnabled && row.setupIssues.length }"
             >
-              {{ row.setupIssues.map(issue => issue.label).join(' · ') }}
+              {{
+                row.outputEnabled
+                  ? row.setupIssues.map(issue => issue.label).join(' · ')
+                  : row.setupIssues.length
+                    ? 'Set up to include in this lineup'
+                    : ''
+              }}
             </div>
             <div v-if="row.rowFeedbackTone === 'danger'" class="row-error">
               {{ row.rowFeedbackLabel }}
@@ -224,9 +236,9 @@ Clear filters
               :data-edit-channel="row.id"
               :aria-label="`Edit ${displayName(row)}`"
               @click="openEditor(row)"
-              >
-{{ row.setupIssues.length ? 'Set up' : 'Edit' }}
-</CindorButton>
+            >
+              {{ row.setupIssues.length ? 'Set up' : 'Edit' }}
+            </CindorButton>
           </td>
         </tr>
       </tbody>
@@ -239,14 +251,12 @@ Clear filters
       </div>
       <div class="button-row">
         <CindorButton variant="ghost" :disabled="busy" @click="reviewOpen = true">
-Review changes
+          Review changes
 </CindorButton><CindorButton variant="ghost" :disabled="busy" @click="discardChanges">
-Discard
+          Discard
 </CindorButton><CindorButton :disabled="busy" @click="saveProfileChanges">
-{{
-          savingProfile ? 'Saving…' : 'Save changes'
-        }}
-</CindorButton>
+          {{ savingProfile ? 'Saving…' : 'Save changes' }}
+        </CindorButton>
       </div>
     </div>
 
@@ -265,13 +275,24 @@ Discard
             <p class="eyebrow">CHANNEL SETTINGS</p>
             <h2 id="channel-editor-title">{{ displayName(activeRow) }}</h2>
           </div>
-          <button type="button" class="editor-close" aria-label="Close channel settings" @click="closeEditor">
+          <button
+            type="button"
+            class="editor-close"
+            aria-label="Close channel settings"
+            @click="closeEditor"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </header>
         <p id="channel-editor-draft-copy" class="help">
           Changes are kept as a draft until you save.
         </p>
+        <div v-if="previewChannel" class="editor-preview">
+          <CindorButton variant="ghost" :disabled="busy || !activeRow.savedOutputEnabled" @click="previewActiveChannel">
+            Preview saved channel
+          </CindorButton>
+          <span class="help">{{ activeRow.savedOutputEnabled ? 'Uses saved lineup settings.' : 'Include this channel and save the lineup before previewing.' }}</span>
+        </div>
         <section aria-labelledby="lineup-fields-title" class="editor-section">
           <h3 id="lineup-fields-title">In this lineup</h3>
           <p class="help">Only affects {{ selectedProfile?.name }}.</p>
@@ -308,9 +329,9 @@ Discard
               variant="ghost"
               :disabled="busy"
               @click="resetNumber"
-              >
-Use default number
-</CindorButton>
+            >
+              Use default number
+            </CindorButton>
           </div>
         </section>
         <section aria-labelledby="shared-fields-title" class="editor-section">
@@ -326,57 +347,29 @@ Use default number
               @blur="saveCanonicalName(activeRow.id)"
           /></label>
           <p id="editor-name-help" class="help">Leave blank to use {{ activeRow.baseName }}.</p>
-          <label class="editor-field"><span>Stream source</span><CindorSelect
-              :model-value="activeRow.preferredSourceChannelId || ''"
-              :value.attr="activeRow.preferredSourceChannelId || ''"
-              :disabled="busy || !activeStreamOptions.length"
-              aria-label="Stream source"
-              @update:model-value="value => updatePreferredStream(activeRow.id, value)"
-              ><option value="" disabled>
-                {{
-                  activeStreamOptions.length
-                    ? 'Choose a stream'
-                    : 'No stream available'
-                }}
-              </option>
-              <option
-                v-for="option in activeStreamOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option></CindorSelect></label>
-          <p class="help">
-            {{
-              activeStreamOptions.length === 1
-                ? 'One stream source is available.'
-                : 'Choose a discovered stream for playback. Current channel matches appear first.'
-            }}
-          </p>
-          <label class="editor-field"><span>TV guide source</span><CindorSelect
-              :model-value="activeRow.selectedGuideBindingValue || ''"
-              :value.attr="activeRow.selectedGuideBindingValue || ''"
-              :disabled="busy || !activeGuideOptions.length"
-              aria-label="TV guide source"
-              aria-describedby="editor-guide-help"
-              @update:model-value="value => updateGuideBinding(activeRow.id, value)"
-              ><option value="" disabled>
-                {{
-                  activeGuideOptions.length
-                    ? 'Choose a TV guide'
-                    : 'No TV guide available'
-                }}
-              </option>
-              <option
-                v-for="option in activeGuideOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option></CindorSelect></label>
+          <ChannelSourceSelect
+            :key="`stream-${activeRow.id}`"
+            id="editor-stream-source"
+            label="Stream source"
+            :model-value="activeRow.preferredSourceChannelId || ''"
+            :options="activeRow.preferredStreamOptions"
+            :matched-values="activeStreamMatches"
+            :disabled="busy"
+            @update:model-value="value => updatePreferredStream(activeRow.id, value)"
+          />
+          <ChannelSourceSelect
+            :key="`guide-${activeRow.id}`"
+            id="editor-guide-source"
+            label="TV guide source"
+            :model-value="activeRow.selectedGuideBindingValue || ''"
+            :options="activeRow.guideBindingOptions"
+            :matched-values="activeRow.boundGuideValues || []"
+            :disabled="busy"
+            @update:model-value="value => updateGuideBinding(activeRow.id, value)"
+          />
           <p id="editor-guide-help" class="help">
-            Choose a discovered guide reference. Current channel matches appear first. This selects
-            programme information, not the channel number, and does not guarantee schedule coverage.
+            TV guide choices select programme information, not the channel number. Schedule coverage
+            depends on your guide source.
           </p>
         </section>
         <details class="technical-details">
@@ -425,10 +418,8 @@ Use default number
         </section>
         <div class="button-row">
           <CindorButton variant="ghost" @click="reviewOpen = false">Keep editing</CindorButton><CindorButton :disabled="busy" @click="saveFromReview">
-{{
-            savingProfile ? 'Saving…' : 'Save changes'
-          }}
-</CindorButton>
+            {{ savingProfile ? 'Saving…' : 'Save changes' }}
+          </CindorButton>
         </div>
       </div>
     </CindorDialog>
@@ -438,9 +429,11 @@ Use default number
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
 import { CindorButton, CindorDialog, CindorInput, CindorSelect, CindorSwitch } from 'cindor-ui-vue';
+import ChannelSourceSelect from './ChannelSourceSelect.vue';
 import {
   matchesChannelSearch,
   getChannelSetupIssues,
+  matchesChannelFilter,
   buildChannelChangeReview,
 } from '../utils/channel-workflow.js';
 
@@ -467,6 +460,7 @@ const props = defineProps({
   saveProfileChanges: { type: Function, required: true },
   discardChanges: { type: Function, required: true },
   openSources: { type: Function, required: true },
+  previewChannel: { type: Function, default: null },
   createProfile: { type: Function, required: true },
   duplicateProfile: { type: Function, required: true },
   deleteProfile: { type: Function, required: true },
@@ -505,47 +499,34 @@ const busy = computed(
 const enrichedRows = computed(() =>
   props.rows.map(row => ({ ...row, setupIssues: getChannelSetupIssues(row) }))
 );
-const matchesFilter = (row, value) =>
-  value === 'enabled'
-    ? row.outputEnabled
-    : value === 'disabled'
-      ? !row.outputEnabled
-      : value === 'setup'
-        ? row.setupIssues.length > 0
-        : value === 'changed'
-          ? row.hasDraftChanges
-          : true;
 const filters = computed(() =>
   [
     ['all', 'All'],
     ['enabled', 'In lineup'],
     ['disabled', 'Not in lineup'],
-    ['setup', 'Needs setup'],
+    ['setup', 'Needs attention'],
     ['changed', 'Changed'],
   ].map(([value, label]) => ({
     value,
     label,
-    count: enrichedRows.value.filter(row => matchesFilter(row, value)).length,
+    count: enrichedRows.value.filter(row => matchesChannelFilter(row, value)).length,
   }))
 );
 const filteredRows = computed(() =>
   enrichedRows.value.filter(
-    row => matchesChannelSearch(row, search.value) && matchesFilter(row, filter.value)
+    row => matchesChannelSearch(row, search.value) && matchesChannelFilter(row, filter.value)
   )
 );
 const activeRow = computed(() => enrichedRows.value.find(row => row.id === editorId.value));
-// Reorder shared option references only for the open editor.
-const activeStreamOptions = computed(() => {
-  const bound = new Set(activeRow.value?.sourceBindings.map(binding => binding.sourceChannel?.id));
-  return (activeRow.value?.preferredStreamOptions || []).slice().sort((a, b) =>
-    Number(bound.has(b.value)) - Number(bound.has(a.value)));
-});
-const activeGuideOptions = computed(() => {
-  const bound = new Set(activeRow.value?.boundGuideValues);
-  return (activeRow.value?.guideBindingOptions || []).slice().sort((a, b) =>
-    Number(bound.has(b.value)) - Number(bound.has(a.value)));
-});
-const streamLabels = computed(() => new Map((props.rows[0]?.preferredStreamOptions || []).map(option => [option.value, option.label])));
+const activeStreamMatches = computed(() =>
+  (activeRow.value?.sourceBindings || []).map(binding => binding.sourceChannel?.id)
+);
+const streamLabels = computed(
+  () =>
+    new Map(
+      (props.rows[0]?.preferredStreamOptions || []).map(option => [option.value, option.label])
+    )
+);
 const changedCount = computed(() => props.rows.filter(row => row.hasDraftChanges).length);
 const review = computed(() =>
   buildChannelChangeReview(props.rows, props.selectedProfile || {}, props.savedProfile)
@@ -572,6 +553,15 @@ async function openEditor(row) {
   await nextTick();
   if (row.enableToggleDisabled) focusControl(numberInput.value);
 }
+function focusChannel(channelId) {
+  const row = enrichedRows.value.find(channel => channel.id === channelId);
+  if (!row) return false;
+  search.value = displayName(row);
+  filter.value = 'all';
+  openEditor(row);
+  return true;
+}
+defineExpose({ focusChannel });
 async function closeEditor() {
   if (!editorOpen.value && !editorId.value) return;
   const id = editorId.value;
@@ -582,6 +572,11 @@ async function closeEditor() {
     element => element.getAttribute('data-edit-channel') === id
   );
   focusControl(button || pane.value?.querySelector('.channel-search'));
+}
+async function previewActiveChannel() {
+  const row = activeRow.value;
+  await closeEditor();
+  props.previewChannel?.(row);
 }
 function resetNumber() {
   props.updateGuideNumberOverrideInput(editorId.value, '');
@@ -644,7 +639,7 @@ watch(activeRow, row => {
   stroke-linecap: round;
 }
 .channels-pane {
-  padding: 24px 28px;
+  padding: 8px 4px;
   color: var(--fg);
 }
 h1,
@@ -672,7 +667,7 @@ p {
   justify-content: space-between;
   align-items: center;
   gap: 20px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 .page-heading p,
 .help,
@@ -692,15 +687,15 @@ p {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 20px;
-  margin-bottom: 22px;
-  padding-bottom: 16px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 .publication {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   color: var(--fg-subtle);
 }
 .status-dot {
@@ -779,6 +774,7 @@ summary:focus-visible {
   flex-wrap: wrap;
   margin: 12px 0 8px;
 }
+.mobile-filter { display: none; }
 .filters .selected {
   --cindor-button-ghost-color: var(--accent);
   --cindor-button-ghost-border-color: var(--accent);
@@ -787,7 +783,7 @@ summary:focus-visible {
 }
 .filter-count {
   margin-left: 6px;
-  opacity: 0.7;
+  opacity: 0.85;
   font-variant-numeric: tabular-nums;
 }
 .results {
@@ -800,7 +796,7 @@ summary:focus-visible {
 }
 .channel-list th {
   color: var(--fg-subtle);
-  font-size: 0.73rem;
+  font-size: 0.85rem;
   font-weight: 600;
   text-align: left;
   padding: 10px;
@@ -823,7 +819,7 @@ summary:focus-visible {
   width: 28%;
 }
 .channel-list td {
-  padding: 12px 10px;
+  padding: 9px 10px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
@@ -837,7 +833,7 @@ summary:focus-visible {
   overflow-wrap: anywhere;
 }
 .source-cell {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--fg-subtle);
   overflow-wrap: anywhere;
 }
@@ -846,8 +842,9 @@ summary:focus-visible {
   margin-top: 3px;
 }
 .row-help {
-  font-size: 0.78rem;
-  margin-top: 4px;
+  font-size: 0.85rem;
+  margin-top: 3px;
+  color: var(--fg-subtle);
   line-height: 1.45;
 }
 .row-help:empty {
@@ -909,14 +906,18 @@ summary:focus-visible {
 }
 .channel-editor,
 .change-review {
-  width: min(640px, calc(100vw - 64px));
+  width: min(660px, calc(100vw - 64px));
   max-height: calc(100dvh - 80px);
   overflow-y: auto;
-  padding: 24px;
+  padding: 16px;
   box-sizing: border-box;
 }
 :deep(cindor-dialog::part(dialog)) {
- padding: 12px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow: hidden; box-sizing: border-box;
+  padding: 12px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .editor-header {
   display: flex;
@@ -925,6 +926,17 @@ summary:focus-visible {
   gap: 16px;
   margin-bottom: 8px;
 }
+.editor-header > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.editor-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
 .eyebrow {
   font-size: 0.7rem;
   letter-spacing: 0.1em;
@@ -932,8 +944,8 @@ summary:focus-visible {
   margin-bottom: 5px;
 }
 .editor-section {
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 .editor-section h3 {
@@ -948,7 +960,7 @@ summary:focus-visible {
 .editor-field {
   display: grid;
   gap: 6px;
-  margin-top: 16px;
+  margin-top: 12px;
   font-size: 0.9rem;
 }
 .editor-field > span {
@@ -1026,7 +1038,7 @@ dd {
 }
 @media (max-width: 700px) {
   .channels-pane {
-    padding: 16px 4px;
+    padding: 12px 4px;
   }
   .page-heading {
     align-items: flex-start;
@@ -1047,13 +1059,15 @@ dd {
     flex-basis: 100%;
   }
   .filters {
-    gap: 4px;
+    display: none;
   }
+  .mobile-filter { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; margin: 10px 0; font-size: 0.9rem; }
+  .mobile-filter select { min-width: 0; min-height: 44px; padding: 8px; font: inherit; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--fg); color-scheme: dark; }
   .filters :deep(cindor-button) {
-    font-size: 0.78rem;
+    font-size: 0.875rem;
   }
   .channel-list th:first-child {
-    width: 48px;
+    width: 50px;
   }
   .channel-list th:nth-child(2) {
     width: 48px;
@@ -1063,7 +1077,7 @@ dd {
   }
   .channel-list td,
   .channel-list th {
-    padding: 10px 4px;
+    padding: 8px 4px;
   }
   .source-cell,
   .source-heading {
@@ -1071,20 +1085,20 @@ dd {
   }
   .mobile-source {
     display: block;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     color: var(--fg-subtle);
     margin-top: 4px;
     overflow-wrap: anywhere;
   }
   .identity-cell strong {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
   }
   .changed-label {
     display: block;
     margin: 3px 0 0;
   }
   .row-help {
-    font-size: 0.74rem;
+    font-size: 0.85rem;
   }
   .edit-cell :deep(cindor-button) {
     --cindor-button-padding-inline: 8px;
@@ -1111,9 +1125,9 @@ dd {
   }
   .channel-editor,
   .change-review {
-    width: calc(100vw - 80px);
-    padding: 12px;
-    max-height: calc(100dvh - 72px);
+    width: calc(100vw - 56px);
+    padding: 8px;
+    max-height: calc(100dvh - 56px);
   }
   .editor-footer {
     align-items: flex-start;
