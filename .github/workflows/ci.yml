@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
@@ -60,7 +60,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
@@ -83,7 +83,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
           cache-dependency-path: admin/package-lock.json
 
@@ -172,6 +172,23 @@ jobs:
             echo "- Image: \`$SCAN_IMAGE\`"
             echo "- Build digest: \`$BUILD_DIGEST\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test the runtime image
+        if: github.event_name == 'pull_request'
+        env:
+          SCAN_IMAGE: iptv-proxy-ci:${{ github.sha }}
+        run: |
+          container=$(docker run --detach --network none "$SCAN_IMAGE")
+          trap 'docker rm --force "$container" > /dev/null' EXIT
+          docker exec "$container" ffmpeg -version > /dev/null
+          for attempt in $(seq 1 30); do
+            if docker exec "$container" /usr/src/app/healthcheck.sh; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs "$container"
+          exit 1
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.35.0

@@ -1307,7 +1307,17 @@ function getPostLoginRedirect() {
 
 function redirectToAdmin(target = DEFAULT_ADMIN_ROUTE) {
   if (typeof window !== 'undefined') {
-    window.location.replace(target);
+    try {
+      // Parse first: browsers normalize backslashes and control characters in URLs.
+      const url = new URL(target, window.location.origin);
+      if (url.origin === window.location.origin) {
+        window.location.replace(url.href);
+        return;
+      }
+    } catch {
+      // Malformed destinations use the same safe fallback as external origins.
+    }
+    window.location.replace(DEFAULT_ADMIN_ROUTE);
   }
 }
 
