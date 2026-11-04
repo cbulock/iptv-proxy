@@ -1,5 +1,8 @@
 # Admin UX release — 2026-11-04
 
+Superseded by the [responsive UX patch](../ux-responsive-release/release.md).
+Use its newer image for future container recreation.
+
 Source commit: `13b671e63ec7f3fc8d1c42573dd8a91f475dd2a9` on `codex/remaining-guide-work`.
 
 Prepared immutable image: `bulock-iptv-proxy:ux-20261104`.
