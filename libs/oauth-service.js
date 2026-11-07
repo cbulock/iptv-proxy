@@ -111,11 +111,44 @@ export function listOAuthClients() {
 }
 
 export function getOAuthClient(clientId) {
-  return listOAuthClients().find(client => client.client_id === clientId) || null;
+  const configured = listOAuthClients().find(client => client.client_id === clientId);
+  if (configured) return configured;
+  ensureDatabaseReady();
+  const row = getDatabase()
+    .prepare(
+      'SELECT client_name, redirect_uris_json, scope FROM oauth_dynamic_clients WHERE client_id = ?'
+    )
+    .get(clientId);
+  if (!row) return null;
+  return {
+    client_id: clientId,
+    client_name: row.client_name,
+    redirect_uris: JSON.parse(row.redirect_uris_json),
+    scope: row.scope,
+    token_endpoint_auth_method: 'none',
+    dynamic: true,
+  };
 }
 
 export function isOAuthEnabled() {
-  return listOAuthClients().length > 0;
+  if (listOAuthClients().length > 0) return true;
+  ensureDatabaseReady();
+  return getDatabase().prepare('SELECT 1 FROM oauth_dynamic_clients LIMIT 1').get() !== undefined;
+}
+
+export function registerOAuthClient({ clientName, redirectUris, scope = DEFAULT_SCOPE }) {
+  ensureDatabaseReady();
+  const clientId = base64Url(crypto.randomBytes(32));
+  const name = String(clientName || 'MCP client')
+    .trim()
+    .slice(0, 120);
+  getDatabase()
+    .prepare(
+      `INSERT INTO oauth_dynamic_clients (client_id, client_name, redirect_uris_json, scope, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+    )
+    .run(clientId, name, JSON.stringify(redirectUris), normalizeScope(scope), nowIso());
+  return getOAuthClient(clientId);
 }
 
 export function getOAuthIssuerOverride() {

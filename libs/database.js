@@ -256,6 +256,18 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_playback_history_ended_at ON playback_history(ended_at DESC);
     `,
   },
+  {
+    id: '009-oauth-dynamic-clients',
+    sql: `
+      CREATE TABLE IF NOT EXISTS oauth_dynamic_clients (
+        client_id TEXT PRIMARY KEY,
+        client_name TEXT NOT NULL,
+        redirect_uris_json TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 let database = null;

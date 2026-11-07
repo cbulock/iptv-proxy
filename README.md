@@ -104,6 +104,7 @@ When `app.yaml` defines `oauth.clients`, IPTV Proxy exposes:
 - `GET /oauth/authorize`
 - `POST /oauth/token`
 - `POST /oauth/revoke`
+- `POST /oauth/register` (dynamic public-client registration)
 
 The server currently supports:
 
@@ -112,6 +113,9 @@ The server currently supports:
 - public clients (`token_endpoint_auth_method: none`)
 - opaque bearer access tokens for the `mcp` scope
 - rotating refresh tokens that keep the client authorized for 30 days after its last successful refresh
+- dynamic public-client registration for MCP clients such as OpenClaw
+
+Dynamic registration accepts HTTPS callback URLs and HTTP loopback callbacks only. A dynamically registered client does **not** receive a code merely because an admin is already logged in: the admin must explicitly approve that client's name and callback URL on the authorization page. Registration does not grant MCP access by itself. Keep the OAuth client registration data and token database backed up with the rest of the application data. The registration endpoint is advertised in authorization-server discovery metadata.
 
 Access tokens retain their configured lifetime (one hour by default). The token response now includes a `refresh_token`. OAuth clients that support refresh tokens can exchange it for a new access token and replacement refresh token without opening the login page. Each refresh token can be used only once. If the client does not refresh for 30 days, is disabled, loses its `mcp` scope, or the token is revoked, authorization must start again. Existing grants need one new authorization to receive a refresh token.
 
