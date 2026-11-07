@@ -612,4 +612,144 @@ describe('OAuth Integration', () => {
     expect(tokenRes.status).to.equal(400);
     expect(tokenRes.data.error).to.equal('invalid_grant');
   });
+
+  it('registers a public client and requires explicit admin consent before issuing a code', async () => {
+    await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+    const sessionInfo = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+    const redirectUri = 'http://127.0.0.1:7654/oauth/callback';
+    const registration = await axios.post(`${baseUrl}/oauth/register`, {
+      client_name: 'OpenClaw',
+      redirect_uris: [redirectUri],
+      token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      scope: 'mcp',
+    });
+    expect(registration.status).to.equal(201);
+    expect(registration.data.client_id).to.be.a('string').with.length.greaterThan(10);
+    expect(registration.data.redirect_uris).to.deep.equal([redirectUri]);
+    closeDatabase(); // Registration must survive process/database reopening.
+
+    const verifier = 'registered-client-verifier';
+    const authorize = await axios.get(`${baseUrl}/oauth/authorize`, {
+      params: {
+        response_type: 'code',
+        client_id: registration.data.client_id,
+        redirect_uri: redirectUri,
+        scope: 'mcp',
+        state: 'registered-state',
+        code_challenge: sha256Base64Url(verifier),
+        code_challenge_method: 'S256',
+      },
+      headers: cookieHeader(sessionInfo),
+      maxRedirects: 0,
+      validateStatus: () => true,
+    });
+    expect(authorize.status).to.equal(200);
+    expect(authorize.data).to.include('OpenClaw');
+    const nonce = authorize.data.match(/name="nonce" value="([^"]+)"/)?.[1];
+    expect(nonce).to.be.a('string');
+    const deniedWithoutConsent = await axios.post(
+      `${baseUrl}/oauth/authorize/decision`,
+      new URLSearchParams({ decision: 'approve', nonce: 'wrong' }).toString(),
+      {
+        headers: {
+          ...cookieHeader(sessionInfo),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        validateStatus: () => true,
+      }
+    );
+    expect(deniedWithoutConsent.status).to.equal(403);
+    const approved = await axios.post(
+      `${baseUrl}/oauth/authorize/decision`,
+      new URLSearchParams({ decision: 'approve', nonce }).toString(),
+      {
+        headers: {
+          ...cookieHeader(sessionInfo),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        maxRedirects: 0,
+        validateStatus: () => true,
+      }
+    );
+    expect(approved.status).to.equal(302);
+    const callback = new URL(approved.headers.location);
+    expect(callback.searchParams.get('state')).to.equal('registered-state');
+    const token = await axios.post(
+      `${baseUrl}/oauth/token`,
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: registration.data.client_id,
+        code: callback.searchParams.get('code'),
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+      }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    expect(token.data.refresh_token).to.be.a('string');
+    const renewed = await refreshOAuthTokens(
+      baseUrl,
+      token.data.refresh_token,
+      registration.data.client_id
+    );
+    expect(renewed.status).to.equal(200);
+  });
+
+  it('rejects unsafe dynamic redirect URIs and unsupported client authentication', async () => {
+    await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+    for (const [uri, method] of [
+      ['https://example.com/callback#fragment', 'none'],
+      ['http://example.com/callback', 'none'],
+      ['javascript:alert(1)', 'none'],
+      ['https://example.com/callback', 'client_secret_basic'],
+    ]) {
+      const response = await axios.post(
+        `${baseUrl}/oauth/register`,
+        { redirect_uris: [uri], token_endpoint_auth_method: method },
+        { validateStatus: () => true }
+      );
+      expect(response.status).to.equal(400);
+    }
+  });
+
+  it('returns access_denied and no code when the admin rejects a registered client', async () => {
+    await axios.post(`${baseUrl}/api/auth/setup`, { username: 'admin', password: 'password123' });
+    const sessionInfo = await loginAndGetCookie(baseUrl, 'admin', 'password123');
+    const redirectUri = 'http://localhost:7654/callback';
+    const registration = await axios.post(`${baseUrl}/oauth/register`, {
+      redirect_uris: [redirectUri],
+    });
+    const authorize = await axios.get(`${baseUrl}/oauth/authorize`, {
+      params: {
+        response_type: 'code',
+        client_id: registration.data.client_id,
+        redirect_uri: redirectUri,
+        state: 'denied-state',
+        code_challenge: sha256Base64Url('verifier'),
+        code_challenge_method: 'S256',
+      },
+      headers: cookieHeader(sessionInfo),
+      maxRedirects: 0,
+      validateStatus: () => true,
+    });
+    const nonce = authorize.data.match(/name="nonce" value="([^"]+)"/)?.[1];
+    const denied = await axios.post(
+      `${baseUrl}/oauth/authorize/decision`,
+      new URLSearchParams({ nonce, decision: 'deny' }).toString(),
+      {
+        headers: {
+          ...cookieHeader(sessionInfo),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        maxRedirects: 0,
+        validateStatus: () => true,
+      }
+    );
+    expect(denied.status).to.equal(302);
+    const callback = new URL(denied.headers.location);
+    expect(callback.searchParams.get('error')).to.equal('access_denied');
+    expect(callback.searchParams.has('code')).to.equal(false);
+    expect(callback.searchParams.get('state')).to.equal('denied-state');
+  });
 });

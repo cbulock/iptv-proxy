@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import express from 'express';
 import RateLimit from 'express-rate-limit';
 import { isAuthEnabled } from './auth.js';
@@ -9,6 +10,7 @@ import {
   getOAuthClient,
   getOAuthIssuerOverride,
   isOAuthEnabled,
+  registerOAuthClient,
   revokeOAuthToken,
 } from '../libs/oauth-service.js';
 import { loadAppConfigFromStore } from '../libs/app-settings-service.js';
@@ -46,6 +48,7 @@ function getMetadata(req) {
     issuer,
     authorization_endpoint: `${issuer}/oauth/authorize`,
     token_endpoint: `${issuer}/oauth/token`,
+    registration_endpoint: `${issuer}/oauth/register`,
     revocation_endpoint: `${issuer}/oauth/revoke`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
@@ -100,6 +103,29 @@ function clientAllowsRequestedScopes(client, requestedScopes) {
   );
 
   return requestedScopes.every(scope => allowed.has(scope));
+}
+
+function validRedirectUri(uri) {
+  if (typeof uri !== 'string' || uri.length > 2048) return false;
+  try {
+    const parsed = new URL(uri);
+    if (parsed.hash || parsed.username || parsed.password || parsed.toString() !== uri)
+      return false;
+    if (parsed.protocol === 'https:') return true;
+    return (
+      parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value).replace(
+    /[&<>"']/g,
+    character =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]
+  );
 }
 
 function bearerChallenge(req) {
@@ -171,6 +197,47 @@ router.get('/.well-known/oauth-protected-resource/mcp', oauthLimiter, (req, res)
     authorization_servers: [metadata.issuer],
     bearer_methods_supported: ['header'],
     scopes_supported: ['mcp'],
+  });
+});
+
+router.post('/oauth/register', oauthLimiter, (req, res) => {
+  if (!isAuthEnabled()) {
+    return res.status(503).json({ error: 'Admin authentication must be configured.' });
+  }
+  const body = req.body || {};
+  const uris = body.redirect_uris;
+  if (
+    !Array.isArray(uris) ||
+    uris.length < 1 ||
+    uris.length > 5 ||
+    new Set(uris).size !== uris.length ||
+    !uris.every(validRedirectUri) ||
+    (body.token_endpoint_auth_method && body.token_endpoint_auth_method !== 'none') ||
+    (body.scope && body.scope !== 'mcp') ||
+    (body.grant_types &&
+      (!Array.isArray(body.grant_types) ||
+        body.grant_types.some(
+          value => !['authorization_code', 'refresh_token'].includes(value)
+        ))) ||
+    (body.response_types &&
+      (!Array.isArray(body.response_types) || body.response_types.some(value => value !== 'code')))
+  ) {
+    return res.status(400).json({ error: 'invalid_client_metadata' });
+  }
+  const client = registerOAuthClient({
+    clientName: body.client_name,
+    redirectUris: uris,
+    scope: 'mcp',
+  });
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(201).json({
+    client_id: client.client_id,
+    client_name: client.client_name,
+    redirect_uris: client.redirect_uris,
+    scope: client.scope,
+    token_endpoint_auth_method: 'none',
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
   });
 });
 
@@ -247,6 +314,27 @@ router.get('/oauth/authorize', oauthLimiter, (req, res) => {
     return res.redirect(`/admin/login?redirect=${redirect}`);
   }
 
+  if (client.dynamic) {
+    const nonce = crypto.randomBytes(24).toString('base64url');
+    req.session.oauthConsent = {
+      nonce,
+      clientId: client.client_id,
+      redirectUri,
+      state,
+      scope: requestedScopes.join(' '),
+      codeChallenge,
+      codeChallengeMethod,
+      username: req.session.username,
+    };
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Frame-Options', 'DENY');
+    return res
+      .type('html')
+      .send(
+        `<!doctype html><html><head><meta charset="utf-8"><title>Authorize MCP client</title></head><body><h1>Authorize MCP client</h1><p><strong>${escapeHtml(client.client_name)}</strong> requests access to IPTV Proxy MCP tools as ${escapeHtml(req.session.username)}.</p><p>Redirect: ${escapeHtml(redirectUri)}</p><p>This includes tools that can change IPTV settings. Only approve clients you trust.</p><form method="post" action="/oauth/authorize/decision"><input type="hidden" name="nonce" value="${nonce}"><button name="decision" value="approve">Approve</button><button name="decision" value="deny">Deny</button></form></body></html>`
+      );
+  }
+
   const code = createAuthorizationCode({
     clientId: client.client_id,
     redirectUri,
@@ -263,6 +351,41 @@ router.get('/oauth/authorize', oauthLimiter, (req, res) => {
       state,
     })
   );
+});
+
+router.post('/oauth/authorize/decision', oauthLimiter, (req, res) => {
+  const pending = req.session?.oauthConsent;
+  if (
+    !pending ||
+    !req.session.authenticated ||
+    req.session.username !== pending.username ||
+    req.body?.nonce !== pending.nonce
+  ) {
+    return res.status(403).send('Invalid authorization decision.');
+  }
+  delete req.session.oauthConsent;
+  const client = getOAuthClient(pending.clientId);
+  if (!client?.dynamic || !client.redirect_uris.includes(pending.redirectUri)) {
+    return res.status(400).send('Client is no longer registered.');
+  }
+  if (req.body.decision !== 'approve') {
+    return redirectAuthorizeError(
+      res,
+      pending.redirectUri,
+      'access_denied',
+      pending.state,
+      'Authorization was denied.'
+    );
+  }
+  const code = createAuthorizationCode({
+    clientId: pending.clientId,
+    redirectUri: pending.redirectUri,
+    scope: pending.scope,
+    username: pending.username,
+    codeChallenge: pending.codeChallenge,
+    codeChallengeMethod: pending.codeChallengeMethod,
+  });
+  return res.redirect(302, redirectWithParams(pending.redirectUri, { code, state: pending.state }));
 });
 
 router.post('/oauth/token', oauthLimiter, (req, res) => {
