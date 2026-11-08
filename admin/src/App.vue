@@ -1824,9 +1824,16 @@ function scheduleAuthExpiry(expiresAt) {
     return;
   }
 
+  // Browser timers overflow above ~24.8 days; sessions last 30 days.
+  // Recheck long expiries in bounded steps and retain the short expiry grace period.
+  const maxTimerDelay = 2 ** 31 - 1;
   _authExpiryTimeout = window.setTimeout(() => {
+    if (Date.now() < expiresAtMs) {
+      scheduleAuthExpiry(expiresAt);
+      return;
+    }
     handleUnauthorizedSession('Your admin session expired. Sign in again to continue.');
-  }, delay + 250);
+  }, Math.min(delay + 250, maxTimerDelay));
 }
 
 function syncAuthenticatedSession(expiresAt) {
