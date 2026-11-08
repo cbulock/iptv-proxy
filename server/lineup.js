@@ -1,4 +1,9 @@
 import axios from 'axios';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import dns from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
 import RateLimit from 'express-rate-limit';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
@@ -33,6 +38,111 @@ let jsonCache = null;
 // URL. This cache lets the ?upstream= origin validator accept those segment URLs even though
 // they don't share an origin with channel.original_url.
 const hlsManifestOriginCache = new Map();
+const hlsOverrideSigningKey = randomBytes(32);
+const hlsOverrideLifetimeMs = 15 * 60 * 1000;
+const maxHlsRedirects = 4;
+const blockedIpv4 = new net.BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
+  ['224.0.0.0', 4],
+])
+  blockedIpv4.addSubnet(network, prefix);
+
+function isPublicAddress(address) {
+  const mapped = address.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  const ip = mapped ? mapped[1] : address;
+  if (net.isIP(ip) === 4) return !blockedIpv4.check(ip, 'ipv4');
+  // Global unicast only. This also excludes loopback, link-local, ULA and mapped IPv4.
+  if (net.isIP(ip) === 6) return /^[23][0-9a-f]{0,3}:/i.test(ip) && !/^2001:db8:/i.test(ip);
+  return false;
+}
+
+function isPublicRedirectUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return false;
+  const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return false;
+  return net.isIP(hostname) ? isPublicAddress(hostname) : true;
+}
+
+function publicDnsLookup(hostname, options, callback) {
+  dns.lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) return callback(error);
+    if (!addresses.length || addresses.some(record => !isPublicAddress(record.address))) {
+      return callback(new Error('HLS redirect destination is not public'));
+    }
+    if (options?.all) callback(null, addresses);
+    else callback(null, addresses[0].address, addresses[0].family);
+  });
+}
+
+async function fetchHlsOverride(url, signal, requirePublicInitialUrl) {
+  let currentUrl = url;
+  for (let hop = 0; hop <= maxHlsRedirects; hop++) {
+    const response = await axios.get(currentUrl, {
+      responseType: 'stream',
+      timeout: 15000,
+      signal,
+      maxRedirects: 0,
+      validateStatus: status => status < 400,
+      proxy: false,
+      ...(hop || requirePublicInitialUrl
+        ? {
+            httpAgent: new http.Agent({ lookup: publicDnsLookup }),
+            httpsAgent: new https.Agent({ lookup: publicDnsLookup }),
+          }
+        : {}),
+    });
+    if (response.status < 300 || response.status >= 400) {
+      response.finalUpstreamUrl = currentUrl;
+      return response;
+    }
+    response.data.destroy();
+    const location = response.headers.location;
+    if (!location || hop === maxHlsRedirects) throw new Error('HLS redirect limit exceeded');
+    const nextUrl = new URL(location, currentUrl).toString();
+    if (!isPublicRedirectUrl(nextUrl)) throw new Error('HLS redirect destination is not public');
+    currentUrl = nextUrl;
+  }
+}
+
+function signHlsOverride(source, name, url, expires) {
+  return createHmac('sha256', hlsOverrideSigningKey)
+    .update(JSON.stringify([source, name, url, expires]))
+    .digest('hex');
+}
+
+function isValidSignedHlsOverride(req, source, name, url) {
+  const expires = Number(req.query.hlsExpires);
+  const signature = req.query.hlsSignature;
+  if (
+    !Number.isSafeInteger(expires) ||
+    expires <= Date.now() ||
+    expires > Date.now() + hlsOverrideLifetimeMs ||
+    typeof signature !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(signature)
+  ) {
+    return false;
+  }
+  const expected = signHlsOverride(source, name, url, expires);
+  return timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'));
+}
 
 function invalidateCaches() {
   if (m3uCache) m3uCache.clear();
@@ -104,7 +214,9 @@ function rewriteUriToProxy(uri, playlistUrl, req, source, name) {
   const baseUrl = getBaseUrl(req);
   const sourcePart = encodeURIComponent(source || 'unknown');
   const namePart = encodeURIComponent(name || 'unknown');
-  return `${baseUrl}/stream/${sourcePart}/${namePart}?upstream=${encodeURIComponent(resolvedUrl)}`;
+  const expires = Date.now() + hlsOverrideLifetimeMs;
+  const signature = signHlsOverride(source, name, resolvedUrl, expires);
+  return `${baseUrl}/stream/${sourcePart}/${namePart}?upstream=${encodeURIComponent(resolvedUrl)}&hlsExpires=${expires}&hlsSignature=${signature}`;
 }
 
 function getStreamUrl(baseUrl, channel) {
@@ -329,7 +441,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     for (const channel of channels) {
       try {
-        let tvgId = channel.tvg_id || '';
+        // Guide selection uses the channel name when a direct HLS source has no tvg-id.
+        // Emit that same ID in M3U so a client can match the published XMLTV records.
+        let tvgId = channel.tvg_id || channel.name || '';
         const originalTvgId = tvgId;
 
         if (tvgIdMap.has(tvgId)) {
@@ -382,11 +496,13 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     if (!channel) return res.status(404).send('Channel not found');
 
-    // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
-    // HTTP(S) origin (protocol + hostname + port) as the channel's configured upstream URL.
+    // Validate the ?upstream= override to prevent SSRF: accept the configured origin,
+    // or an exact, short-lived URL emitted in a rewritten HLS playlist. Signed URLs
+    // allow providers whose manifests, variants, and segments use different CDNs.
     // We also accept the origin of the last-known HLS manifest response URL for this channel
     // (see hlsManifestOriginCache) to handle cases where channel.original_url redirects to a
     // different origin (e.g., http://host:8000 → https://host via a reverse proxy).
+    let signedCrossOriginOverride = false;
     if (upstreamOverride) {
       let result = isSameOriginHttpUrl(upstreamOverride, channel.original_url);
 
@@ -396,6 +512,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         const cachedResponseUrl = hlsManifestOriginCache.get(`${source}/${name}`);
         if (cachedResponseUrl) {
           result = isSameOriginHttpUrl(upstreamOverride, cachedResponseUrl);
+        }
+        if (!result.ok && isValidSignedHlsOverride(req, source, name, upstreamOverride)) {
+          result = { ok: true };
+          signedCrossOriginOverride = true;
         }
       }
 
@@ -412,6 +532,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
       // Additional SSRF hardening: ensure the override uses a permitted scheme.
       if (!isSafePublicHttpUrl(upstreamOverride)) {
+        return res.status(403).send('Upstream URL not allowed');
+      }
+      if (signedCrossOriginOverride && !isPublicRedirectUrl(upstreamOverride)) {
         return res.status(403).send('Upstream URL not allowed');
       }
     }
@@ -437,7 +560,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         upstreamUrl = hdUrl.toString();
       } catch (_err) {
         // URL parse error; proceed with original URL without modification
-        console.warn('[stream] %s/%s: could not append ?streamMode=hls to upstream URL: %s', source, name, channel.original_url);
+        console.warn(
+          '[stream] %s/%s: could not append ?streamMode=hls to upstream URL: %s',
+          source,
+          name,
+          channel.original_url
+        );
       }
     }
 
@@ -497,12 +625,23 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     res.on('close', abortForDisconnectedClient);
     res.on('error', cleanup);
     const touchViewer = async () => {
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity, transient: true });
+      usageKey = await registerUsage({
+        ip: String(ip),
+        channelId: String(channelId),
+        userAgent,
+        ...identity,
+        transient: true,
+      });
       touchUsage(usageKey);
     };
     const registerPersistentViewer = async () => {
       if (usageKey) return;
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity });
+      usageKey = await registerUsage({
+        ip: String(ip),
+        channelId: String(channelId),
+        userAgent,
+        ...identity,
+      });
       usageInterval = setInterval(() => touchUsage(usageKey), 10000);
       res.on('finish', cleanup);
     };
@@ -515,7 +654,8 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         upstreamSocket?.destroy();
         return;
       }
-      const responseUrl = response.request?.res?.responseUrl || resolvedUrl;
+      const responseUrl =
+        response.finalUpstreamUrl || response.request?.res?.responseUrl || resolvedUrl;
       const contentType = response.headers?.['content-type'] || '';
       // Determine whether the upstream response is an HLS playlist:
       //
@@ -529,10 +669,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       //   HDHomeRun channels, preventing readStreamToUtf8 from buffering a continuous
       //   MPEG-TS feed when firmware redirects to an .m3u8-named URL.
       const isHlsResponse = requestedHlsMode
-        // Content-type only (empty URL disables the URL-hint path inside isLikelyHlsPlaylist).
-        // URL hints are intentionally skipped here: we appended ?streamMode=hls to the
-        // upstream URL, so those hints would always match regardless of the actual format.
-        ? isLikelyHlsPlaylist(contentType, '')
+        ? // Content-type only (empty URL disables the URL-hint path inside isLikelyHlsPlaylist).
+          // URL hints are intentionally skipped here: we appended ?streamMode=hls to the
+          // upstream URL, so those hints would always match regardless of the actual format.
+          isLikelyHlsPlaylist(contentType, '')
         : !channel.hdhomerun && isLikelyHlsPlaylist(contentType, responseUrl);
 
       console.info(
@@ -593,16 +733,16 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     };
 
     try {
-      // When an ?upstream= override is in use, disable redirects to prevent SSRF via open
-      // redirects: the origin check above validates the initial URL but can't guard against
-      // a server-side redirect to a different host.
+      // Overrides follow only bounded redirects whose destination and resolved IP are public.
+      // Primary configured stream URLs retain their existing redirect behavior.
       const axiosOptions = {
         responseType: 'stream',
         timeout: 15000,
         signal: upstreamRequest.signal,
-        ...(upstreamOverride ? { maxRedirects: 0 } : {}),
       };
-      const response = await axios.get(upstreamUrl, axiosOptions);
+      const response = upstreamOverride
+        ? await fetchHlsOverride(upstreamUrl, upstreamRequest.signal, signedCrossOriginOverride)
+        : await axios.get(upstreamUrl, axiosOptions);
 
       await handleStreamResponse(response, upstreamUrl, !!upstreamOverride);
     } catch (err) {

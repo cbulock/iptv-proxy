@@ -679,6 +679,60 @@ describe('output profile routes', () => {
     expect(xmltvResponse.data).to.include('Living Room One');
   });
 
+  it('publishes matching playlist and XMLTV IDs for a direct HLS channel without a source tvg-id', async () => {
+    const guidePath = path.join(configDir, 'direct-hls.xml');
+    await fs.writeFile(
+      guidePath,
+      '<tv><channel id="xumo.811"><display-name>Hallmark Movies &amp; More</display-name></channel><programme channel="xumo.811" start="20261108220000 +0000" stop="20261108230000 +0000"><title>Test Movie</title></programme></tv>'
+    );
+    const call = async (name, args) => {
+      const message = await callMcpTool(baseUrl, name, args);
+      const payload = message.result.structuredContent || JSON.parse(message.result.content[0].text);
+      expect(payload.ok, `${name}: ${JSON.stringify(payload)}`).to.equal(true);
+      return payload.data;
+    };
+    const provider = await call('create_provider', {
+      name: 'Hallmark Movies & More',
+      url: 'https://xumo.example/master.m3u8',
+      epg: pathToFileURL(guidePath).href,
+    });
+    nock('http://output-routes.example')
+      .get('/one.m3u')
+      .reply(200, '#EXTM3U\n#EXTINF:-1 tvg-id="raw.one",Source One\nhttp://streams.example/one\n');
+    nock('http://output-routes.example')
+      .get('/two.m3u')
+      .reply(200, '#EXTM3U\n#EXTINF:-1 tvg-id="raw.two",Source Two\nhttp://streams.example/two\n');
+    nock('https://xumo.example')
+      .get('/master.m3u8')
+      .reply(200, '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1200000\n/live.m3u8\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
+    await call('reload_channels', {});
+    const canonicalChannels = await call('list_canonical_channels', {});
+    const channel = canonicalChannels.find(c => c.name === 'Hallmark Movies & More');
+    expect(channel).to.exist;
+    await call('set_canonical_channel_guide_binding', {
+      canonical_id: channel.id,
+      source_id: provider.id,
+      epg_channel_id: 'xumo.811',
+    });
+    await call('update_output_profile_channels', {
+      slug: 'default',
+      channels: [{ canonicalId: channel.id, position: 2, enabled: true, guideNumberOverride: '811' }],
+    });
+    await epgRefresh();
+
+    const playlist = (await axios.get(`${baseUrl}/lineup.m3u`)).data;
+    const guide = (await axios.get(`${baseUrl}/xmltv.xml`)).data;
+    const published = (await axios.get(`${baseUrl}/channels.json`)).data.channels;
+    expect(published.find(c => c.name === 'Hallmark Movies & More')?.tvgId).to.equal(
+      'Hallmark Movies & More'
+    );
+    expect(playlist).to.include('tvg-id="Hallmark Movies & More"');
+    expect(guide).to.include('<channel id="Hallmark Movies &amp; More">');
+    expect(guide).to.include('Test Movie');
+  });
+
   it('returns 404 for disabled named profile public routes', async () => {
     await axios.post(`${baseUrl}/api/output-profiles`, {
       name: 'Guest Room',

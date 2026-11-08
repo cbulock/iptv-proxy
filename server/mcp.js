@@ -591,7 +591,7 @@ function createMcpServer() {
   registerJsonTool(
     server,
     'get_published_channels',
-    'Read the default published viewer channel projection with relative stream, transcode, and artwork paths. Transcode paths encode H.264/AAC and deinterlace frames flagged as interlaced, preserving field-rate motion.',
+    'Read the default published viewer channel projection with relative stream, transcode, and artwork paths. tvgId falls back to the channel name when a direct stream has no source TVG ID, matching published XMLTV. Transcode paths encode H.264/AAC and deinterlace frames flagged as interlaced, preserving field-rate motion.',
     {},
     async () =>
       createSuccess('get_published_channels', getPublishedChannelsData(), {

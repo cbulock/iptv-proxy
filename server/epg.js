@@ -359,7 +359,7 @@ function rewriteOutputChannelDisplayNames(xmlString, outputChannels = []) {
 
   const outputNamesByChannelId = new Map();
   for (const channel of outputChannels) {
-    const channelId = channel?.tvg_id || '';
+    const channelId = channel?.tvg_id || channel?.name || '';
     const outputName = channel?.name || '';
     if (channelId && outputName) {
       outputNamesByChannelId.set(channelId, outputName);
@@ -796,12 +796,12 @@ export async function setupEPGRoutes(app) {
         if (filterChannels) {
           const allowedChannelIds = new Set(filterChannels.map(id => id.trim()));
           allowedChannels = allowedChannels.filter(
-            channel => channel?.tvg_id && allowedChannelIds.has(channel.tvg_id)
+            channel => channel && allowedChannelIds.has(channel.tvg_id || channel.name)
           );
         }
         displayNameChannels = allowedChannels;
         const allowedTvgIds = new Set(
-          allowedChannels.map(channel => channel?.tvg_id).filter(Boolean)
+          allowedChannels.map(channel => channel?.tvg_id || channel?.name).filter(Boolean)
         );
 
         if (parsed.tv) {
