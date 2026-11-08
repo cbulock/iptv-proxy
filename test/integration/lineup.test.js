@@ -88,6 +88,12 @@ describe('Lineup Route Integration', () => {
         source: 'OctetSource',
         original_url: 'http://octet.example/stream.m3u8',
       },
+      {
+        name: 'Cross Origin HLS',
+        tvg_id: 'cross.1',
+        source: 'Xumo',
+        original_url: 'https://manifest.example/master.m3u8',
+      },
     ];
 
     replaceChannelSnapshot(testChannels);
@@ -203,11 +209,9 @@ describe('Lineup Route Integration', () => {
     nock('http://antenna.example')
       .get('/auto/v6.1')
       .query({ streamMode: 'hls' })
-      .reply(
-        200,
-        '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/auto/v6.1/hls/seg000001.ts\n',
-        { 'Content-Type': 'application/vnd.apple.mpegurl' }
-      );
+      .reply(200, '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/auto/v6.1/hls/seg000001.ts\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
 
     const playlistResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?streamMode=hls`);
     expect(playlistResponse.status).to.equal(200);
@@ -226,7 +230,7 @@ describe('Lineup Route Integration', () => {
       .reply(200, 'mpegts-fallback', { 'Content-Type': 'video/mp2t' });
 
     const streamResponse = await axios.get(`${baseUrl}/stream/Antenna/WLNS-TV?streamMode=hls`, {
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
     });
 
     expect(streamResponse.status).to.equal(200);
@@ -309,6 +313,46 @@ describe('Lineup Route Integration', () => {
     const segmentResponse = await axios.get(proxiedSegmentUrl);
     expect(segmentResponse.status).to.equal(200);
     expect(segmentResponse.data).to.equal('segment-bytes');
+  });
+
+  it('proxies exact cross-origin HLS URLs from manifests but rejects forged URLs', async () => {
+    nock('https://manifest.example')
+      .get('/master.m3u8')
+      .reply(200, '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1200000\nhttps://cdn.example/live.m3u8\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
+    const master = await axios.get(`${baseUrl}/stream/Xumo/Cross%20Origin%20HLS`);
+    const variantUrl = master.data.split('\n').find(line => line.includes('cdn.example'));
+    expect(variantUrl).to.be.a('string');
+
+    nock('https://cdn.example')
+      .get('/live.m3u8')
+      .reply(
+        200,
+        '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nhttps://hls-beacons-us.xumo.com/hlsstream/v1/beacon?url=https%3A%2F%2Flive-content-cf.xumo.com%2Fsegment.ts\n',
+        {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+        }
+      );
+    const variant = await axios.get(variantUrl);
+    expect(variant.status).to.equal(200);
+    const segmentUrl = variant.data.split('\n').find(line => line.includes('live-content-cf.xumo.com'));
+    expect(segmentUrl).to.be.a('string');
+    expect(new URL(segmentUrl).searchParams.get('upstream')).to.equal(
+      'https://live-content-cf.xumo.com/segment.ts'
+    );
+
+    const forgedUrl = new URL(segmentUrl);
+    forgedUrl.searchParams.set('upstream', 'http://internal-server.local/secret');
+    const forged = await axios.get(forgedUrl.toString(), { validateStatus: () => true });
+    expect(forged.status).to.equal(403);
+
+    nock('https://live-content-cf.xumo.com')
+      .get('/segment.ts')
+      .reply(200, 'segment-bytes', { 'Content-Type': 'video/mp2t' });
+    const segment = await axios.get(segmentUrl);
+    expect(segment.status).to.equal(200);
+    expect(segment.data).to.equal('segment-bytes');
   });
 
   it('rejects ?upstream= URLs pointing to a different origin (SSRF protection)', async () => {

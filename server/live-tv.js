@@ -75,7 +75,7 @@ export function channelProjection(channel, icons) {
     : `${encodeURIComponent(channel.source || '')}/${encodeURIComponent(channel.streamName || channel.name || '')}`;
   return {
     id: channel.canonicalId,
-    tvgId: channel.tvg_id || '',
+    tvgId: channel.tvg_id || channel.name || '',
     name: plainText(channel.name),
     number: String(channel.guideNumber || ''),
     source: plainText(channel.source || ''),

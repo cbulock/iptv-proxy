@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import RateLimit from 'express-rate-limit';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
@@ -33,6 +34,51 @@ let jsonCache = null;
 // URL. This cache lets the ?upstream= origin validator accept those segment URLs even though
 // they don't share an origin with channel.original_url.
 const hlsManifestOriginCache = new Map();
+const hlsOverrideSigningKey = randomBytes(32);
+const hlsOverrideLifetimeMs = 15 * 60 * 1000;
+
+function signHlsOverride(source, name, url, expires) {
+  return createHmac('sha256', hlsOverrideSigningKey)
+    .update(JSON.stringify([source, name, url, expires]))
+    .digest('hex');
+}
+
+function isValidSignedHlsOverride(req, source, name, url) {
+  const expires = Number(req.query.hlsExpires);
+  const signature = req.query.hlsSignature;
+  if (
+    !Number.isSafeInteger(expires) ||
+    expires <= Date.now() ||
+    expires > Date.now() + hlsOverrideLifetimeMs ||
+    typeof signature !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(signature)
+  ) {
+    return false;
+  }
+  const expected = signHlsOverride(source, name, url, expires);
+  return timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'));
+}
+
+function resolveXumoBeaconSegment(urlString) {
+  const url = new URL(urlString);
+  if (url.hostname !== 'hls-beacons-us.xumo.com' || url.pathname !== '/hlsstream/v1/beacon') {
+    return urlString;
+  }
+  // Xumo inserts tracking redirects as HLS media entries. Their response is a 302 to
+  // the real .ts segment, which ffmpeg rejects and cannot be followed by the proxy's
+  // SSRF-safe override path. Only unwrap the specific HTTPS Xumo media destination.
+  const destination = url.searchParams.get('url');
+  if (!destination) return urlString;
+  try {
+    const media = new URL(destination);
+    if (media.protocol === 'https:' && media.hostname === 'live-content-cf.xumo.com') {
+      return media.toString();
+    }
+  } catch (_err) {
+    // Keep the original URL if Xumo's beacon format changes.
+  }
+  return urlString;
+}
 
 function invalidateCaches() {
   if (m3uCache) m3uCache.clear();
@@ -96,7 +142,7 @@ function rewriteUriToProxy(uri, playlistUrl, req, source, name) {
 
   let resolvedUrl;
   try {
-    resolvedUrl = new URL(trimmed, playlistUrl).toString();
+    resolvedUrl = resolveXumoBeaconSegment(new URL(trimmed, playlistUrl).toString());
   } catch (_err) {
     return trimmed;
   }
@@ -104,7 +150,9 @@ function rewriteUriToProxy(uri, playlistUrl, req, source, name) {
   const baseUrl = getBaseUrl(req);
   const sourcePart = encodeURIComponent(source || 'unknown');
   const namePart = encodeURIComponent(name || 'unknown');
-  return `${baseUrl}/stream/${sourcePart}/${namePart}?upstream=${encodeURIComponent(resolvedUrl)}`;
+  const expires = Date.now() + hlsOverrideLifetimeMs;
+  const signature = signHlsOverride(source, name, resolvedUrl, expires);
+  return `${baseUrl}/stream/${sourcePart}/${namePart}?upstream=${encodeURIComponent(resolvedUrl)}&hlsExpires=${expires}&hlsSignature=${signature}`;
 }
 
 function getStreamUrl(baseUrl, channel) {
@@ -329,7 +377,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     for (const channel of channels) {
       try {
-        let tvgId = channel.tvg_id || '';
+        // Guide selection uses the channel name when a direct HLS source has no tvg-id.
+        // Emit that same ID in M3U so a client can match the published XMLTV records.
+        let tvgId = channel.tvg_id || channel.name || '';
         const originalTvgId = tvgId;
 
         if (tvgIdMap.has(tvgId)) {
@@ -382,8 +432,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
     if (!channel) return res.status(404).send('Channel not found');
 
-    // Validate the ?upstream= override to prevent SSRF: only allow fetching from the same
-    // HTTP(S) origin (protocol + hostname + port) as the channel's configured upstream URL.
+    // Validate the ?upstream= override to prevent SSRF: accept the configured origin,
+    // or an exact, short-lived URL emitted in a rewritten HLS playlist. Signed URLs
+    // allow providers whose manifests, variants, and segments use different CDNs.
     // We also accept the origin of the last-known HLS manifest response URL for this channel
     // (see hlsManifestOriginCache) to handle cases where channel.original_url redirects to a
     // different origin (e.g., http://host:8000 → https://host via a reverse proxy).
@@ -396,6 +447,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         const cachedResponseUrl = hlsManifestOriginCache.get(`${source}/${name}`);
         if (cachedResponseUrl) {
           result = isSameOriginHttpUrl(upstreamOverride, cachedResponseUrl);
+        }
+        if (!result.ok && isValidSignedHlsOverride(req, source, name, upstreamOverride)) {
+          result = { ok: true };
         }
       }
 
@@ -437,7 +491,12 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         upstreamUrl = hdUrl.toString();
       } catch (_err) {
         // URL parse error; proceed with original URL without modification
-        console.warn('[stream] %s/%s: could not append ?streamMode=hls to upstream URL: %s', source, name, channel.original_url);
+        console.warn(
+          '[stream] %s/%s: could not append ?streamMode=hls to upstream URL: %s',
+          source,
+          name,
+          channel.original_url
+        );
       }
     }
 
@@ -497,12 +556,23 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     res.on('close', abortForDisconnectedClient);
     res.on('error', cleanup);
     const touchViewer = async () => {
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity, transient: true });
+      usageKey = await registerUsage({
+        ip: String(ip),
+        channelId: String(channelId),
+        userAgent,
+        ...identity,
+        transient: true,
+      });
       touchUsage(usageKey);
     };
     const registerPersistentViewer = async () => {
       if (usageKey) return;
-      usageKey = await registerUsage({ ip: String(ip), channelId: String(channelId), userAgent, ...identity });
+      usageKey = await registerUsage({
+        ip: String(ip),
+        channelId: String(channelId),
+        userAgent,
+        ...identity,
+      });
       usageInterval = setInterval(() => touchUsage(usageKey), 10000);
       res.on('finish', cleanup);
     };
@@ -529,10 +599,10 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
       //   HDHomeRun channels, preventing readStreamToUtf8 from buffering a continuous
       //   MPEG-TS feed when firmware redirects to an .m3u8-named URL.
       const isHlsResponse = requestedHlsMode
-        // Content-type only (empty URL disables the URL-hint path inside isLikelyHlsPlaylist).
-        // URL hints are intentionally skipped here: we appended ?streamMode=hls to the
-        // upstream URL, so those hints would always match regardless of the actual format.
-        ? isLikelyHlsPlaylist(contentType, '')
+        ? // Content-type only (empty URL disables the URL-hint path inside isLikelyHlsPlaylist).
+          // URL hints are intentionally skipped here: we appended ?streamMode=hls to the
+          // upstream URL, so those hints would always match regardless of the actual format.
+          isLikelyHlsPlaylist(contentType, '')
         : !channel.hdhomerun && isLikelyHlsPlaylist(contentType, responseUrl);
 
       console.info(
