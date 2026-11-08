@@ -336,10 +336,12 @@ describe('Lineup Route Integration', () => {
       );
     const variant = await axios.get(variantUrl);
     expect(variant.status).to.equal(200);
-    const segmentUrl = variant.data.split('\n').find(line => line.includes('live-content-cf.xumo.com'));
+    const segmentUrl = variant.data
+      .split('\n')
+      .find(line => line.includes('hls-beacons-us.xumo.com'));
     expect(segmentUrl).to.be.a('string');
     expect(new URL(segmentUrl).searchParams.get('upstream')).to.equal(
-      'https://live-content-cf.xumo.com/segment.ts'
+      'https://hls-beacons-us.xumo.com/hlsstream/v1/beacon?url=https%3A%2F%2Flive-content-cf.xumo.com%2Fsegment.ts'
     );
 
     const forgedUrl = new URL(segmentUrl);
@@ -347,12 +349,111 @@ describe('Lineup Route Integration', () => {
     const forged = await axios.get(forgedUrl.toString(), { validateStatus: () => true });
     expect(forged.status).to.equal(403);
 
+    nock('https://hls-beacons-us.xumo.com')
+      .get('/hlsstream/v1/beacon')
+      .query(true)
+      .reply(302, '', { Location: 'https://live-content-cf.xumo.com/segment.ts' });
     nock('https://live-content-cf.xumo.com')
       .get('/segment.ts')
       .reply(200, 'segment-bytes', { 'Content-Type': 'video/mp2t' });
     const segment = await axios.get(segmentUrl);
     expect(segment.status).to.equal(200);
     expect(segment.data).to.equal('segment-bytes');
+  });
+
+  it('follows a different provider redirect without a hostname allowlist', async () => {
+    nock('https://manifest.example')
+      .get('/master.m3u8')
+      .reply(200, '#EXTM3U\n#EXTINF:6,\nhttps://beacon.other.example/entry\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
+    const playlist = await axios.get(`${baseUrl}/stream/Xumo/Cross%20Origin%20HLS`);
+    const segmentUrl = playlist.data
+      .split('\n')
+      .find(line => line.includes('beacon.other.example'));
+    nock('https://beacon.other.example')
+      .get('/entry')
+      .reply(302, '', { Location: 'https://media.other.example/segment.ts' });
+    nock('https://media.other.example')
+      .get('/segment.ts')
+      .reply(200, 'other-provider-bytes', { 'Content-Type': 'video/mp2t' });
+    const segment = await axios.get(segmentUrl);
+    expect(segment.data).to.equal('other-provider-bytes');
+  });
+
+  it('resolves relative HLS entries against the final redirect URL', async () => {
+    nock('https://manifest.example')
+      .get('/master.m3u8')
+      .reply(
+        200,
+        '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1200000\nhttps://beacon.other.example/entry\n',
+        {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+        }
+      );
+    const master = await axios.get(`${baseUrl}/stream/Xumo/Cross%20Origin%20HLS`);
+    const variantUrl = master.data.split('\n').find(line => line.includes('beacon.other.example'));
+    nock('https://beacon.other.example')
+      .get('/entry')
+      .reply(302, '', { Location: 'https://media.other.example/live/variant.m3u8' });
+    nock('https://media.other.example')
+      .get('/live/variant.m3u8')
+      .reply(200, '#EXTM3U\n#EXTINF:6,\nsegment.ts\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
+    const variant = await axios.get(variantUrl);
+    const segmentUrl = variant.data.split('\n').find(line => line.includes('segment.ts'));
+    expect(new URL(segmentUrl).searchParams.get('upstream')).to.equal(
+      'https://media.other.example/live/segment.ts'
+    );
+  });
+
+  it('rejects a signed HLS URL redirecting to a private address', async () => {
+    nock('https://manifest.example')
+      .get('/master.m3u8')
+      .reply(200, '#EXTM3U\n#EXTINF:6,\nhttps://beacon.other.example/entry\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
+    const playlist = await axios.get(`${baseUrl}/stream/Xumo/Cross%20Origin%20HLS`);
+    const segmentUrl = playlist.data
+      .split('\n')
+      .find(line => line.includes('beacon.other.example'));
+    nock('https://beacon.other.example')
+      .get('/entry')
+      .reply(302, '', { Location: 'http://127.0.0.1:9999/private' });
+    const segment = await axios.get(segmentUrl, { validateStatus: () => true });
+    expect(segment.status).to.equal(502);
+  });
+
+  it('rejects a private address advertised directly in a cross-origin playlist', async () => {
+    nock('https://manifest.example')
+      .get('/master.m3u8')
+      .reply(200, '#EXTM3U\n#EXTINF:6,\nhttp://127.0.0.1:9999/private\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
+    const playlist = await axios.get(`${baseUrl}/stream/Xumo/Cross%20Origin%20HLS`);
+    const segmentUrl = playlist.data.split('\n').find(line => line.includes('127.0.0.1'));
+    const segment = await axios.get(segmentUrl, { validateStatus: () => true });
+    expect(segment.status).to.equal(403);
+  });
+
+  it('stops a signed HLS redirect chain after four hops', async () => {
+    nock('https://manifest.example')
+      .get('/master.m3u8')
+      .reply(200, '#EXTM3U\n#EXTINF:6,\nhttps://beacon.other.example/step0\n', {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+      });
+    const playlist = await axios.get(`${baseUrl}/stream/Xumo/Cross%20Origin%20HLS`);
+    const segmentUrl = playlist.data
+      .split('\n')
+      .find(line => line.includes('beacon.other.example'));
+    for (let hop = 0; hop <= 4; hop++) {
+      nock('https://beacon.other.example')
+        .get(`/step${hop}`)
+        .reply(302, '', { Location: `/step${hop + 1}` });
+    }
+    const segment = await axios.get(segmentUrl, { validateStatus: () => true });
+    expect(segment.status).to.equal(502);
   });
 
   it('rejects ?upstream= URLs pointing to a different origin (SSRF protection)', async () => {

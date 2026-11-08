@@ -1,5 +1,9 @@
 import axios from 'axios';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import dns from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
 import RateLimit from 'express-rate-limit';
 import { getProxiedImageUrl } from '../libs/proxy-image.js';
 import getBaseUrl from '../libs/getBaseUrl.js';
@@ -36,6 +40,87 @@ let jsonCache = null;
 const hlsManifestOriginCache = new Map();
 const hlsOverrideSigningKey = randomBytes(32);
 const hlsOverrideLifetimeMs = 15 * 60 * 1000;
+const maxHlsRedirects = 4;
+const blockedIpv4 = new net.BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
+  ['224.0.0.0', 4],
+])
+  blockedIpv4.addSubnet(network, prefix);
+
+function isPublicAddress(address) {
+  const mapped = address.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  const ip = mapped ? mapped[1] : address;
+  if (net.isIP(ip) === 4) return !blockedIpv4.check(ip, 'ipv4');
+  // Global unicast only. This also excludes loopback, link-local, ULA and mapped IPv4.
+  if (net.isIP(ip) === 6) return /^[23][0-9a-f]{0,3}:/i.test(ip) && !/^2001:db8:/i.test(ip);
+  return false;
+}
+
+function isPublicRedirectUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return false;
+  const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return false;
+  return net.isIP(hostname) ? isPublicAddress(hostname) : true;
+}
+
+function publicDnsLookup(hostname, options, callback) {
+  dns.lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) return callback(error);
+    if (!addresses.length || addresses.some(record => !isPublicAddress(record.address))) {
+      return callback(new Error('HLS redirect destination is not public'));
+    }
+    if (options?.all) callback(null, addresses);
+    else callback(null, addresses[0].address, addresses[0].family);
+  });
+}
+
+async function fetchHlsOverride(url, signal, requirePublicInitialUrl) {
+  let currentUrl = url;
+  for (let hop = 0; hop <= maxHlsRedirects; hop++) {
+    const response = await axios.get(currentUrl, {
+      responseType: 'stream',
+      timeout: 15000,
+      signal,
+      maxRedirects: 0,
+      validateStatus: status => status < 400,
+      proxy: false,
+      ...(hop || requirePublicInitialUrl
+        ? {
+            httpAgent: new http.Agent({ lookup: publicDnsLookup }),
+            httpsAgent: new https.Agent({ lookup: publicDnsLookup }),
+          }
+        : {}),
+    });
+    if (response.status < 300 || response.status >= 400) {
+      response.finalUpstreamUrl = currentUrl;
+      return response;
+    }
+    response.data.destroy();
+    const location = response.headers.location;
+    if (!location || hop === maxHlsRedirects) throw new Error('HLS redirect limit exceeded');
+    const nextUrl = new URL(location, currentUrl).toString();
+    if (!isPublicRedirectUrl(nextUrl)) throw new Error('HLS redirect destination is not public');
+    currentUrl = nextUrl;
+  }
+}
 
 function signHlsOverride(source, name, url, expires) {
   return createHmac('sha256', hlsOverrideSigningKey)
@@ -57,27 +142,6 @@ function isValidSignedHlsOverride(req, source, name, url) {
   }
   const expected = signHlsOverride(source, name, url, expires);
   return timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'));
-}
-
-function resolveXumoBeaconSegment(urlString) {
-  const url = new URL(urlString);
-  if (url.hostname !== 'hls-beacons-us.xumo.com' || url.pathname !== '/hlsstream/v1/beacon') {
-    return urlString;
-  }
-  // Xumo inserts tracking redirects as HLS media entries. Their response is a 302 to
-  // the real .ts segment, which ffmpeg rejects and cannot be followed by the proxy's
-  // SSRF-safe override path. Only unwrap the specific HTTPS Xumo media destination.
-  const destination = url.searchParams.get('url');
-  if (!destination) return urlString;
-  try {
-    const media = new URL(destination);
-    if (media.protocol === 'https:' && media.hostname === 'live-content-cf.xumo.com') {
-      return media.toString();
-    }
-  } catch (_err) {
-    // Keep the original URL if Xumo's beacon format changes.
-  }
-  return urlString;
 }
 
 function invalidateCaches() {
@@ -142,7 +206,7 @@ function rewriteUriToProxy(uri, playlistUrl, req, source, name) {
 
   let resolvedUrl;
   try {
-    resolvedUrl = resolveXumoBeaconSegment(new URL(trimmed, playlistUrl).toString());
+    resolvedUrl = new URL(trimmed, playlistUrl).toString();
   } catch (_err) {
     return trimmed;
   }
@@ -438,6 +502,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     // We also accept the origin of the last-known HLS manifest response URL for this channel
     // (see hlsManifestOriginCache) to handle cases where channel.original_url redirects to a
     // different origin (e.g., http://host:8000 → https://host via a reverse proxy).
+    let signedCrossOriginOverride = false;
     if (upstreamOverride) {
       let result = isSameOriginHttpUrl(upstreamOverride, channel.original_url);
 
@@ -450,6 +515,7 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         }
         if (!result.ok && isValidSignedHlsOverride(req, source, name, upstreamOverride)) {
           result = { ok: true };
+          signedCrossOriginOverride = true;
         }
       }
 
@@ -466,6 +532,9 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
 
       // Additional SSRF hardening: ensure the override uses a permitted scheme.
       if (!isSafePublicHttpUrl(upstreamOverride)) {
+        return res.status(403).send('Upstream URL not allowed');
+      }
+      if (signedCrossOriginOverride && !isPublicRedirectUrl(upstreamOverride)) {
         return res.status(403).send('Upstream URL not allowed');
       }
     }
@@ -585,7 +654,8 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
         upstreamSocket?.destroy();
         return;
       }
-      const responseUrl = response.request?.res?.responseUrl || resolvedUrl;
+      const responseUrl =
+        response.finalUpstreamUrl || response.request?.res?.responseUrl || resolvedUrl;
       const contentType = response.headers?.['content-type'] || '';
       // Determine whether the upstream response is an HLS playlist:
       //
@@ -663,16 +733,16 @@ export function setupLineupRoutes(app, config, usageHelpers = {}) {
     };
 
     try {
-      // When an ?upstream= override is in use, disable redirects to prevent SSRF via open
-      // redirects: the origin check above validates the initial URL but can't guard against
-      // a server-side redirect to a different host.
+      // Overrides follow only bounded redirects whose destination and resolved IP are public.
+      // Primary configured stream URLs retain their existing redirect behavior.
       const axiosOptions = {
         responseType: 'stream',
         timeout: 15000,
         signal: upstreamRequest.signal,
-        ...(upstreamOverride ? { maxRedirects: 0 } : {}),
       };
-      const response = await axios.get(upstreamUrl, axiosOptions);
+      const response = upstreamOverride
+        ? await fetchHlsOverride(upstreamUrl, upstreamRequest.signal, signedCrossOriginOverride)
+        : await axios.get(upstreamUrl, axiosOptions);
 
       await handleStreamResponse(response, upstreamUrl, !!upstreamOverride);
     } catch (err) {
